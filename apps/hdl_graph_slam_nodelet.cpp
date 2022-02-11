@@ -204,17 +204,30 @@ private:
       // fix the first node
       if(keyframes.empty() && new_keyframes.size() == 1) {
         if(private_nh.param<bool>("fix_first_node", false)) {
+          Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+          std::stringstream sstp(private_nh.param<std::string>("fix_first_node_pose", "0 0 0 0 0 0"));
+          Eigen::Matrix<double, 6, 1> p;
+          for(int i = 0; i < 6; i++) {
+            sstp >> p[i];
+          }
+          Eigen::Matrix4d poseMat = Eigen::Matrix4d::Identity();
+          poseMat.topLeftCorner<3,3>() = (Eigen::AngleAxisd(p[5], Eigen::Vector3d::UnitX())
+            * Eigen::AngleAxisd(p[4], Eigen::Vector3d::UnitY())
+            * Eigen::AngleAxisd(p[3], Eigen::Vector3d::UnitZ())).toRotationMatrix();
+          poseMat.topRightCorner<3,1>() = p.head<3>();          
+          pose = poseMat;
+
           Eigen::MatrixXd inf = Eigen::MatrixXd::Identity(6, 6);
-          std::stringstream sst(private_nh.param<std::string>("fix_first_node_stddev", "1 1 1 1 1 1"));
+          std::stringstream sststd(private_nh.param<std::string>("fix_first_node_stddev", "1 1 1 1 1 1"));
           for(int i = 0; i < 6; i++) {
             double stddev = 1.0;
-            sst >> stddev;
+            sststd >> stddev;
             inf(i, i) = 1.0 / stddev;
           }
 
           anchor_node = graph_slam->add_se3_node(Eigen::Isometry3d::Identity());
           anchor_node->setFixed(true);
-          anchor_edge = graph_slam->add_se3_edge(anchor_node, keyframe->node, Eigen::Isometry3d::Identity(), inf);
+          anchor_edge = graph_slam->add_se3_edge(anchor_node, keyframe->node, pose, inf);
         }
       }
 
