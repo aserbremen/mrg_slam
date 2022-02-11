@@ -57,6 +57,9 @@ endif()
 add_message_files(FILES
   FloorCoeffs.msg
   ScanMatchingStatus.msg
+  Keyframe.msg
+  Edge.msg
+  Graph.msg
 )
 
 add_service_files(FILES
@@ -64,7 +67,7 @@ add_service_files(FILES
   DumpGraph.srv
 )
 
-generate_messages(DEPENDENCIES std_msgs geometry_msgs)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
 
 ###################################
 ## catkin specific configuration ##
