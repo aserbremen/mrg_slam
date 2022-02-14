@@ -4,6 +4,7 @@
 #define KEYFRAME_HPP
 
 #include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <boost/optional.hpp>
@@ -25,7 +26,7 @@ public:
   using PointT = pcl::PointXYZI;
   using Ptr = std::shared_ptr<KeyFrame>;
 
-  KeyFrame(const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud);
+  KeyFrame(const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg = nullptr);
   KeyFrame(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~KeyFrame();
 
@@ -40,6 +41,7 @@ public:
   Eigen::Isometry3d odom;                         // odometry (estimated by scan_matching_odometry)
   double accum_distance;                          // accumulated distance from the first node (by scan_matching_odometry)
   pcl::PointCloud<PointT>::ConstPtr cloud;        // point cloud
+  sensor_msgs::PointCloud2::ConstPtr cloud_msg;   // point cloud ROS msg
   boost::optional<Eigen::Vector4d> floor_coeffs;  // detected floor's coefficients
   boost::optional<Eigen::Vector3d> utm_coord;     // UTM coord obtained by GPS
 
@@ -60,13 +62,15 @@ public:
   using Ptr = std::shared_ptr<KeyFrameSnapshot>;
 
   KeyFrameSnapshot(const KeyFrame::Ptr& key);
-  KeyFrameSnapshot(const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud);
+  KeyFrameSnapshot(long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg = nullptr);
 
   ~KeyFrameSnapshot();
 
 public:
-  Eigen::Isometry3d pose;                   // pose estimated by graph optimization
-  pcl::PointCloud<PointT>::ConstPtr cloud;  // point cloud
+  long id;
+  Eigen::Isometry3d pose;                         // pose estimated by graph optimization
+  pcl::PointCloud<PointT>::ConstPtr cloud;        // point cloud
+  sensor_msgs::PointCloud2::ConstPtr cloud_msg;   // point cloud ROS msg
 };
 
 }  // namespace hdl_graph_slam

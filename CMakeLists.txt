@@ -58,7 +58,7 @@ endif()
 add_message_files(FILES
   FloorCoeffs.msg
   ScanMatchingStatus.msg
-  Keyframe.msg
+  KeyFrame.msg
   Edge.msg
   Graph.msg
 )

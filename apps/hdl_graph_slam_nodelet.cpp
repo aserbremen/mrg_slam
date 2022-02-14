@@ -173,7 +173,7 @@ private:
     }
 
     double accum_d = keyframe_updater->get_accum_distance();
-    KeyFrame::Ptr keyframe(new KeyFrame(stamp, odom, accum_d, cloud));
+    KeyFrame::Ptr keyframe(new KeyFrame(stamp, odom, accum_d, cloud, cloud_msg));
 
     std::lock_guard<std::mutex> lock(keyframe_queue_mutex);
     keyframe_queue.push_back(keyframe);
