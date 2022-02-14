@@ -20,6 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   message_generation
   interactive_markers
+  eigen_conversions
   ndt_omp
   fast_gicp
 )
@@ -118,6 +119,7 @@ add_dependencies(scan_matching_odometry_nodelet ${PROJECT_NAME}_gencpp)
 add_library(hdl_graph_slam_nodelet
   apps/hdl_graph_slam_nodelet.cpp
   src/hdl_graph_slam/graph_slam.cpp
+  src/hdl_graph_slam/edge.cpp
   src/hdl_graph_slam/keyframe.cpp
   src/hdl_graph_slam/map_cloud_generator.cpp
   src/hdl_graph_slam/registrations.cpp
