@@ -23,6 +23,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <tf_conversions/tf_eigen.h>
 #include <tf/transform_listener.h>
+#include <eigen_conversions/eigen_msg.h>
 
 #include <std_msgs/Time.h>
 #include <nav_msgs/Odometry.h>
@@ -120,6 +121,11 @@ public:
       navsat_sub = mt_nh.subscribe("/gps/navsat", 1024, &HdlGraphSlamNodelet::navsat_callback, this);
     }
 
+    anchor_node_pose_topic = private_nh.param<std::string>("fix_first_node_pose_topic", "NONE");
+    if(anchor_node_pose_topic != "NONE") {
+      anchor_node_pose_sub = mt_nh.subscribe(anchor_node_pose_topic, 32, &HdlGraphSlamNodelet::anchor_node_pose_callback, this );
+    }
+
     // publishers
     markers_pub = mt_nh.advertise<visualization_msgs::MarkerArray>("/hdl_graph_slam/markers", 16);
     odom2map_pub = mt_nh.advertise<geometry_msgs::TransformStamped>("/hdl_graph_slam/odom2pub", 16);
@@ -205,17 +211,22 @@ private:
       if(keyframes.empty() && new_keyframes.size() == 1) {
         if(private_nh.param<bool>("fix_first_node", false)) {
           Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
-          std::stringstream sstp(private_nh.param<std::string>("fix_first_node_pose", "0 0 0 0 0 0"));
-          Eigen::Matrix<double, 6, 1> p;
-          for(int i = 0; i < 6; i++) {
-            sstp >> p[i];
+          if( anchor_node_pose != nullptr ) {
+            tf::poseMsgToEigen( anchor_node_pose->pose.pose, pose );
+          } else {
+            std::stringstream sstp(private_nh.param<std::string>("fix_first_node_pose", "0 0 0 0 0 0"));
+            Eigen::Matrix<double, 6, 1> p;
+            for(int i = 0; i < 6; i++) {
+              sstp >> p[i];
+            }
+            Eigen::Matrix4d poseMat = Eigen::Matrix4d::Identity();
+            poseMat.topLeftCorner<3,3>() = (Eigen::AngleAxisd(p[5], Eigen::Vector3d::UnitX())
+              * Eigen::AngleAxisd(p[4], Eigen::Vector3d::UnitY())
+              * Eigen::AngleAxisd(p[3], Eigen::Vector3d::UnitZ())).toRotationMatrix();
+            poseMat.topRightCorner<3,1>() = p.head<3>();          
+            pose = poseMat;
           }
-          Eigen::Matrix4d poseMat = Eigen::Matrix4d::Identity();
-          poseMat.topLeftCorner<3,3>() = (Eigen::AngleAxisd(p[5], Eigen::Vector3d::UnitX())
-            * Eigen::AngleAxisd(p[4], Eigen::Vector3d::UnitY())
-            * Eigen::AngleAxisd(p[3], Eigen::Vector3d::UnitZ())).toRotationMatrix();
-          poseMat.topRightCorner<3,1>() = p.head<3>();          
-          pose = poseMat;
+          pose = pose.inverse();
 
           Eigen::MatrixXd inf = Eigen::MatrixXd::Identity(6, 6);
           std::stringstream sststd(private_nh.param<std::string>("fix_first_node_stddev", "1 1 1 1 1 1"));
@@ -225,7 +236,7 @@ private:
             inf(i, i) = 1.0 / stddev;
           }
 
-          anchor_node = graph_slam->add_se3_node(Eigen::Isometry3d::Identity());
+          anchor_node = graph_slam->add_se3_node(pose);
           anchor_node->setFixed(true);
           anchor_edge = graph_slam->add_se3_edge(anchor_node, keyframe->node, pose, inf);
         }
@@ -517,6 +528,15 @@ private:
     return updated;
   }
 
+  /**
+   * @brief receive anchor node pose from topic
+   * @param
+   */
+  void anchor_node_pose_callback( const nav_msgs::Odometry::ConstPtr &msg ) {
+    std::lock_guard<std::mutex> lock(keyframe_queue_mutex);
+    anchor_node_pose = msg;
+  }
+   
   /**
    * @brief generate map point cloud and publish it
    * @param event
@@ -938,6 +958,11 @@ private:
 
   ros::ServiceServer dump_service_server;
   ros::ServiceServer save_map_service_server;
+
+  // getting anchor node pose from topic
+  ros::Subscriber anchor_node_pose_sub;
+  std::string anchor_node_pose_topic;
+  nav_msgs::Odometry::ConstPtr anchor_node_pose; // should be accessed with keyframe_queue_mutex locked
 
   // keyframe queue
   std::string base_frame_id;
