@@ -35,8 +35,6 @@ public:
   const g2o::EdgeSE3*   edge;       // edge instance
 };
 
-#if 0
-
 /**
  * @brief EdgeSnapshot for publishing graph
  */
@@ -44,20 +42,20 @@ struct EdgeSnapshot {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  using Ptr = std::shared_ptr<KeyFrameSnapshot>;
+  using Ptr = std::shared_ptr<EdgeSnapshot>;
 
   EdgeSnapshot(const Edge::Ptr& edge);
-  //EdgeSnapshot(const g2o::EdgeSE3* edge, ...);
+  //EdgeSnapshot(...);
 
   ~EdgeSnapshot();
 
 public:
-  Eigen::Isometry3d pose;                         // pose estimated by graph optimization
-  pcl::PointCloud<PointT>::ConstPtr cloud;        // point cloud
-  sensor_msgs::PointCloud2::ConstPtr cloud_msg;   // point cloud ROS msg
+  long                        id;
+  long                        from_id;
+  long                        to_id;
+  Eigen::Isometry3d           relative_pose;
+  Eigen::Matrix<double, 6, 6> information;
 };
-
-#endif
 
 }  // namespace hdl_graph_slam
 

@@ -46,6 +46,7 @@
 
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
+#include <hdl_graph_slam/edge.hpp>
 #include <hdl_graph_slam/keyframe_updater.hpp>
 #include <hdl_graph_slam/loop_detector.hpp>
 #include <hdl_graph_slam/information_matrix_calculator.hpp>
@@ -252,6 +253,7 @@ private:
       Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_keyframe->odom;
       Eigen::MatrixXd information = inf_calclator->calc_information_matrix(keyframe->cloud, prev_keyframe->cloud, relative_pose);
       auto edge = graph_slam->add_se3_edge(keyframe->node, prev_keyframe->node, relative_pose, information);
+      edges.emplace_back(new Edge(edge));
       graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("odometry_edge_robust_kernel", "NONE"), private_nh.param<double>("odometry_edge_robust_kernel_size", 1.0));
     }
 
@@ -595,6 +597,7 @@ private:
       Eigen::Isometry3d relpose(loop->relative_pose.cast<double>());
       Eigen::MatrixXd information_matrix = inf_calclator->calc_information_matrix(loop->key1->cloud, loop->key2->cloud, relpose);
       auto edge = graph_slam->add_se3_edge(loop->key1->node, loop->key2->node, relpose, information_matrix);
+      edges.emplace_back(new Edge(edge));
       graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("loop_closure_edge_robust_kernel", "NONE"), private_nh.param<double>("loop_closure_edge_robust_kernel_size", 1.0));
     }
 
@@ -1010,6 +1013,7 @@ private:
   g2o::VertexPlane* floor_plane_node;
   std::vector<KeyFrame::Ptr> keyframes;
   std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
+  std::vector<Edge::Ptr> edges;
 
   std::unique_ptr<GraphSLAM> graph_slam;
   std::unique_ptr<LoopDetector> loop_detector;

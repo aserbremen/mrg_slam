@@ -45,4 +45,7 @@ const Eigen::Matrix<double, 6, 6>& Edge::information() const {
   return edge->information();   
 }
 
+
+EdgeSnapshot::EdgeSnapshot(const Edge::Ptr& edge) : id(edge->id()), from_id(edge->from_id()), to_id(edge->to_id()), relative_pose(edge->relative_pose()), information(edge->information()) {}
+
 }  // namespace hdl_graph_slam
