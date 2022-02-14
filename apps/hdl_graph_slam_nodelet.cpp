@@ -34,9 +34,11 @@
 #include <geographic_msgs/GeoPointStamped.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <hdl_graph_slam/FloorCoeffs.h>
+#include <hdl_graph_slam/GraphRos.h>
 
 #include <hdl_graph_slam/SaveMap.h>
 #include <hdl_graph_slam/DumpGraph.h>
+#include <hdl_graph_slam/PublishGraph.h>
 
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
@@ -132,9 +134,11 @@ public:
     odom2map_pub = mt_nh.advertise<geometry_msgs::TransformStamped>("/hdl_graph_slam/odom2pub", 16);
     map_points_pub = mt_nh.advertise<sensor_msgs::PointCloud2>("/hdl_graph_slam/map_points", 1, true);
     read_until_pub = mt_nh.advertise<std_msgs::Header>("/hdl_graph_slam/read_until", 32);
+    graph_pub = mt_nh.advertise<hdl_graph_slam::GraphRos>("/hdl_graph_slam/graph", 1);
 
     dump_service_server = mt_nh.advertiseService("/hdl_graph_slam/dump", &HdlGraphSlamNodelet::dump_service, this);
     save_map_service_server = mt_nh.advertiseService("/hdl_graph_slam/save_map", &HdlGraphSlamNodelet::save_map_service, this);
+    publish_graph_service_server = mt_nh.advertiseService("/hdl_graph_slam/publish_graph", &HdlGraphSlamNodelet::publish_graph_service, this);
 
     graph_updated = false;
     double graph_update_interval = private_nh.param<double>("graph_update_interval", 3.0);
@@ -925,6 +929,45 @@ private:
     return true;
   }
 
+
+  /**
+   * @brief publish graph on corresponding topic
+   * @param req
+   * @param res
+   * @return
+   */
+  bool publish_graph_service(hdl_graph_slam::SaveMapRequest& req, hdl_graph_slam::SaveMapResponse& res) {
+    main_thread_mutex.lock();
+    GraphRos msg;
+    
+    msg.keyframes.resize(keyframes.size());
+    for(size_t i = 0; i < keyframes.size(); i++) {
+      auto &dst = msg.keyframes[i];
+      auto &src = keyframes[i];
+      dst.id = src->id();
+      tf::poseEigenToMsg(src->estimate(), dst.estimate);
+      dst.cloud = *src->cloud_msg;
+    }
+    
+    msg.edges.resize(edges.size());
+    for(size_t i = 0; i < edges.size(); i++) {
+      auto &dst = msg.edges[i];
+      auto &src = edges[i];
+      dst.id = src->id();
+      dst.from_id = src->from_id();
+      dst.to_id = src->to_id();
+      tf::poseEigenToMsg(src->relative_pose(), dst.relative_pose);
+      Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map(dst.information.data());
+      information_map = src->information();
+    }
+    
+    main_thread_mutex.unlock();
+
+    graph_pub.publish(msg);
+
+    return true;
+  }
+
 private:
   // ROS
   ros::NodeHandle nh;
@@ -945,6 +988,7 @@ private:
   ros::Subscriber floor_sub;
 
   ros::Publisher markers_pub;
+  ros::Publisher graph_pub;
 
   std::string map_frame_id;
   std::string odom_frame_id;
@@ -961,6 +1005,7 @@ private:
 
   ros::ServiceServer dump_service_server;
   ros::ServiceServer save_map_service_server;
+  ros::ServiceServer publish_graph_service_server;
 
   // getting anchor node pose from topic
   ros::Subscriber anchor_node_pose_sub;

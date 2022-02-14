@@ -58,14 +58,15 @@ endif()
 add_message_files(FILES
   FloorCoeffs.msg
   ScanMatchingStatus.msg
-  KeyFrame.msg
-  Edge.msg
-  Graph.msg
+  KeyFrameRos.msg
+  EdgeRos.msg
+  GraphRos.msg
 )
 
 add_service_files(FILES
   SaveMap.srv
   DumpGraph.srv
+  PublishGraph.srv
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
