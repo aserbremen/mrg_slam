@@ -47,6 +47,7 @@
 #include <hdl_graph_slam/ros_time_hash.hpp>
 
 #include <hdl_graph_slam/graph_slam.hpp>
+#include <hdl_graph_slam/global_id.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <hdl_graph_slam/edge.hpp>
 #include <hdl_graph_slam/keyframe_updater.hpp>
@@ -109,6 +110,16 @@ public:
     imu_acceleration_edge_stddev = private_nh.param<double>("imu_acceleration_edge_stddev", 3.0);
 
     points_topic = private_nh.param<std::string>("points_topic", "/velodyne_points");
+
+    auto own_name = private_nh.param<std::string>("own_name", "atlas");
+    auto robot_names_str = private_nh.param<std::string>("robot_names", "atlas");
+    std::vector<std::string> robot_names;
+    size_t pos = 0;
+    while ((pos = robot_names_str.find(" ")) != std::string::npos) {
+      robot_names.emplace_back(robot_names_str.substr(0, pos));
+      robot_names_str.erase(0, pos + 1);
+    }
+    gid_generator = std::unique_ptr<GlobalIdGenerator>(new GlobalIdGenerator(own_name, robot_names));
 
     // subscribers
     odom_sub.reset(new message_filters::Subscriber<nav_msgs::Odometry>(mt_nh, "/odom", 256));
@@ -210,6 +221,7 @@ private:
       // add pose node
       Eigen::Isometry3d odom = odom2map * keyframe->odom;
       keyframe->node = graph_slam->add_se3_node(odom);
+      keyframe->setGid(*gid_generator);
       keyframe_hash[keyframe->stamp] = keyframe;
 
       // fix the first node
@@ -257,7 +269,7 @@ private:
       Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_keyframe->odom;
       Eigen::MatrixXd information = inf_calclator->calc_information_matrix(keyframe->cloud, prev_keyframe->cloud, relative_pose);
       auto edge = graph_slam->add_se3_edge(keyframe->node, prev_keyframe->node, relative_pose, information);
-      edges.emplace_back(new Edge(edge));
+      edges.emplace_back(new Edge(edge, *gid_generator));
       graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("odometry_edge_robust_kernel", "NONE"), private_nh.param<double>("odometry_edge_robust_kernel_size", 1.0));
     }
 
@@ -601,7 +613,7 @@ private:
       Eigen::Isometry3d relpose(loop->relative_pose.cast<double>());
       Eigen::MatrixXd information_matrix = inf_calclator->calc_information_matrix(loop->key1->cloud, loop->key2->cloud, relpose);
       auto edge = graph_slam->add_se3_edge(loop->key1->node, loop->key2->node, relpose, information_matrix);
-      edges.emplace_back(new Edge(edge));
+      edges.emplace_back(new Edge(edge, *gid_generator));
       graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("loop_closure_edge_robust_kernel", "NONE"), private_nh.param<double>("loop_closure_edge_robust_kernel_size", 1.0));
     }
 
@@ -944,7 +956,7 @@ private:
     for(size_t i = 0; i < keyframes.size(); i++) {
       auto &dst = msg.keyframes[i];
       auto &src = keyframes[i];
-      dst.id = src->id();
+      dst.gid = src->gid;
       tf::poseEigenToMsg(src->estimate(), dst.estimate);
       dst.cloud = *src->cloud_msg;
     }
@@ -953,9 +965,9 @@ private:
     for(size_t i = 0; i < edges.size(); i++) {
       auto &dst = msg.edges[i];
       auto &src = edges[i];
-      dst.id = src->id();
-      dst.from_id = src->from_id();
-      dst.to_id = src->to_id();
+      dst.gid = src->gid;
+      dst.from_gid = src->from_gid;
+      dst.to_gid = src->to_gid;
       tf::poseEigenToMsg(src->relative_pose(), dst.relative_pose);
       Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map(dst.information.data());
       information_map = src->information();
@@ -1045,6 +1057,9 @@ private:
   std::mutex keyframes_snapshot_mutex;
   std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot;
   std::unique_ptr<MapCloudGenerator> map_cloud_generator;
+
+  // global id
+  std::unique_ptr<GlobalIdGenerator> gid_generator;
 
   // graph slam
   // all the below members must be accessed after locking main_thread_mutex

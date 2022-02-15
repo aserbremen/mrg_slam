@@ -121,6 +121,7 @@ add_library(hdl_graph_slam_nodelet
   apps/hdl_graph_slam_nodelet.cpp
   src/hdl_graph_slam/graph_slam.cpp
   src/hdl_graph_slam/edge.cpp
+  src/hdl_graph_slam/global_id.cpp
   src/hdl_graph_slam/keyframe.cpp
   src/hdl_graph_slam/map_cloud_generator.cpp
   src/hdl_graph_slam/registrations.cpp

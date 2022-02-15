@@ -8,15 +8,22 @@
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 
+
 namespace hdl_graph_slam {
 
-KeyFrame::KeyFrame(const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg) : stamp(stamp), odom(odom), accum_distance(accum_distance), cloud(cloud), cloud_msg(cloud_msg), node(nullptr) {}
+KeyFrame::KeyFrame(const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg) : stamp(stamp), odom(odom), accum_distance(accum_distance), gid(0), cloud(cloud), cloud_msg(cloud_msg), node(nullptr) {}
 
 KeyFrame::KeyFrame(const std::string& directory, g2o::HyperGraph* graph) : stamp(), odom(Eigen::Isometry3d::Identity()), accum_distance(-1), cloud(nullptr), cloud_msg(nullptr), node(nullptr) {
   load(directory, graph);
 }
 
 KeyFrame::~KeyFrame() {}
+
+
+void KeyFrame::setGid(const GlobalIdGenerator &gid_generator) {
+  gid = gid_generator(id());
+}
+
 
 void KeyFrame::save(const std::string& directory) {
   if(!boost::filesystem::is_directory(directory)) {

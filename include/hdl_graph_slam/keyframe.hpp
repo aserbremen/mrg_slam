@@ -9,6 +9,9 @@
 #include <pcl/point_cloud.h>
 #include <boost/optional.hpp>
 
+#include <hdl_graph_slam/global_id.hpp>
+
+
 namespace g2o {
 class VertexSE3;
 class HyperGraph;
@@ -30,6 +33,8 @@ public:
   KeyFrame(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~KeyFrame();
 
+  void setGid(const GlobalIdGenerator &gid_generator);
+
   void save(const std::string& directory);
   bool load(const std::string& directory, g2o::HyperGraph* graph);
 
@@ -40,6 +45,7 @@ public:
   ros::Time stamp;                                // timestamp
   Eigen::Isometry3d odom;                         // odometry (estimated by scan_matching_odometry)
   double accum_distance;                          // accumulated distance from the first node (by scan_matching_odometry)
+  GlobalId gid;                                   // global id
   pcl::PointCloud<PointT>::ConstPtr cloud;        // point cloud
   sensor_msgs::PointCloud2::ConstPtr cloud_msg;   // point cloud ROS msg
   boost::optional<Eigen::Vector4d> floor_coeffs;  // detected floor's coefficients

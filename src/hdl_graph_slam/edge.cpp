@@ -6,9 +6,14 @@
 
 #include <g2o/types/slam3d/edge_se3.h>
 
+
 namespace hdl_graph_slam {
 
-Edge::Edge(const g2o::EdgeSE3* edge) : edge(edge) {}
+Edge::Edge(const g2o::EdgeSE3* edge, const GlobalIdGenerator &gid_generator) : edge(edge) {
+  gid = gid_generator(id());
+  from_gid = gid_generator(from_id());
+  to_gid = gid_generator(to_id());
+}
 
 /*
 Edge::Edge(const std::string& directory, g2o::HyperGraph* graph) {

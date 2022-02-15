@@ -1,7 +1,7 @@
-int64 id
+uint64 gid
 
-int64 from_id
-int64 to_id
+uint64 from_gid
+uint64 to_gid
 
 geometry_msgs/Pose relative_pose
 

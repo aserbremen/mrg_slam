@@ -6,6 +6,8 @@
 #include <ros/ros.h>
 #include <Eigen/Dense>
 
+#include <hdl_graph_slam/global_id.hpp>
+
 
 namespace g2o {
 class EdgeSE3;
@@ -21,7 +23,7 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Ptr = std::shared_ptr<Edge>;
 
-  Edge(const g2o::EdgeSE3* edge);
+  Edge(const g2o::EdgeSE3* edge, const GlobalIdGenerator &gid_generator);
   //Edge(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~Edge();
 
@@ -33,6 +35,9 @@ public:
 
 public:
   const g2o::EdgeSE3*   edge;       // edge instance
+  GlobalId gid;
+  GlobalId from_gid;
+  GlobalId to_gid;
 };
 
 /**
