@@ -80,7 +80,7 @@ private:
    */
   std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const {
     // too close to the last registered loop edge
-    if(new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh) {
+    if(new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh) {
       return std::vector<KeyFrame::Ptr>();
     }
 
@@ -89,7 +89,7 @@ private:
 
     for(const auto& k : keyframes) {
       // traveled distance between keyframes is too small
-      if(new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh) {
+      if(new_keyframe->accum_distance >= 0 && k->accum_distance >= 0 && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh) {
         continue;
       }
 
@@ -165,7 +165,9 @@ private:
     std::cout << "loop found!!" << std::endl;
     std::cout << "relpose: " << relative_pose.block<3, 1>(0, 3) << " - " << Eigen::Quaternionf(relative_pose.block<3, 3>(0, 0)).coeffs().transpose() << std::endl;
 
-    last_edge_accum_distance = new_keyframe->accum_distance;
+    if(new_keyframe->accum_distance >= 0 ) {
+      last_edge_accum_distance = new_keyframe->accum_distance;
+    }
 
     return std::make_shared<Loop>(new_keyframe, best_matched, relative_pose);
   }

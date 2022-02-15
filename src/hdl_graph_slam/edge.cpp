@@ -9,7 +9,10 @@
 
 namespace hdl_graph_slam {
 
-Edge::Edge(const g2o::EdgeSE3* edge, const GlobalIdGenerator &gid_generator) : edge(edge) {
+Edge::Edge(const g2o::EdgeSE3* edge, Type type) : edge(edge), type(type), gid(0), from_gid(0), to_gid(0) {
+}
+
+Edge::Edge(const g2o::EdgeSE3* edge, Type type, const GlobalIdGenerator &gid_generator) : edge(edge), type(type) {
   gid = gid_generator(id());
   from_gid = gid_generator(from_id());
   to_gid = gid_generator(to_id());

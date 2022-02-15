@@ -23,7 +23,13 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Ptr = std::shared_ptr<Edge>;
 
-  Edge(const g2o::EdgeSE3* edge, const GlobalIdGenerator &gid_generator);
+  enum Type {
+    TYPE_ODOM,
+    TYPE_LOOP
+  };
+
+  Edge(const g2o::EdgeSE3* edge, Type type);
+  Edge(const g2o::EdgeSE3* edge, Type type, const GlobalIdGenerator &gid_generator);
   //Edge(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~Edge();
 
@@ -35,6 +41,7 @@ public:
 
 public:
   const g2o::EdgeSE3*   edge;       // edge instance
+  Type type;
   GlobalId gid;
   GlobalId from_gid;
   GlobalId to_gid;

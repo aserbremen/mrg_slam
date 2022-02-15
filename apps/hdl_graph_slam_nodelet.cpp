@@ -6,6 +6,7 @@
 #include <memory>
 #include <iomanip>
 #include <iostream>
+#include <unordered_set>
 #include <unordered_map>
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
@@ -111,7 +112,7 @@ public:
 
     points_topic = private_nh.param<std::string>("points_topic", "/velodyne_points");
 
-    auto own_name = private_nh.param<std::string>("own_name", "atlas");
+    own_name = private_nh.param<std::string>("own_name", "atlas");
     auto robot_names_str = private_nh.param<std::string>("robot_names", "atlas");
     std::vector<std::string> robot_names;
     size_t pos = 0;
@@ -128,6 +129,7 @@ public:
     sync->registerCallback(boost::bind(&HdlGraphSlamNodelet::cloud_callback, this, _1, _2));
     imu_sub = nh.subscribe("/gpsimu_driver/imu_data", 1024, &HdlGraphSlamNodelet::imu_callback, this);
     floor_sub = nh.subscribe("/floor_detection/floor_coeffs", 1024, &HdlGraphSlamNodelet::floor_coeffs_callback, this);
+    graph_sub = nh.subscribe("/graph", 32, &HdlGraphSlamNodelet::graph_callback, this);
 
     if(private_nh.param<bool>("enable_gps", true)) {
       gps_sub = mt_nh.subscribe("/gps/geopoint", 1024, &HdlGraphSlamNodelet::gps_callback, this);
@@ -222,6 +224,7 @@ private:
       Eigen::Isometry3d odom = odom2map * keyframe->odom;
       keyframe->node = graph_slam->add_se3_node(odom);
       keyframe->setGid(*gid_generator);
+      keyframe_gids[keyframe->gid] = keyframe;
       keyframe_hash[keyframe->stamp] = keyframe;
 
       // fix the first node
@@ -268,9 +271,11 @@ private:
 
       Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_keyframe->odom;
       Eigen::MatrixXd information = inf_calclator->calc_information_matrix(keyframe->cloud, prev_keyframe->cloud, relative_pose);
-      auto edge = graph_slam->add_se3_edge(keyframe->node, prev_keyframe->node, relative_pose, information);
-      edges.emplace_back(new Edge(edge, *gid_generator));
-      graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("odometry_edge_robust_kernel", "NONE"), private_nh.param<double>("odometry_edge_robust_kernel_size", 1.0));
+      auto graph_edge = graph_slam->add_se3_edge(keyframe->node, prev_keyframe->node, relative_pose, information);
+      auto edge = new Edge(graph_edge, Edge::TYPE_ODOM, *gid_generator);
+      edges.emplace_back(edge);
+      edge_gids.insert(edge->gid);
+      graph_slam->add_robust_kernel(graph_edge, private_nh.param<std::string>("odometry_edge_robust_kernel", "NONE"), private_nh.param<double>("odometry_edge_robust_kernel_size", 1.0));
     }
 
     std_msgs::Header read_until;
@@ -547,6 +552,127 @@ private:
   }
 
   /**
+   * @brief received grapha from other robots are added to #graph_queue
+   * @param graph_msg
+   */
+  void graph_callback(const hdl_graph_slam::GraphRos::ConstPtr& graph_msg) {
+    std::lock_guard<std::mutex> lock(graph_queue_mutex);
+    if(graph_msg->robot_name != own_name) {
+      graph_queue.push_back(graph_msg);
+    }
+  }
+
+
+  /**
+   * @brief all edges and keyframes from #graph_queue that are not known yet are added to the graph
+   * @return if true, at least one edge or keyframe is added to the pose graph
+   */
+  bool flush_graph_queue() {
+    std::lock_guard<std::mutex> lock(graph_queue_mutex);
+
+    if(graph_queue.empty()) {
+      return false;
+    }
+
+    std::unordered_map<GlobalId, const KeyFrameRos *> unique_keyframes;
+    std::unordered_map<GlobalId, const EdgeRos *> unique_edges;
+    
+    for(const auto &graph_msg : graph_queue) {
+      for(const auto &edge_ros : graph_msg->edges) {
+        if(edge_gids.find(edge_ros.gid) != edge_gids.end()) {
+          continue;
+        }
+        if(edge_ignore_gids.find(edge_ros.gid) != edge_ignore_gids.end()) {
+          continue;
+        }
+        auto iter = unique_edges.find(edge_ros.gid);
+        if(iter != unique_edges.end()) {
+          iter->second = &edge_ros; 
+        } else {
+          unique_edges[edge_ros.gid] = &edge_ros;
+        }
+      }
+
+      for(const auto &keyframe_ros : graph_msg->keyframes) {
+        if(keyframe_gids.find(keyframe_ros.gid) != keyframe_gids.end()) {
+          continue;
+        }
+        auto iter = unique_keyframes.find(keyframe_ros.gid);
+        if(iter != unique_keyframes.end()) {
+          iter->second = &keyframe_ros; 
+        } else {
+          unique_keyframes[keyframe_ros.gid] = &keyframe_ros;
+        }
+      }
+    }
+
+    if(unique_keyframes.empty() || unique_edges.empty()) {
+      return false;
+    }
+
+    for(const auto &kf : unique_keyframes) {
+      const auto &keyframe_ros = *kf.second;
+
+      pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>());
+      pcl::fromROSMsg(keyframe_ros.cloud, *cloud);
+      //ros::Time stamp(keyframe_ros.stamp);
+      sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>(keyframe_ros.cloud);
+      KeyFrame::Ptr keyframe(new KeyFrame(keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros));
+      
+      Eigen::Isometry3d pose;
+      tf::poseMsgToEigen(keyframe_ros.estimate, pose);
+      keyframe->node = graph_slam->add_se3_node(pose);
+      keyframe->gid = keyframe_ros.gid;
+      keyframe_gids[keyframe->gid] = keyframe;
+      new_keyframes.push_back(keyframe); // new_keyframes will be tested later for loop closure
+      // don't add it to keyframe_hash, which is only used for floor_coeffs
+      //keyframe_hash[keyframe->stamp] = keyframe;
+    }
+
+    for(const auto &e : unique_edges) {
+      const auto &edge_ros = *e.second;
+
+      auto &from_node = keyframe_gids[edge_ros.from_gid]->node;
+      auto &to_node = keyframe_gids[edge_ros.from_gid]->node;
+      bool add_edge = true;
+      // check if both nodes are connected by an edge already
+      for(const auto &node_edge : from_node->edges()) {
+        if(node_edge->vertices().size() == 2) {
+          if(node_edge->vertex(0) == from_node && node_edge->vertex(1) == to_node || node_edge->vertex(0) == to_node && node_edge->vertex(1) == from_node) {
+            add_edge = false;
+            break;
+          }
+        }
+      }
+
+      if(!add_edge) {
+        edge_ignore_gids.insert(edge_ros.gid);
+        continue;
+      }      
+
+      Eigen::Isometry3d relpose;
+      tf::poseMsgToEigen(edge_ros.relative_pose, relpose);      
+      Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information(edge_ros.information.data());
+      auto graph_edge = graph_slam->add_se3_edge(from_node, to_node, relpose, information);
+      auto edge = new Edge(graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP);
+      edge->gid = edge_ros.gid;
+      edge->from_gid = edge_ros.from_gid;
+      edge->to_gid = edge_ros.to_gid;
+      edges.emplace_back(edge);
+      edge_gids.insert(edge->gid);
+
+      if(edge->type == Edge::TYPE_ODOM) {
+        graph_slam->add_robust_kernel(graph_edge, private_nh.param<std::string>("odometry_edge_robust_kernel", "NONE"), private_nh.param<double>("odometry_edge_robust_kernel_size", 1.0));
+      } else {
+        graph_slam->add_robust_kernel(graph_edge, private_nh.param<std::string>("loop_closure_edge_robust_kernel", "NONE"), private_nh.param<double>("loop_closure_edge_robust_kernel_size", 1.0));
+      }
+    }
+
+    return true;
+  }
+
+
+  /**
    * @brief receive anchor node pose from topic
    * @param
    */
@@ -603,7 +729,7 @@ private:
       read_until_pub.publish(read_until);
     }
 
-    if(!keyframe_updated & !flush_floor_queue() & !flush_gps_queue() & !flush_imu_queue()) {
+    if(!keyframe_updated & !flush_floor_queue() & !flush_gps_queue() & !flush_imu_queue() & !flush_graph_queue()) {
       return;
     }
 
@@ -612,9 +738,11 @@ private:
     for(const auto& loop : loops) {
       Eigen::Isometry3d relpose(loop->relative_pose.cast<double>());
       Eigen::MatrixXd information_matrix = inf_calclator->calc_information_matrix(loop->key1->cloud, loop->key2->cloud, relpose);
-      auto edge = graph_slam->add_se3_edge(loop->key1->node, loop->key2->node, relpose, information_matrix);
-      edges.emplace_back(new Edge(edge, *gid_generator));
-      graph_slam->add_robust_kernel(edge, private_nh.param<std::string>("loop_closure_edge_robust_kernel", "NONE"), private_nh.param<double>("loop_closure_edge_robust_kernel_size", 1.0));
+      auto graph_edge = graph_slam->add_se3_edge(loop->key1->node, loop->key2->node, relpose, information_matrix);
+      auto edge = new Edge(graph_edge, Edge::TYPE_LOOP, *gid_generator);
+      edges.emplace_back(edge);
+      edge_gids.insert(edge->gid);
+      graph_slam->add_robust_kernel(graph_edge, private_nh.param<std::string>("loop_closure_edge_robust_kernel", "NONE"), private_nh.param<double>("loop_closure_edge_robust_kernel_size", 1.0));
     }
 
     std::copy(new_keyframes.begin(), new_keyframes.end(), std::back_inserter(keyframes));
@@ -951,12 +1079,14 @@ private:
   bool publish_graph_service(hdl_graph_slam::SaveMapRequest& req, hdl_graph_slam::SaveMapResponse& res) {
     main_thread_mutex.lock();
     GraphRos msg;
+    msg.robot_name = own_name;
     
     msg.keyframes.resize(keyframes.size());
     for(size_t i = 0; i < keyframes.size(); i++) {
       auto &dst = msg.keyframes[i];
       auto &src = keyframes[i];
       dst.gid = src->gid;
+      dst.stamp = src->stamp;
       tf::poseEigenToMsg(src->estimate(), dst.estimate);
       dst.cloud = *src->cloud_msg;
     }
@@ -965,6 +1095,7 @@ private:
     for(size_t i = 0; i < edges.size(); i++) {
       auto &dst = msg.edges[i];
       auto &src = edges[i];
+      dst.type = src->type == Edge::TYPE_ODOM ? 0 : 1;
       dst.gid = src->gid;
       dst.from_gid = src->from_gid;
       dst.to_gid = src->to_gid;
@@ -999,6 +1130,8 @@ private:
   ros::Subscriber imu_sub;
   ros::Subscriber floor_sub;
 
+  ros::Subscriber graph_sub;
+
   ros::Publisher markers_pub;
   ros::Publisher graph_pub;
 
@@ -1018,6 +1151,8 @@ private:
   ros::ServiceServer dump_service_server;
   ros::ServiceServer save_map_service_server;
   ros::ServiceServer publish_graph_service_server;
+
+  std::string own_name;
 
   // getting anchor node pose from topic
   ros::Subscriber anchor_node_pose_sub;
@@ -1051,6 +1186,10 @@ private:
   std::mutex floor_coeffs_queue_mutex;
   std::deque<hdl_graph_slam::FloorCoeffsConstPtr> floor_coeffs_queue;
 
+  // graph queue
+  std::mutex graph_queue_mutex;
+  std::deque<hdl_graph_slam::GraphRosConstPtr> graph_queue;
+
   // for map cloud generation
   std::atomic_bool graph_updated;
   double map_cloud_resolution;
@@ -1074,6 +1213,9 @@ private:
   std::vector<KeyFrame::Ptr> keyframes;
   std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
   std::vector<Edge::Ptr> edges;
+  std::unordered_map<GlobalId, KeyFrame::Ptr> keyframe_gids;
+  std::unordered_set<GlobalId> edge_gids;
+  std::unordered_set<GlobalId> edge_ignore_gids;
 
   std::unique_ptr<GraphSLAM> graph_slam;
   std::unique_ptr<LoopDetector> loop_detector;
