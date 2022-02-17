@@ -29,13 +29,11 @@ public:
   };
 
   Edge(const g2o::EdgeSE3* edge, Type type);
-  Edge(const g2o::EdgeSE3* edge, Type type, const GlobalIdGenerator &gid_generator);
+  Edge(const g2o::EdgeSE3* edge, Type type, GlobalId from_gid, GlobalId to_gid, const GlobalIdGenerator &gid_generator);
   //Edge(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~Edge();
 
   long id() const;
-  long from_id() const;
-  long to_id() const;
   const Eigen::Isometry3d& relative_pose() const;
   const Eigen::Matrix<double, 6, 6>& information() const;
 
@@ -47,9 +45,11 @@ public:
   GlobalId to_gid;
 };
 
+
 /**
  * @brief EdgeSnapshot for publishing graph
  */
+/*
 struct EdgeSnapshot {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -68,6 +68,7 @@ public:
   Eigen::Isometry3d           relative_pose;
   Eigen::Matrix<double, 6, 6> information;
 };
+*/
 
 }  // namespace hdl_graph_slam
 

@@ -133,6 +133,7 @@ g2o::VertexPointXYZ* GraphSLAM::add_point_xyz_node(const Eigen::Vector3d& xyz) {
 
 g2o::EdgeSE3* GraphSLAM::add_se3_edge(g2o::VertexSE3* v1, g2o::VertexSE3* v2, const Eigen::Isometry3d& relative_pose, const Eigen::MatrixXd& information_matrix) {
   g2o::EdgeSE3* edge(new g2o::EdgeSE3());
+  edge->setId(static_cast<int>(graph->edges().size()));
   edge->setMeasurement(relative_pose);
   edge->setInformation(information_matrix);
   edge->vertices()[0] = v1;

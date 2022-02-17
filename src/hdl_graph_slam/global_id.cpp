@@ -14,7 +14,7 @@ GlobalIdGenerator::GlobalIdGenerator(const std::string &own_name, const std::vec
     std::sort(robot_names_sorted.begin(), robot_names_sorted.end());
 
     for(size_t i = 0; i < robot_names_sorted.size(); i++) {
-        robot_names_mapping[robot_names_sorted[i]] = (RobotId) i;
+        robot_names_mapping[robot_names_sorted[i]] = (RobotId) i + 1;
     }
 
     own_id = robot_names_mapping[own_name];
@@ -38,7 +38,7 @@ RobotId GlobalIdGenerator::getRobotId(const GlobalId &gid) const {
 
 
 const std::string& GlobalIdGenerator::getRobotName(const RobotId &rid) const {
-    return robot_names_sorted[rid];
+    return robot_names_sorted[rid-1];
 }
 
 

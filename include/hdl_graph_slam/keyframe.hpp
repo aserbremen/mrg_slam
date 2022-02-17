@@ -28,6 +28,7 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using PointT = pcl::PointXYZI;
   using Ptr = std::shared_ptr<KeyFrame>;
+  using ConstPtr = std::shared_ptr<const KeyFrame>;
 
   KeyFrame(const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg = nullptr);
   KeyFrame(const std::string& directory, g2o::HyperGraph* graph);
