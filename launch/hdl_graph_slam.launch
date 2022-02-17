@@ -101,6 +101,9 @@
     <param name="fix_first_node" value="true"/>
     <param name="fix_first_node_stddev" value="10 10 10 1 1 1"/>
     <param name="fix_first_node_adaptive" value="true"/>
+    <!-- init pose -->
+    <param name="init_pose" value="0 0 0 0 0 0"/>
+    <param name="init_pose_topic" value="NONE"/> <!-- set to NONE to use init_pose instead -->
     <!-- loop closure params -->
     <param name="distance_thresh" value="10.0" />
     <param name="accum_distance_thresh" value="15.0" />

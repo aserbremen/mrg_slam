@@ -49,7 +49,7 @@ GlobalId GlobalIdGenerator::operator()(int id) const {
 
     GlobalId gid = (GlobalId) id;
 
-    if(gid >= (1 << 56)) {
+    if(gid >= (((uint64_t) 1) << 56)) {
         throw std::overflow_error("Overflow in global id counter");
     }
 

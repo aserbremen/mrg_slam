@@ -113,13 +113,8 @@ public:
     points_topic = private_nh.param<std::string>("points_topic", "/velodyne_points");
 
     own_name = private_nh.param<std::string>("own_name", "atlas");
-    auto robot_names_str = private_nh.param<std::string>("robot_names", "atlas");
-    std::vector<std::string> robot_names;
-    size_t pos = 0;
-    while ((pos = robot_names_str.find(" ")) != std::string::npos) {
-      robot_names.emplace_back(robot_names_str.substr(0, pos));
-      robot_names_str.erase(0, pos + 1);
-    }
+    robot_names.push_back(own_name)
+    robot_names = private_nh.param<std::vector<std::string>>("/properties/scenario/rovers/names", robot_names);
     gid_generator = std::unique_ptr<GlobalIdGenerator>(new GlobalIdGenerator(own_name, robot_names));
 
     // subscribers
@@ -137,9 +132,9 @@ public:
       navsat_sub = mt_nh.subscribe("/gps/navsat", 1024, &HdlGraphSlamNodelet::navsat_callback, this);
     }
 
-    anchor_node_pose_topic = private_nh.param<std::string>("fix_first_node_pose_topic", "NONE");
-    if(anchor_node_pose_topic != "NONE") {
-      anchor_node_pose_sub = mt_nh.subscribe(anchor_node_pose_topic, 32, &HdlGraphSlamNodelet::anchor_node_pose_callback, this );
+    init_pose_topic = private_nh.param<std::string>("init_pose_topic", "NONE");
+    if(init_pose_topic != "NONE") {
+      init_pose_sub = mt_nh.subscribe(init_pose_topic, 32, &HdlGraphSlamNodelet::init_pose_callback, this );
     }
 
     // publishers
@@ -208,9 +203,34 @@ private:
       return false;
     }
 
+    if(keyframes.empty() && new_keyframes.empty()) {
+      // init pose
+      Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
+      if( init_pose != nullptr ) {
+        Eigen::Isometry3d pose;
+        tf::poseMsgToEigen( init_pose->pose.pose, pose );
+        pose = pose * keyframe_queue[0]->odom.inverse(); // "remove" odom (which will be added later again) such that the init pose actually corresponds to the received pose
+        pose_mat = pose.matrix();
+      } else {
+        std::stringstream sstp(private_nh.param<std::string>("init_pose", "0 0 0 0 0 0"));
+        Eigen::Matrix<double, 6, 1> p;
+        for(int i = 0; i < 6; i++) {
+          sstp >> p[i];
+        }
+        pose_mat.topLeftCorner<3,3>() = (Eigen::AngleAxisd(p[5], Eigen::Vector3d::UnitX())
+          * Eigen::AngleAxisd(p[4], Eigen::Vector3d::UnitY())
+          * Eigen::AngleAxisd(p[3], Eigen::Vector3d::UnitZ())).toRotationMatrix();
+        pose_mat.topRightCorner<3,1>() = p.head<3>();
+        // don't remove odom because we assume that the provided pose corresponds to the pose of the rover when starting the system
+      }
+      trans_odom2map_mutex.lock();
+      trans_odom2map = pose_mat.cast<float>();
+      trans_odom2map_mutex.unlock();    
+    }
+
     trans_odom2map_mutex.lock();
     Eigen::Isometry3d odom2map(trans_odom2map.cast<double>());
-    trans_odom2map_mutex.unlock();
+    trans_odom2map_mutex.unlock();    
 
     int num_processed = 0;
     for(int i = 0; i < std::min<int>(keyframe_queue.size(), max_keyframes_per_update); i++) {
@@ -230,35 +250,17 @@ private:
       // fix the first node
       if(keyframes.empty() && new_keyframes.size() == 1) {
         if(private_nh.param<bool>("fix_first_node", false)) {
-          Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
-          if( anchor_node_pose != nullptr ) {
-            tf::poseMsgToEigen( anchor_node_pose->pose.pose, pose );
-          } else {
-            std::stringstream sstp(private_nh.param<std::string>("fix_first_node_pose", "0 0 0 0 0 0"));
-            Eigen::Matrix<double, 6, 1> p;
-            for(int i = 0; i < 6; i++) {
-              sstp >> p[i];
-            }
-            Eigen::Matrix4d poseMat = Eigen::Matrix4d::Identity();
-            poseMat.topLeftCorner<3,3>() = (Eigen::AngleAxisd(p[5], Eigen::Vector3d::UnitX())
-              * Eigen::AngleAxisd(p[4], Eigen::Vector3d::UnitY())
-              * Eigen::AngleAxisd(p[3], Eigen::Vector3d::UnitZ())).toRotationMatrix();
-            poseMat.topRightCorner<3,1>() = p.head<3>();          
-            pose = poseMat;
-          }
-          pose = pose.inverse();
-
-          Eigen::MatrixXd inf = Eigen::MatrixXd::Identity(6, 6);
+          Eigen::MatrixXd information = Eigen::MatrixXd::Identity(6, 6);
           std::stringstream sststd(private_nh.param<std::string>("fix_first_node_stddev", "1 1 1 1 1 1"));
           for(int i = 0; i < 6; i++) {
             double stddev = 1.0;
             sststd >> stddev;
-            inf(i, i) = 1.0 / stddev;
+            information(i, i) = 1.0 / stddev;
           }
 
-          anchor_node = graph_slam->add_se3_node(pose);
+          anchor_node = graph_slam->add_se3_node(Eigen::Isometry3d::Identity());
           anchor_node->setFixed(true);
-          anchor_edge = graph_slam->add_se3_edge(anchor_node, keyframe->node, pose, inf);
+          anchor_edge = graph_slam->add_se3_edge(anchor_node, keyframe->node, keyframe->node->estimate(), information);
         }
       }
 
@@ -676,9 +678,9 @@ private:
    * @brief receive anchor node pose from topic
    * @param
    */
-  void anchor_node_pose_callback( const nav_msgs::Odometry::ConstPtr &msg ) {
+  void init_pose_callback( const nav_msgs::Odometry::ConstPtr &msg ) {
     std::lock_guard<std::mutex> lock(keyframe_queue_mutex);
-    anchor_node_pose = msg;
+    init_pose = msg;
   }
    
   /**
@@ -1153,11 +1155,12 @@ private:
   ros::ServiceServer publish_graph_service_server;
 
   std::string own_name;
+  std::vector<std::string> robot_names;
 
-  // getting anchor node pose from topic
-  ros::Subscriber anchor_node_pose_sub;
-  std::string anchor_node_pose_topic;
-  nav_msgs::Odometry::ConstPtr anchor_node_pose; // should be accessed with keyframe_queue_mutex locked
+  // getting init pose from topic
+  ros::Subscriber init_pose_sub;
+  std::string init_pose_topic;
+  nav_msgs::Odometry::ConstPtr init_pose; // should be accessed with keyframe_queue_mutex locked
 
   // keyframe queue
   std::string base_frame_id;
