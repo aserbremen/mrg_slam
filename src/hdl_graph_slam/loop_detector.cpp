@@ -5,16 +5,17 @@
 
 namespace hdl_graph_slam {
 
-LoopDetector::LoopDetector(ros::NodeHandle& pnh) {
-    distance_thresh = pnh.param<double>("distance_thresh", 5.0);
-    distance_thresh_squared = distance_thresh*distance_thresh;
-    accum_distance_thresh = pnh.param<double>("accum_distance_thresh", 8.0);
-    distance_from_last_edge_thresh = pnh.param<double>("min_edge_interval", 5.0);
+LoopDetector::LoopDetector( ros::NodeHandle& pnh )
+{
+    distance_thresh                = pnh.param<double>( "distance_thresh", 5.0 );
+    distance_thresh_squared        = distance_thresh * distance_thresh;
+    accum_distance_thresh          = pnh.param<double>( "accum_distance_thresh", 8.0 );
+    distance_from_last_edge_thresh = pnh.param<double>( "min_edge_interval", 5.0 );
 
-    fitness_score_max_range = pnh.param<double>("fitness_score_max_range", std::numeric_limits<double>::max());
-    fitness_score_thresh = pnh.param<double>("fitness_score_thresh", 0.5);
+    fitness_score_max_range = pnh.param<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
+    fitness_score_thresh    = pnh.param<double>( "fitness_score_thresh", 0.5 );
 
-    registration = select_registration_method(pnh);
+    registration             = select_registration_method( pnh );
     last_edge_accum_distance = 0.0;
 }
 
@@ -24,13 +25,16 @@ LoopDetector::LoopDetector(ros::NodeHandle& pnh) {
  * @param new_keyframes   newly registered keyframes
  * @param graph_slam      pose graph
  */
-std::vector<Loop::Ptr> LoopDetector::detect(const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes, hdl_graph_slam::GraphSLAM& graph_slam) {
+std::vector<Loop::Ptr>
+LoopDetector::detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
+                      hdl_graph_slam::GraphSLAM& graph_slam )
+{
     std::vector<Loop::Ptr> detected_loops;
-    for(const auto& new_keyframe : new_keyframes) {
-        auto candidates = find_candidates(keyframes, new_keyframe);
-        auto loop = matching(candidates, new_keyframe, graph_slam);
-        if(loop) {
-        detected_loops.push_back(loop);
+    for( const auto& new_keyframe : new_keyframes ) {
+        auto candidates = find_candidates( keyframes, new_keyframe );
+        auto loop       = matching( candidates, new_keyframe, graph_slam );
+        if( loop ) {
+            detected_loops.push_back( loop );
         }
     }
 
@@ -38,28 +42,33 @@ std::vector<Loop::Ptr> LoopDetector::detect(const std::vector<KeyFrame::Ptr>& ke
 }
 
 
-double LoopDetector::get_distance_thresh() const {
+double
+LoopDetector::get_distance_thresh() const
+{
     return distance_thresh;
 }
 
 
-std::vector<KeyFrame::Ptr> LoopDetector::find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const {
+std::vector<KeyFrame::Ptr>
+LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const
+{
     // too close to the last registered loop edge
-    if(new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh) {
+    if( new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();
     }
 
     std::vector<KeyFrame::Ptr> candidates;
-    candidates.reserve(32);
+    candidates.reserve( 32 );
 
-    for(const auto& k : keyframes) {
+    for( const auto& k : keyframes ) {
         // traveled distance between keyframes is too small
-        if(new_keyframe->accum_distance >= 0 && k->accum_distance >= 0 && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh) {
+        if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0
+            && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh ) {
             continue;
         }
 
         // there is already an edge
-        if(new_keyframe->edge_exists(*k)) {
+        if( new_keyframe->edge_exists( *k ) ) {
             continue;
         }
 
@@ -67,27 +76,30 @@ std::vector<KeyFrame::Ptr> LoopDetector::find_candidates(const std::vector<KeyFr
         const auto& pos2 = new_keyframe->node->estimate().translation();
 
         // estimated distance between keyframes is too small
-        double dist_squared = (pos1.head<2>() - pos2.head<2>()).squaredNorm();
-        if(dist_squared > distance_thresh_squared) {
+        double dist_squared = ( pos1.head<2>() - pos2.head<2>() ).squaredNorm();
+        if( dist_squared > distance_thresh_squared ) {
             continue;
         }
 
-        candidates.push_back(k);
+        candidates.push_back( k );
     }
 
     return candidates;
 }
 
 
-Loop::Ptr LoopDetector::matching(const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe, hdl_graph_slam::GraphSLAM& graph_slam) {
-    if(candidate_keyframes.empty()) {
+Loop::Ptr
+LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
+                        hdl_graph_slam::GraphSLAM& graph_slam )
+{
+    if( candidate_keyframes.empty() ) {
         return nullptr;
     }
 
-    registration->setInputTarget(new_keyframe->cloud);
+    registration->setInputTarget( new_keyframe->cloud );
 
-    double best_score = std::numeric_limits<double>::max();
-    KeyFrame::Ptr best_matched;
+    double          best_score = std::numeric_limits<double>::max();
+    KeyFrame::Ptr   best_matched;
     Eigen::Matrix4f relative_pose;
 
     std::cout << std::endl;
@@ -96,45 +108,47 @@ Loop::Ptr LoopDetector::matching(const std::vector<KeyFrame::Ptr>& candidate_key
     std::cout << "matching" << std::flush;
     auto t1 = ros::Time::now();
 
-    pcl::PointCloud<PointT>::Ptr aligned(new pcl::PointCloud<PointT>());
-    for(const auto& candidate : candidate_keyframes) {
-        registration->setInputSource(candidate->cloud);
+    pcl::PointCloud<PointT>::Ptr aligned( new pcl::PointCloud<PointT>() );
+    for( const auto& candidate : candidate_keyframes ) {
+        registration->setInputSource( candidate->cloud );
         Eigen::Isometry3d new_keyframe_estimate = new_keyframe->node->estimate();
-        new_keyframe_estimate.linear() = Eigen::Quaterniond(new_keyframe_estimate.linear()).normalized().toRotationMatrix();
-        Eigen::Isometry3d candidate_estimate = candidate->node->estimate();
-        candidate_estimate.linear() = Eigen::Quaterniond(candidate_estimate.linear()).normalized().toRotationMatrix();
-        Eigen::Matrix4f guess = (new_keyframe_estimate.inverse() * candidate_estimate).matrix().cast<float>();
-        guess(2, 3) = 0.0;
-        registration->align(*aligned, guess);
+        new_keyframe_estimate.linear()          = Eigen::Quaterniond( new_keyframe_estimate.linear() ).normalized().toRotationMatrix();
+        Eigen::Isometry3d candidate_estimate    = candidate->node->estimate();
+        candidate_estimate.linear()             = Eigen::Quaterniond( candidate_estimate.linear() ).normalized().toRotationMatrix();
+        Eigen::Matrix4f guess                   = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
+        guess( 2, 3 )                           = 0.0;
+        registration->align( *aligned, guess );
         std::cout << "." << std::flush;
 
-        double score = registration->getFitnessScore(fitness_score_max_range);
-        if(!registration->hasConverged() || score > best_score) {
-        continue;
+        double score = registration->getFitnessScore( fitness_score_max_range );
+        if( !registration->hasConverged() || score > best_score ) {
+            continue;
         }
 
-        best_score = score;
-        best_matched = candidate;
+        best_score    = score;
+        best_matched  = candidate;
         relative_pose = registration->getFinalTransformation();
     }
 
     auto t2 = ros::Time::now();
     std::cout << " done" << std::endl;
-    std::cout << "best_score: " << boost::format("%.3f") % best_score << "    time: " << boost::format("%.3f") % (t2 - t1).toSec() << "[sec]" << std::endl;
+    std::cout << "best_score: " << boost::format( "%.3f" ) % best_score << "    time: " << boost::format( "%.3f" ) % ( t2 - t1 ).toSec()
+              << "[sec]" << std::endl;
 
-    if(best_score > fitness_score_thresh) {
+    if( best_score > fitness_score_thresh ) {
         std::cout << "loop not found..." << std::endl;
         return nullptr;
     }
 
     std::cout << "loop found!!" << std::endl;
-    std::cout << "relpose: " << relative_pose.block<3, 1>(0, 3) << " - " << Eigen::Quaternionf(relative_pose.block<3, 3>(0, 0)).coeffs().transpose() << std::endl;
+    std::cout << "relpose: " << relative_pose.block<3, 1>( 0, 3 ) << " - "
+              << Eigen::Quaternionf( relative_pose.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 
-    if(new_keyframe->accum_distance >= 0 ) {
+    if( new_keyframe->accum_distance >= 0 ) {
         last_edge_accum_distance = new_keyframe->accum_distance;
     }
 
-    return std::make_shared<Loop>(new_keyframe, best_matched, relative_pose);
+    return std::make_shared<Loop>( new_keyframe, best_matched, relative_pose );
 }
 
-} // namespace hdl_graph_slam
+}  // namespace hdl_graph_slam

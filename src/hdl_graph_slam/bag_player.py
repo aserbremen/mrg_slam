@@ -1,13 +1,8 @@
-#!/usr/bin/python
-# SPDX-License-Identifier: BSD-2-Clause
-import sys
-import yaml
-import time
-import curses
-import argparse
+#!/ usr / bin / python
+#SPDX - License - Identifier : BSD - 2 - Clause
+import sys import yaml import time import curses import argparse
 
-try:
-    from StringIO import StringIO ## for Python 2
+try : from StringIO import StringIO ## for Python 2
 except ImportError:
     from io import StringIO ## for Python 3
 
@@ -134,10 +129,9 @@ class BagPlayer:
 
 		elapsed = (stamp - self.start_stamp).to_sec()
 		self.progress.fd = StringIO()
-		try:
-			self.progress.update(elapsed)
+    try : self.progress.update(elapsed)
 		except:
-			# nothing to do
+#nothing to do
 			pass
 		self.stdscr.addstr(line + 1, 0, '----------')
 		self.stdscr.addstr(line + 2, 0, self.progress.fd.getvalue())
@@ -175,49 +169,38 @@ class BagPlayer:
 		curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_WHITE)
 		curses.init_pair(2, curses.COLOR_RED, curses.COLOR_WHITE)
 
-		try:
-			while not rospy.is_shutdown():
-				if not self.check_stamp(topic, msg):
-					self.update_time_subs()
-					self.print_progress(stamp)
-					time.sleep(0.1)
-					continue
+        try:
+            while
+not rospy.is_shutdown() :
+    if not self.check_stamp( topic, msg ) :
+    self.update_time_subs() self.print_progress( stamp ) time.sleep( 0.1 ) continue
 
-				clock_msg = Clock()
-				clock_msg.clock = stamp
+    clock_msg = Clock() clock_msg.clock = stamp
 
-				if self.duration:
-					if (stamp - self.init_time) > rospy.Duration(float(self.duration)):
-						break
+                                          if self.duration
+    : if( stamp - self.init_time ) > rospy.Duration( float( self.duration ) ) :
+    break
 
-				self.clock_pub.publish(clock_msg)
-				self.publishers[topic].publish(msg)
-				topic, msg, stamp = next(self.message_generator)
-		except:
-			print(sys.exc_info()[0])
-			clock_msg = Clock()
-			clock_msg.clock = stamp + rospy.Duration(30.0)
-			self.clock_pub.publish(clock_msg)
-			time.sleep(0.5)
+    self.clock_pub.publish( clock_msg ) self.publishers[topic]
+        .publish( msg ) topic,
+    msg, stamp = next( self.message_generator ) except
+    : print( sys.exc_info()[0] ) clock_msg = Clock() clock_msg.clock = stamp
+                                                                       + rospy.Duration( 30.0 ) self.clock_pub.publish( clock_msg ) time
+                                                                             .sleep( 0.5 )
 
-		curses.echo()
-		curses.endwin()
+                                                                                 curses.echo() curses.endwin()
 
 
-def main():
-	myargv = rospy.myargv(sys.argv)
-	parser = argparse.ArgumentParser()
-	parser.add_argument('input_bag', help='bag file to be played')
-	parser.add_argument('-s', '--start', help='start sec seconds into the bag')
-	parser.add_argument('-u', '--duration', help='play only sec seconds into the bag')
-	args = parser.parse_args(myargv[1:])
+                                                                                     def main() :
+    myargv = rospy.myargv( sys.argv ) parser =
+          argparse.ArgumentParser() parser.add_argument( 'input_bag', help = 'bag file to be played' ) parser
+              .add_argument( '-s', '--start', help = 'start sec seconds into the bag' ) parser.add_argument(
+                  '-u', '--duration', help = 'play only sec seconds into the bag' ) args = parser.parse_args( myargv [1:] )
 
-	if len(sys.argv) < 2:
-		print('usage bag_player src_bagname')
-		return
+                                                                                                   if len( sys.argv )
+                                                                                               < 2
+    : print( 'usage bag_player src_bagname' ) return
 
-	rospy.init_node('bag_player')
-	BagPlayer(args.input_bag, args.start, args.duration)
+      rospy.init_node( 'bag_player' ) BagPlayer( args.input_bag, args.start, args.duration )
 
-if __name__ == '__main__':
-	main()
+          if __name__ == '__main__' : main()

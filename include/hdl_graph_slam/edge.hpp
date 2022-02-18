@@ -4,8 +4,8 @@
 #define EDGE_HPP
 
 #include <ros/ros.h>
-#include <Eigen/Dense>
 
+#include <Eigen/Dense>
 #include <hdl_graph_slam/global_id.hpp>
 
 
@@ -20,29 +20,29 @@ namespace hdl_graph_slam {
  */
 struct Edge {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  using Ptr = std::shared_ptr<Edge>;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    using Ptr = std::shared_ptr<Edge>;
 
-  enum Type {
-    TYPE_ODOM,
-    TYPE_LOOP
-  };
+    enum Type {
+        TYPE_ODOM,
+        TYPE_LOOP,
+    };
 
-  Edge(const g2o::EdgeSE3* edge, Type type);
-  Edge(const g2o::EdgeSE3* edge, Type type, GlobalId from_gid, GlobalId to_gid, const GlobalIdGenerator &gid_generator);
-  //Edge(const std::string& directory, g2o::HyperGraph* graph);
-  virtual ~Edge();
+    Edge( const g2o::EdgeSE3* edge, Type type );
+    Edge( const g2o::EdgeSE3* edge, Type type, GlobalId from_gid, GlobalId to_gid, const GlobalIdGenerator& gid_generator );
+    // Edge(const std::string& directory, g2o::HyperGraph* graph);
+    virtual ~Edge();
 
-  long id() const;
-  const Eigen::Isometry3d& relative_pose() const;
-  const Eigen::Matrix<double, 6, 6>& information() const;
+    long                               id() const;
+    const Eigen::Isometry3d&           relative_pose() const;
+    const Eigen::Matrix<double, 6, 6>& information() const;
 
 public:
-  const g2o::EdgeSE3*   edge;       // edge instance
-  Type type;
-  GlobalId gid;
-  GlobalId from_gid;
-  GlobalId to_gid;
+    const g2o::EdgeSE3* edge;  // edge instance
+    Type                type;
+    GlobalId            gid;
+    GlobalId            from_gid;
+    GlobalId            to_gid;
 };
 
 

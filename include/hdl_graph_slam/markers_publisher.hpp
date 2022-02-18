@@ -13,19 +13,18 @@ namespace hdl_graph_slam {
 
 class MarkersPublisher {
 public:
-    void onInit(ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh);
+    void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
 
-    void publish(std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes, double loop_detector_distance_thresh);
+    void publish( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
+                  double loop_detector_distance_thresh );
 
-    uint32_t getNumSubscribers() const {
-      return markers_pub.getNumSubscribers();
-    }
+    uint32_t getNumSubscribers() const { return markers_pub.getNumSubscribers(); }
 
 private:
-  ros::Publisher markers_pub;
+    ros::Publisher markers_pub;
 };
 
-} // namespace hdl_graph_slam
+}  // namespace hdl_graph_slam
 
 
-#endif // MARKER_PUBLISHER_HPP
+#endif  // MARKER_PUBLISHER_HPP

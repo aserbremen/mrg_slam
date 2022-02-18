@@ -3,26 +3,29 @@
 #ifndef LOOP_DETECTOR_HPP
 #define LOOP_DETECTOR_HPP
 
+#include <g2o/types/slam3d/vertex_se3.h>
+
 #include <boost/format.hpp>
+#include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <hdl_graph_slam/registrations.hpp>
-#include <hdl_graph_slam/graph_slam.hpp>
-
-#include <g2o/types/slam3d/vertex_se3.h>
 
 namespace hdl_graph_slam {
 
 struct Loop {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  using Ptr = std::shared_ptr<Loop>;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    using Ptr = std::shared_ptr<Loop>;
 
-  Loop(const KeyFrame::Ptr& key1, const KeyFrame::Ptr& key2, const Eigen::Matrix4f& relpose) : key1(key1), key2(key2), relative_pose(relpose) {}
+    Loop( const KeyFrame::Ptr& key1, const KeyFrame::Ptr& key2, const Eigen::Matrix4f& relpose ) :
+        key1( key1 ), key2( key2 ), relative_pose( relpose )
+    {
+    }
 
 public:
-  KeyFrame::Ptr key1;
-  KeyFrame::Ptr key2;
-  Eigen::Matrix4f relative_pose;
+    KeyFrame::Ptr   key1;
+    KeyFrame::Ptr   key2;
+    Eigen::Matrix4f relative_pose;
 };
 
 /**
@@ -30,52 +33,56 @@ public:
  */
 class LoopDetector {
 public:
-  typedef pcl::PointXYZI PointT;
+    typedef pcl::PointXYZI PointT;
 
-  /**
-   * @brief constructor
-   * @param pnh
-   */
-  LoopDetector(ros::NodeHandle& pnh);
+    /**
+     * @brief constructor
+     * @param pnh
+     */
+    LoopDetector( ros::NodeHandle& pnh );
 
-  /**
-   * @brief detect loops and add them to the pose graph
-   * @param keyframes       keyframes
-   * @param new_keyframes   newly registered keyframes
-   * @param graph_slam      pose graph
-   */
-  std::vector<Loop::Ptr> detect(const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes, hdl_graph_slam::GraphSLAM& graph_slam);
+    /**
+     * @brief detect loops and add them to the pose graph
+     * @param keyframes       keyframes
+     * @param new_keyframes   newly registered keyframes
+     * @param graph_slam      pose graph
+     */
+    std::vector<Loop::Ptr> detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
+                                   hdl_graph_slam::GraphSLAM& graph_slam );
 
-  double get_distance_thresh() const;
-
-private:
-  /**
-   * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
-   * @param keyframes      candidate keyframes of loop start
-   * @param new_keyframe   loop end keyframe
-   * @return loop candidates
-   */
-  std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const;
-
-  /**
-   * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched well, the loop is added to the pose graph
-   * @param candidate_keyframes  candidate keyframes of loop start
-   * @param new_keyframe         loop end keyframe
-   * @param graph_slam           graph slam
-   */
-  Loop::Ptr matching(const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe, hdl_graph_slam::GraphSLAM& graph_slam);
+    double get_distance_thresh() const;
 
 private:
-  double distance_thresh, distance_thresh_squared;  // estimated distance between keyframes consisting a loop must be less than this distance
-  double accum_distance_thresh;                     // traveled distance between ...
-  double distance_from_last_edge_thresh;            // a new loop edge must far from the last one at least this distance
+    /**
+     * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
+     * @param keyframes      candidate keyframes of loop start
+     * @param new_keyframe   loop end keyframe
+     * @return loop candidates
+     */
+    std::vector<KeyFrame::Ptr> find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const;
 
-  double fitness_score_max_range;  // maximum allowable distance between corresponding points
-  double fitness_score_thresh;     // threshold for scan matching
+    /**
+     * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched
+     * well, the loop is added to the pose graph
+     * @param candidate_keyframes  candidate keyframes of loop start
+     * @param new_keyframe         loop end keyframe
+     * @param graph_slam           graph slam
+     */
+    Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
+                        hdl_graph_slam::GraphSLAM& graph_slam );
 
-  double last_edge_accum_distance;
+private:
+    double distance_thresh,
+        distance_thresh_squared;            // estimated distance between keyframes consisting a loop must be less than this distance
+    double accum_distance_thresh;           // traveled distance between ...
+    double distance_from_last_edge_thresh;  // a new loop edge must far from the last one at least this distance
 
-  pcl::Registration<PointT, PointT>::Ptr registration;
+    double fitness_score_max_range;  // maximum allowable distance between corresponding points
+    double fitness_score_thresh;     // threshold for scan matching
+
+    double last_edge_accum_distance;
+
+    pcl::Registration<PointT, PointT>::Ptr registration;
 };
 
 }  // namespace hdl_graph_slam
