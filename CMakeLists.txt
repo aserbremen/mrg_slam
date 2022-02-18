@@ -128,6 +128,10 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/map_cloud_generator.cpp
   src/hdl_graph_slam/registrations.cpp
   src/hdl_graph_slam/information_matrix_calculator.cpp
+  src/hdl_graph_slam/imu_processor.cpp
+  src/hdl_graph_slam/gps_processor.cpp
+  src/hdl_graph_slam/floor_coeffs_processor.cpp
+  src/hdl_graph_slam/markers_publisher.cpp
   src/g2o/robust_kernel_io.cpp
 )
 target_link_libraries(hdl_graph_slam_nodelet

@@ -49,13 +49,13 @@ public:
   double get_distance_thresh() const;
 
 private:
-/**
- * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
- * @param keyframes      candidate keyframes of loop start
- * @param new_keyframe   loop end keyframe
- * @return loop candidates
- */
-std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const;
+  /**
+   * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
+   * @param keyframes      candidate keyframes of loop start
+   * @param new_keyframe   loop end keyframe
+   * @return loop candidates
+   */
+  std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const;
 
   /**
    * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched well, the loop is added to the pose graph
