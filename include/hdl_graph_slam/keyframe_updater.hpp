@@ -19,48 +19,20 @@ public:
    * @brief constructor
    * @param pnh
    */
-  KeyframeUpdater(ros::NodeHandle& pnh) : is_first(true), prev_keypose(Eigen::Isometry3d::Identity()) {
-    keyframe_delta_trans = pnh.param<double>("keyframe_delta_trans", 2.0);
-    keyframe_delta_angle = pnh.param<double>("keyframe_delta_angle", 2.0);
-
-    accum_distance = 0.0;
-  }
+  KeyframeUpdater(ros::NodeHandle& pnh);
 
   /**
    * @brief decide if a new frame should be registered to the graph
    * @param pose  pose of the frame
    * @return  if true, the frame should be registered
    */
-  bool update(const Eigen::Isometry3d& pose) {
-    // first frame is always registered to the graph
-    if(is_first) {
-      is_first = false;
-      prev_keypose = pose;
-      return true;
-    }
-
-    // calculate the delta transformation from the previous keyframe
-    Eigen::Isometry3d delta = prev_keypose.inverse() * pose;
-    double dx = delta.translation().norm();
-    double da = Eigen::AngleAxisd(delta.linear()).angle();
-
-    // too close to the previous frame
-    if(dx < keyframe_delta_trans && da < keyframe_delta_angle) {
-      return false;
-    }
-
-    accum_distance += dx;
-    prev_keypose = pose;
-    return true;
-  }
+  bool update(const Eigen::Isometry3d& pose);
 
   /**
    * @brief the last keyframe's accumulated distance from the first keyframe
    * @return accumulated distance
    */
-  double get_accum_distance() const {
-    return accum_distance;
-  }
+  double get_accum_distance() const;
 
 private:
   // parameters
