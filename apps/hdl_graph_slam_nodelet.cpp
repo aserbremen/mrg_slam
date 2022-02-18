@@ -1089,7 +1089,10 @@ private:
   bool publish_graph_service(hdl_graph_slam::PublishGraphRequest& req, hdl_graph_slam::PublishGraphResponse& res) {
     main_thread_mutex.lock();
     GraphRos msg;
+
     msg.robot_name = own_name;
+    msg.latest_keyframe_gid = prev_robot_keyframe->gid;
+    tf::poseEigenToMsg(prev_robot_keyframe->odom, msg.latest_keyframe_odom);
     
     msg.keyframes.resize(keyframes.size());
     for(size_t i = 0; i < keyframes.size(); i++) {
