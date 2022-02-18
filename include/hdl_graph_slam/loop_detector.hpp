@@ -38,6 +38,7 @@ public:
    */
   LoopDetector(ros::NodeHandle& pnh) {
     distance_thresh = pnh.param<double>("distance_thresh", 5.0);
+    distance_thresh_squared = distance_thresh*distance_thresh;
     accum_distance_thresh = pnh.param<double>("accum_distance_thresh", 8.0);
     distance_from_last_edge_thresh = pnh.param<double>("min_edge_interval", 5.0);
 
@@ -69,20 +70,20 @@ public:
 
   double get_distance_thresh() const {
     return distance_thresh;
-  }
+}
 
 private:
-  /**
-   * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
-   * @param keyframes      candidate keyframes of loop start
-   * @param new_keyframe   loop end keyframe
-   * @return loop candidates
-   */
-  std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const {
-    // too close to the last registered loop edge
-    if(new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh) {
-      return std::vector<KeyFrame::Ptr>();
-    }
+/**
+ * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
+ * @param keyframes      candidate keyframes of loop start
+ * @param new_keyframe   loop end keyframe
+ * @return loop candidates
+ */
+std::vector<KeyFrame::Ptr> find_candidates(const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe) const {
+  // too close to the last registered loop edge
+  if(new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh) {
+    return std::vector<KeyFrame::Ptr>();
+  }
 
     std::vector<KeyFrame::Ptr> candidates;
     candidates.reserve(32);
@@ -93,12 +94,17 @@ private:
         continue;
       }
 
+      // there is already an edge
+      if(new_keyframe->edge_exists(*k)) {
+        continue;
+      }
+
       const auto& pos1 = k->node->estimate().translation();
       const auto& pos2 = new_keyframe->node->estimate().translation();
 
       // estimated distance between keyframes is too small
-      double dist = (pos1.head<2>() - pos2.head<2>()).norm();
-      if(dist > distance_thresh) {
+      double dist_squared = (pos1.head<2>() - pos2.head<2>()).squaredNorm();
+      if(dist_squared > distance_thresh_squared) {
         continue;
       }
 
@@ -173,9 +179,9 @@ private:
   }
 
 private:
-  double distance_thresh;                 // estimated distance between keyframes consisting a loop must be less than this distance
-  double accum_distance_thresh;           // traveled distance between ...
-  double distance_from_last_edge_thresh;  // a new loop edge must far from the last one at least this distance
+  double distance_thresh, distance_thresh_squared;  // estimated distance between keyframes consisting a loop must be less than this distance
+  double accum_distance_thresh;                     // traveled distance between ...
+  double distance_from_last_edge_thresh;            // a new loop edge must far from the last one at least this distance
 
   double fitness_score_max_range;  // maximum allowable distance between corresponding points
   double fitness_score_thresh;     // threshold for scan matching

@@ -34,13 +34,15 @@ public:
   KeyFrame(const std::string& directory, g2o::HyperGraph* graph);
   virtual ~KeyFrame();
 
-  void setGid(const GlobalIdGenerator &gid_generator);
+  void set_gid(const GlobalIdGenerator &gid_generator);
 
   void save(const std::string& directory);
   bool load(const std::string& directory, g2o::HyperGraph* graph);
 
   long id() const;
   Eigen::Isometry3d estimate() const;
+
+  bool edge_exists(const KeyFrame &other) const;
 
 public:
   ros::Time stamp;                                // timestamp

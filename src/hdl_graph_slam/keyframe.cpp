@@ -20,7 +20,7 @@ KeyFrame::KeyFrame(const std::string& directory, g2o::HyperGraph* graph) : stamp
 KeyFrame::~KeyFrame() {}
 
 
-void KeyFrame::setGid(const GlobalIdGenerator &gid_generator) {
+void KeyFrame::set_gid(const GlobalIdGenerator &gid_generator) {
   gid = gid_generator(id());
 }
 
@@ -158,6 +158,26 @@ long KeyFrame::id() const {
 Eigen::Isometry3d KeyFrame::estimate() const {
   return node->estimate();
 }
+
+
+bool KeyFrame::edge_exists(const KeyFrame &other) const {
+    const auto &from_node = node;
+    const auto &to_node = other.node;
+    bool exist = false;
+
+    // check if both nodes are connected by an edge already
+    for(const auto &node_edge : from_node->edges()) {
+      if(node_edge->vertices().size() == 2) {
+        if(node_edge->vertex(0) == from_node && node_edge->vertex(1) == to_node || node_edge->vertex(0) == to_node && node_edge->vertex(1) == from_node) {
+          exist = true;
+          break;
+        }
+      }
+    }
+
+    return exist;
+}
+
 
 KeyFrameSnapshot::KeyFrameSnapshot(long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg) : id(id), pose(pose), cloud(cloud), cloud_msg(cloud_msg) {}
 

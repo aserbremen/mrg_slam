@@ -156,24 +156,6 @@ public:
   }
 
 private:
-  bool edge_exists(const KeyFrame::ConstPtr &from, const KeyFrame::ConstPtr &to) const {
-      const auto &from_node = from->node;
-      const auto &to_node = to->node;
-      bool exist = false;
-
-      // check if both nodes are connected by an edge already
-      for(const auto &node_edge : from_node->edges()) {
-        if(node_edge->vertices().size() == 2) {
-          if(node_edge->vertex(0) == from_node && node_edge->vertex(1) == to_node || node_edge->vertex(0) == to_node && node_edge->vertex(1) == from_node) {
-            exist = true;
-            break;
-          }
-        }
-      }
-
-      return exist;
-  }
-
   /**
    * @brief received point clouds are pushed to #keyframe_queue
    * @param odom_msg
@@ -261,7 +243,7 @@ private:
       // add pose node
       Eigen::Isometry3d odom = odom2map * keyframe->odom;
       keyframe->node = graph_slam->add_se3_node(odom);
-      keyframe->setGid(*gid_generator);
+      keyframe->set_gid(*gid_generator);
       keyframe_gids[keyframe->gid] = keyframe;
       keyframe_hash[keyframe->stamp] = keyframe;
 
@@ -279,7 +261,9 @@ private:
           anchor_node = graph_slam->add_se3_node(Eigen::Isometry3d::Identity());
           anchor_node->setFixed(true);
           KeyFrame::Ptr anchor_kf(new KeyFrame(ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ));
-          anchor_kf->gid = 0;
+          if(!private_nh.param<bool>("fix_first_node_adaptive", true)) {
+            anchor_kf->gid = 0; // if anchor node is not adaptive (i.e. stays at the origin), its GID needs to be 0 for all robots
+          }
           anchor_kf->node = anchor_node;
           keyframe_gids[0] = anchor_kf;
 
@@ -669,7 +653,7 @@ private:
       const auto &from_keyframe = keyframe_gids[edge_ros.from_gid];
       const auto &to_keyframe = keyframe_gids[edge_ros.to_gid];
 
-      if(edge_exists(from_keyframe, to_keyframe)) {
+      if(from_keyframe->edge_exists(*to_keyframe)) {
         edge_ignore_gids.insert(edge_ros.gid);
         continue;
       }      
@@ -763,10 +747,6 @@ private:
     // loop detection
     std::vector<Loop::Ptr> loops = loop_detector->detect(keyframes, new_keyframes, *graph_slam);
     for(const auto& loop : loops) {
-      if(edge_exists(loop->key1, loop->key2)) {
-        continue;
-      }
-
       Eigen::Isometry3d relpose(loop->relative_pose.cast<double>());
       Eigen::MatrixXd information_matrix = inf_calclator->calc_information_matrix(loop->key1->cloud, loop->key2->cloud, relpose);
       auto graph_edge = graph_slam->add_se3_edge(loop->key1->node, loop->key2->node, relpose, information_matrix);
