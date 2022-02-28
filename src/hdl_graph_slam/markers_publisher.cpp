@@ -15,7 +15,8 @@ namespace hdl_graph_slam {
 void
 MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh )
 {
-    markers_pub = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
+    markers_pub  = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
+    map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
 }
 
 
@@ -29,7 +30,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // node markers
     visualization_msgs::Marker& traj_marker = markers.markers[0];
-    traj_marker.header.frame_id             = "map";
+    traj_marker.header.frame_id             = map_frame_id;
     traj_marker.header.stamp                = stamp;
     traj_marker.ns                          = "nodes";
     traj_marker.id                          = 0;
@@ -81,7 +82,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // edge markers
     visualization_msgs::Marker& edge_marker = markers.markers[2];
-    edge_marker.header.frame_id             = "map";
+    edge_marker.header.frame_id             = map_frame_id;
     edge_marker.header.stamp                = stamp;
     edge_marker.ns                          = "edges";
     edge_marker.id                          = 2;
@@ -194,7 +195,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // sphere
     visualization_msgs::Marker& sphere_marker = markers.markers[3];
-    sphere_marker.header.frame_id             = "map";
+    sphere_marker.header.frame_id             = map_frame_id;
     sphere_marker.header.stamp                = stamp;
     sphere_marker.ns                          = "loop_close_radius";
     sphere_marker.id                          = 3;

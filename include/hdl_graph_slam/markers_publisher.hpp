@@ -22,6 +22,7 @@ public:
 
 private:
     ros::Publisher markers_pub;
+    std::string    map_frame_id;
 };
 
 }  // namespace hdl_graph_slam
