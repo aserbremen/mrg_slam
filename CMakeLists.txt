@@ -61,6 +61,8 @@ add_message_files(FILES
   KeyFrameRos.msg
   EdgeRos.msg
   GraphRos.msg
+  PoseWithName.msg
+  PoseWithNameArray.msg
 )
 
 add_service_files(FILES
