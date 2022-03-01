@@ -109,6 +109,9 @@
     <param name="accum_distance_thresh" value="15.0" />
     <param name="min_edge_interval" value="5.0" />
     <param name="fitness_score_thresh" value="0.5" />
+    <!-- graph request params -->
+    <param name="graph_request_min_accum_dist" value="2.0" />
+    <param name="graph_request_max_robot_dist" value="10.0" />  
     <!-- scan matching params -->
     <param name="registration_method" value="FAST_GICP" />
     <param name="reg_num_threads" value="0" />
