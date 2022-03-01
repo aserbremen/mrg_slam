@@ -74,8 +74,8 @@ MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::Node
 void
 MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
                            const std::vector<Edge::Ptr>& edges, const KeyFrame::ConstPtr& last_keyframe,
-                           const std::vector<std::pair<KeyFrame::ConstPtr, geometry_msgs::Pose> >& others_last_kf_and_pose,
-                           double loop_detector_distance_thresh, const GlobalIdGenerator& gid_gen )
+                           const std::vector<KeyFrame::ConstPtr>& others_last_kf, double loop_detector_distance_thresh,
+                           const GlobalIdGenerator& gid_gen )
 {
     enum {
         MARKER_NODES,
@@ -162,16 +162,16 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     last_node_marker.pose.orientation.w = 1.0;
     last_node_marker.scale.x = last_node_marker.scale.y = last_node_marker.scale.z = 0.5;
 
-    last_node_marker.points.resize( others_last_kf_and_pose.size() + 2 );
-    last_node_marker.colors.resize( others_last_kf_and_pose.size() + 2 );
+    last_node_marker.points.resize( others_last_kf.size() + 2 );
+    last_node_marker.colors.resize( others_last_kf.size() + 2 );
 
-    for( size_t i = 0; i <= others_last_kf_and_pose.size(); i++ ) {
+    for( size_t i = 0; i <= others_last_kf.size(); i++ ) {
         Eigen::Vector3d pos;
-        if( i == others_last_kf_and_pose.size() ) {
+        if( i == others_last_kf.size() ) {
             pos                        = last_keyframe->node->estimate().translation();
             last_node_marker.colors[i] = color_blue;
         } else {
-            pos                        = others_last_kf_and_pose[i].first->node->estimate().translation();
+            pos                        = others_last_kf[i]->node->estimate().translation();
             last_node_marker.colors[i] = color_cyan;
         }
 

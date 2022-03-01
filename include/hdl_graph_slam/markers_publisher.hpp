@@ -18,8 +18,7 @@ public:
     void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
 
     void publish( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes, const std::vector<Edge::Ptr> &edges,
-                  const KeyFrame::ConstPtr                                               &last_keyframe,
-                  const std::vector<std::pair<KeyFrame::ConstPtr, geometry_msgs::Pose> > &others_last_kf_and_pose,
+                  const KeyFrame::ConstPtr &last_keyframe, const std::vector<KeyFrame::ConstPtr> &others_last_kf,
                   double loop_detector_distance_thresh, const GlobalIdGenerator &gid_gen );
 
     uint32_t getNumSubscribers() const { return markers_pub.getNumSubscribers(); }
