@@ -564,10 +564,12 @@ private:
         int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
         graph_slam->optimize( num_iterations );
 
-        // publish tf
+        // get transformations between map and robots
         Eigen::Isometry3d trans = prev_robot_keyframe->node->estimate() * prev_robot_keyframe->odom.inverse();
+        std::vector<std::pair<KeyFrame::ConstPtr, geometry_msgs::Pose>> others_last_kf_and_pose;
         trans_odom2map_mutex.lock();
         trans_odom2map = trans.matrix().cast<float>();
+        others_last_kf_and_pose.reserve( others_prev_robot_keyframes.size() );
         for( const auto &other_prev_kf : others_prev_robot_keyframes ) {
             //                                                node pointer                      odometry (not stored in kf for other robots)
             Eigen::Isometry3d other_trans        = other_prev_kf.second.first->node->estimate() * other_prev_kf.second.second.inverse();
@@ -581,6 +583,8 @@ private:
 
             if( iter != others_odom_poses.end() ) {
                 update_pose( other_trans, iter->second );
+                others_last_kf_and_pose.emplace_back(
+                    std::pair<KeyFrame::ConstPtr, geometry_msgs::Pose>( other_prev_kf.second.first, iter->second.second ) );
             }
         }
         trans_odom2map_mutex.unlock();
@@ -601,7 +605,8 @@ private:
         }
 
         if( markers_pub.getNumSubscribers() ) {
-            markers_pub.publish( graph_slam, keyframes, loop_detector->get_distance_thresh() );
+            markers_pub.publish( graph_slam, keyframes, edges, prev_robot_keyframe, others_last_kf_and_pose,
+                                 loop_detector->get_distance_thresh(), *gid_generator );
         }
     }
 
