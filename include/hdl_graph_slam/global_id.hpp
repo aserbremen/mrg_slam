@@ -32,6 +32,7 @@ protected:
 
     RobotId  own_id;
     GlobalId own_id_shifted;
+    GlobalId start_gid;
 };
 
 

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <ros/time.h>
+
 #include <algorithm>
 #include <hdl_graph_slam/global_id.hpp>
 #include <stdexcept>
@@ -18,7 +20,12 @@ GlobalIdGenerator::GlobalIdGenerator( const std::string &own_name, const std::ve
     }
 
     own_id         = robot_names_mapping[own_name];
-    own_id_shifted = ( (GlobalId)own_id ) << 56;  // 8 bit for robot id, rest of 64 bit for id
+    own_id_shifted = ( (GlobalId)own_id ) << 56;  // 8bit for robot id, rest of 64bit for id (56bit)
+
+    // get start gid from time to prevent id clashes if one robot should be restartet
+    auto time = ros::Time::now();
+    // take all 32 bit from sec and use the remaining 24bit (64bit - 32bit - 8bit for robot id) for the upper 24bit of nsec
+    start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nsec ) >> ( 32 - 24 );
 }
 
 
@@ -57,7 +64,7 @@ GlobalIdGenerator::operator()( int id ) const
         throw std::invalid_argument( "Id must be positive" );
     }
 
-    GlobalId gid = (GlobalId)id;
+    GlobalId gid = (GlobalId)id + start_gid;
 
     if( gid >= ( ( (uint64_t)1 ) << 56 ) ) {
         throw std::overflow_error( "Overflow in global id counter" );
