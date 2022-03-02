@@ -14,6 +14,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <nav_msgs/Odometry.h>
 #include <nodelet/nodelet.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/point_cloud.h>
 #include <pluginlib/class_list_macros.h>
@@ -152,15 +153,17 @@ private:
         const ros::Time  &stamp = cloud_msg->header.stamp;
         Eigen::Isometry3d odom  = odom2isometry( odom_msg );
 
-        pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-        pcl::fromROSMsg( *cloud_msg, *cloud );
         if( base_frame_id.empty() ) {
             base_frame_id = cloud_msg->header.frame_id;
         }
 
         {
-            std::lock_guard<std::mutex> lock( keyframe_updater_mutex );
-            if( !keyframe_updater->update( odom ) ) {
+            keyframe_updater_mutex.lock();
+            bool   update_required = keyframe_updater->update( odom );
+            double accum_d         = keyframe_updater->get_accum_distance();
+            keyframe_updater_mutex.unlock();
+
+            if( !update_required ) {
                 if( keyframe_queue.empty() ) {
                     std_msgs::Header read_until;
                     read_until.stamp    = stamp + ros::Duration( 10, 0 );
@@ -170,14 +173,76 @@ private:
                     read_until_pub.publish( read_until );
                 }
             } else {
-                double        accum_d = keyframe_updater->get_accum_distance();
-                KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg ) );
+                pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
+                pcl::fromROSMsg( *cloud_msg, *cloud );
+                sensor_msgs::PointCloud2::ConstPtr cloud_msg_filtered = cloud_msg;
+
+                // get poses of other robots and remove corresponding points
+                Eigen::Isometry3d            map2odom;
+                std::vector<Eigen::Vector3d> others_positions;
+                {
+                    std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
+                    map2odom = trans_odom2map.cast<double>().inverse();
+
+                    others_positions.resize( others_odom_poses.size() );
+                    size_t i = 0;
+                    for( const auto &odom_pose : others_odom_poses ) {
+                        others_positions[i].x() = odom_pose.second.second.position.x;
+                        others_positions[i].y() = odom_pose.second.second.position.y;
+                        others_positions[i].z() = odom_pose.second.second.position.z;
+                        i++;
+                    }
+                }
+                if( !others_positions.empty() ) {
+                    Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
+
+                    // transform other robots' positions to sensro frame
+                    std::vector<Eigen::Vector3f> others_positions_sensor;
+                    others_positions_sensor.resize( others_positions.size() );
+                    for( size_t i = 0; i < others_positions.size(); i++ ) {
+                        others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
+                    }
+
+                    float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
+                    robot_radius_sqr *= robot_radius_sqr;
+
+                    // get points to be removed
+                    pcl::PointIndices::Ptr to_be_removed( new pcl::PointIndices() );
+                    to_be_removed->indices.reserve( cloud->size() );
+                    for( size_t i = 0; i < cloud->size(); i++ ) {
+                        const auto     &point_pcl = ( *cloud )[i];
+                        Eigen::Vector3f point( point_pcl.x, point_pcl.y, point_pcl.z );
+                        for( const auto &other_position_sensor : others_positions_sensor ) {
+                            float distSqr = ( point - other_position_sensor ).squaredNorm();
+                            if( distSqr < robot_radius_sqr ) {
+                                to_be_removed->indices.push_back( i );
+                                break;
+                            }
+                        }
+                    }
+
+                    // remove points
+                    pcl::ExtractIndices<PointT> extract;
+                    extract.setInputCloud( cloud );
+                    extract.setIndices( to_be_removed );
+                    extract.setNegative( true );
+                    extract.filter( *cloud );
+
+                    // create ROS cloud to be stored within the keyframe
+                    sensor_msgs::PointCloud2::Ptr cloud_msg_tmp( new sensor_msgs::PointCloud2 );
+                    pcl::toROSMsg( *cloud, *cloud_msg_tmp );
+                    cloud_msg_filtered = cloud_msg_tmp;
+                }
+
+                // create keyframe and add it to the queue
+                KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
 
                 std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
                 keyframe_queue.push_back( keyframe );
             }
         }
 
+        // publish own odometry
         PoseWithName pose_msg;
         pose_msg.header     = odom_msg->header;
         pose_msg.robot_name = own_name;
