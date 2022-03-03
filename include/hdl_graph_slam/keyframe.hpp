@@ -46,14 +46,15 @@ public:
     bool edge_exists( const KeyFrame& other ) const;
 
 public:
-    ros::Time                          stamp;           // timestamp
-    Eigen::Isometry3d                  odom;            // odometry (estimated by scan_matching_odometry)
-    double                             accum_distance;  // accumulated distance from the first node (by scan_matching_odometry)
-    GlobalId                           gid;             // global id
-    pcl::PointCloud<PointT>::ConstPtr  cloud;           // point cloud
-    sensor_msgs::PointCloud2::ConstPtr cloud_msg;       // point cloud ROS msg
-    boost::optional<Eigen::Vector4d>   floor_coeffs;    // detected floor's coefficients
-    boost::optional<Eigen::Vector3d>   utm_coord;       // UTM coord obtained by GPS
+    ros::Time                          stamp;             // timestamp
+    Eigen::Isometry3d                  odom;              // odometry (estimated by scan_matching_odometry)
+    double                             accum_distance;    // accumulated distance from the first node (by scan_matching_odometry)
+    GlobalId                           gid;               // global id
+    bool                               exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
+    pcl::PointCloud<PointT>::ConstPtr  cloud;             // point cloud
+    sensor_msgs::PointCloud2::ConstPtr cloud_msg;         // point cloud ROS msg
+    boost::optional<Eigen::Vector4d>   floor_coeffs;      // detected floor's coefficients
+    boost::optional<Eigen::Vector3d>   utm_coord;         // UTM coord obtained by GPS
 
     boost::optional<Eigen::Vector3d>    acceleration;  //
     boost::optional<Eigen::Quaterniond> orientation;   //
@@ -73,15 +74,15 @@ public:
 
     KeyFrameSnapshot( const KeyFrame::Ptr& key );
     KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                      const sensor_msgs::PointCloud2::ConstPtr& cloud_msg = nullptr );
+                      bool exclude_from_map = false );
 
     ~KeyFrameSnapshot();
 
 public:
-    long                               id;
-    Eigen::Isometry3d                  pose;       // pose estimated by graph optimization
-    pcl::PointCloud<PointT>::ConstPtr  cloud;      // point cloud
-    sensor_msgs::PointCloud2::ConstPtr cloud_msg;  // point cloud ROS msg
+    long                              id;
+    Eigen::Isometry3d                 pose;              // pose estimated by graph optimization
+    pcl::PointCloud<PointT>::ConstPtr cloud;             // point cloud
+    bool                              exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
 };
 
 }  // namespace hdl_graph_slam

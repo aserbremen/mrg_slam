@@ -308,8 +308,12 @@ private:
             keyframe_gids[keyframe->gid]   = keyframe;
             keyframe_hash[keyframe->stamp] = keyframe;
 
-            // fix the first node
+            // first keyframe?
             if( keyframes.empty() && new_keyframes.size() == 1 ) {
+                keyframe->exclude_from_map = true;  // exclude point cloud of first keyframe from map, because points corresponding to other
+                                                    // robots have not been filtered for this keyframe
+
+                // fix the first node
                 if( private_nh.param<bool>( "fix_first_node", false ) ) {
                     Eigen::MatrixXd   information = Eigen::MatrixXd::Identity( 6, 6 );
                     std::stringstream sststd( private_nh.param<std::string>( "fix_first_node_stddev", "1 1 1 1 1 1" ) );
@@ -451,6 +455,7 @@ private:
             tf::poseMsgToEigen( keyframe_ros.estimate, pose );
             keyframe->node               = graph_slam->add_se3_node( pose );
             keyframe->gid                = keyframe_ros.gid;
+            keyframe->exclude_from_map   = keyframe_ros.exclude_from_map;
             keyframe_gids[keyframe->gid] = keyframe;
             new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure
                                                   // don't add it to keyframe_hash, which is only used for floor_coeffs
@@ -845,10 +850,11 @@ private:
 
             msg.keyframes.resize( keyframes.size() );
             for( size_t i = 0; i < keyframes.size(); i++ ) {
-                auto &dst = msg.keyframes[i];
-                auto &src = keyframes[i];
-                dst.gid   = src->gid;
-                dst.stamp = src->stamp;
+                auto &dst            = msg.keyframes[i];
+                auto &src            = keyframes[i];
+                dst.gid              = src->gid;
+                dst.stamp            = src->stamp;
+                dst.exclude_from_map = src->exclude_from_map;
                 tf::poseEigenToMsg( src->estimate(), dst.estimate );
                 dst.cloud = *src->cloud_msg;
             }

@@ -12,12 +12,25 @@ namespace hdl_graph_slam {
 
 KeyFrame::KeyFrame( const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
                     const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr& cloud_msg ) :
-    stamp( stamp ), odom( odom ), accum_distance( accum_distance ), gid( 0 ), cloud( cloud ), cloud_msg( cloud_msg ), node( nullptr )
+    stamp( stamp ),
+    odom( odom ),
+    accum_distance( accum_distance ),
+    gid( 0 ),
+    exclude_from_map( false ),
+    cloud( cloud ),
+    cloud_msg( cloud_msg ),
+    node( nullptr )
 {
 }
 
 KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
-    stamp(), odom( Eigen::Isometry3d::Identity() ), accum_distance( -1 ), cloud( nullptr ), cloud_msg( nullptr ), node( nullptr )
+    stamp(),
+    odom( Eigen::Isometry3d::Identity() ),
+    accum_distance( -1 ),
+    exclude_from_map( false ),
+    cloud( nullptr ),
+    cloud_msg( nullptr ),
+    node( nullptr )
 {
     load( directory, graph );
 }
@@ -162,11 +175,13 @@ KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
     return true;
 }
 
+
 long
 KeyFrame::id() const
 {
     return node->id();
 }
+
 
 Eigen::Isometry3d
 KeyFrame::estimate() const
@@ -198,13 +213,14 @@ KeyFrame::edge_exists( const KeyFrame& other ) const
 
 
 KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                                    const sensor_msgs::PointCloud2::ConstPtr& cloud_msg ) :
-    id( id ), pose( pose ), cloud( cloud ), cloud_msg( cloud_msg )
+                                    bool exclude_from_map ) :
+    id( id ), pose( pose ), exclude_from_map( exclude_from_map ), cloud( cloud )
 {
 }
 
+
 KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key ) :
-    id( key->id() ), pose( key->node->estimate() ), cloud( key->cloud ), cloud_msg( key->cloud_msg )
+    id( key->id() ), pose( key->node->estimate() ), exclude_from_map( key->exclude_from_map ), cloud( key->cloud )
 {
 }
 

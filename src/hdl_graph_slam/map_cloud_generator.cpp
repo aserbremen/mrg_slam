@@ -22,6 +22,9 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     cloud->reserve( keyframes.front()->cloud->size() * keyframes.size() );
 
     for( const auto& keyframe : keyframes ) {
+        if( keyframe->exclude_from_map ) {
+            continue;
+        }
         Eigen::Matrix4f pose = keyframe->pose.matrix().cast<float>();
         for( const auto& src_pt : keyframe->cloud->points ) {
             PointT dst_pt;
