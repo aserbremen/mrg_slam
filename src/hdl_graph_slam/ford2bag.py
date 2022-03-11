@@ -1,15 +1,25 @@
-#!/ usr / bin / python
-#SPDX - License - Identifier : BSD - 2 - Clause
-import re import os import sys import struct import numpy import scipy.io
+#!/usr/bin/python
+# SPDX-License-Identifier: BSD-2-Clause
+import re
+import os
+import sys
+import struct
+import numpy
+import scipy.io
 
-    import rospy import rosbag import progressbar import sensor_msgs.point_cloud2 as pc2
+import rospy
+import rosbag
+import progressbar
+import sensor_msgs.point_cloud2 as pc2
 
-    from sensor_msgs.msg import NavSatFix, NavSatStatus, PointCloud2 from geographic_msgs.msg import GeoPointStamped
+from sensor_msgs.msg import NavSatFix, NavSatStatus, PointCloud2
+from geographic_msgs.msg import GeoPointStamped
 
 
-                                                         def gps2navsat( filename, bag ) : with open( filename, 'r' ) as file:
-try:
-    while True:
+def gps2navsat(filename, bag):
+	with open(filename, 'r') as file:
+		try:
+			while True:
 				data = struct.unpack('qddd', file.read(8*4))
 				time = data[0]
 				local = data[1:]
