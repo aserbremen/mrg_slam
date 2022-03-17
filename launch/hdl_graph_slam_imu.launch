@@ -31,7 +31,6 @@
 
   <!-- prefiltering_nodelet -->
   <node pkg="nodelet" type="nodelet" name="prefiltering_nodelet" args="load hdl_graph_slam/PrefilteringNodelet $(arg nodelet_manager)" output="screen">
-    <remap from="/velodyne_points" to="$(arg points_topic)" />
     <remap from="/imu/data" to="$(arg imu_topic)" />
     <param name="deskewing" value="$(arg enable_imu_frontend)" />
     <param name="scan_period" value="0.1" />
@@ -50,12 +49,13 @@
     <param name="statistical_stddev" value="1.2" />
     <param name="radius_radius" value="0.5" />
     <param name="radius_min_neighbors" value="2" />
+    
+    <remap from="/velodyne_points" to="$(arg points_topic)" />
   </node>
 
   <!-- scan_matching_odometry_nodelet -->
   <node pkg="nodelet" type="nodelet" name="scan_matching_odometry_nodelet" args="load hdl_graph_slam/ScanMatchingOdometryNodelet $(arg nodelet_manager)">
     <param name="enable_imu_frontend" value="$(arg enable_imu_frontend)" />
-    <param name="points_topic" value="$(arg points_topic)" />
     <param name="odom_frame_id" value="odom" />
     <param name="keyframe_delta_trans" value="0.25" />
     <param name="keyframe_delta_angle" value="2.0" />
@@ -75,23 +75,25 @@
     <param name="ndt_resolution" value="1.0" />
     <param name="ndt_num_threads" value="0" />
     <param name="ndt_nn_search_method" value="DIRECT7" />
+    
+    <remap from="/velodyne_points" to="$(arg points_topic)" />
   </node>
 
   <!-- floor_detection_nodelet -->
   <node pkg="nodelet" type="nodelet" name="floor_detection_nodelet" args="load hdl_graph_slam/FloorDetectionNodelet $(arg nodelet_manager)" if="$(arg enable_floor_detection)">
-    <param name="points_topic" value="$(arg points_topic)" />
     <param name="tilt_deg" value="0.0" />
     <param name="sensor_height" value="1.5" />
     <param name="height_clip_range" value="0.5" />
     <param name="floor_pts_thresh" value="256" />
     <param name="use_normal_filtering" value="true" />
     <param name="normal_filter_thresh" value="20.0" />
+
+    <param name="points_topic" value="$(arg points_topic)" />
+    <remap from="/filtered_points" to="/prefiltering/filtered_points" />
   </node>
 
   <!-- hdl_graph_slam_nodelet -->
   <node pkg="nodelet" type="nodelet" name="hdl_graph_slam_nodelet" args="load hdl_graph_slam/HdlGraphSlamNodelet $(arg nodelet_manager)">
-    <param name="points_topic" value="$(arg points_topic)" />
-    <remap from="/gpsimu_driver/imu_data" to="$(arg imu_topic)" />
     <!-- frame settings -->
     <param name="map_frame_id" value="map" />
     <param name="odom_frame_id" value="odom" />
@@ -154,6 +156,14 @@
     <param name="graph_update_interval" value="1.5" />
     <param name="map_cloud_update_interval" value="3.0" />
     <param name="map_cloud_resolution" value="0.01" />
+
+    <!-- topics -->
+    <param name="points_topic" value="$(arg points_topic)" />
+    <remap from="/imu/data" to="$(arg imu_topic)" />
+
+    <remap from="/filtered_points" to="/prefiltering/filtered_points" />
+    <remap from="/odom"            to="/scan_matching_odometry/odom"  />
+    <remap from="/floor_coeffs"    to="/floor_detection/floor_coeffs"  />
   </node>
 
   <node pkg="hdl_graph_slam" type="map2odom_publisher.py" name="map2odom_publisher" />

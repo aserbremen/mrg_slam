@@ -21,7 +21,7 @@ ImuProcessor::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHand
     imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
     imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
 
-    imu_sub = nh.subscribe( "/gpsimu_driver/imu_data", 1024, &ImuProcessor::imu_callback, this );
+    imu_sub = nh.subscribe( "/imu/data", 1024, &ImuProcessor::imu_callback, this );
 }
 
 
@@ -98,7 +98,7 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
 
         keyframe->acceleration = Eigen::Vector3d( acc_base.vector.x, acc_base.vector.y, acc_base.vector.z );
         keyframe->orientation  = Eigen::Quaterniond( quat_base.quaternion.w, quat_base.quaternion.x, quat_base.quaternion.y,
-                                                    quat_base.quaternion.z );
+                                                     quat_base.quaternion.z );
         keyframe->orientation  = keyframe->orientation;
         if( keyframe->orientation->w() < 0.0 ) {
             keyframe->orientation->coeffs() = -keyframe->orientation->coeffs();

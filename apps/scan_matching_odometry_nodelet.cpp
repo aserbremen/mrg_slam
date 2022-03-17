@@ -51,10 +51,10 @@ public:
 
         points_sub         = nh.subscribe( "/filtered_points", 256, &ScanMatchingOdometryNodelet::cloud_callback, this );
         read_until_pub     = nh.advertise<std_msgs::Header>( "/scan_matching_odometry/read_until", 32 );
-        odom_pub           = nh.advertise<nav_msgs::Odometry>( "/odom", 32 );
+        odom_pub           = nh.advertise<nav_msgs::Odometry>( "/scan_matching_odometry/odom", 32 );
         trans_pub          = nh.advertise<geometry_msgs::TransformStamped>( "/scan_matching_odometry/transform", 32 );
         status_pub         = private_nh.advertise<ScanMatchingStatus>( "/scan_matching_odometry/status", 8 );
-        aligned_points_pub = nh.advertise<sensor_msgs::PointCloud2>( "/aligned_points", 32 );
+        aligned_points_pub = nh.advertise<sensor_msgs::PointCloud2>( "/scan_matching_odometry/aligned_points", 32 );
     }
 
 private:

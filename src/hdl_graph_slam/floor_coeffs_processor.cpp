@@ -13,7 +13,7 @@ FloorCoeffsProcessor::onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::
     floor_plane_node_ptr = nullptr;
 
     floor_edge_stddev = private_nh->param<double>( "floor_edge_stddev", 10.0 );
-    floor_sub         = nh.subscribe( "/floor_detection/floor_coeffs", 1024, &FloorCoeffsProcessor::floor_coeffs_callback, this );
+    floor_sub         = nh.subscribe( "/floor_coeffs", 1024, &FloorCoeffsProcessor::floor_coeffs_callback, this );
 }
 
 
@@ -41,7 +41,7 @@ FloorCoeffsProcessor::floor_coeffs_callback( const hdl_graph_slam::FloorCoeffsCo
 bool
 FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
                              const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-                             const ros::Time &                                                latest_keyframe_stamp )
+                             const ros::Time                                                 &latest_keyframe_stamp )
 {
     std::lock_guard<std::mutex> lock( floor_coeffs_queue_mutex );
 

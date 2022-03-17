@@ -40,8 +40,8 @@ public:
         }
 
         points_sub  = nh.subscribe( "/velodyne_points", 64, &PrefilteringNodelet::cloud_callback, this );
-        points_pub  = nh.advertise<sensor_msgs::PointCloud2>( "/filtered_points", 32 );
-        colored_pub = nh.advertise<sensor_msgs::PointCloud2>( "/colored_points", 32 );
+        points_pub  = nh.advertise<sensor_msgs::PointCloud2>( "/prefiltering/filtered_points", 32 );
+        colored_pub = nh.advertise<sensor_msgs::PointCloud2>( "/prefiltering/colored_points", 32 );
     }
 
 private:
