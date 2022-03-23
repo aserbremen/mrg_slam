@@ -609,15 +609,17 @@ private:
      */
     bool update_cloud_msg()
     {
-        if( !graph_updated ) {
-            return false;
-        }
-
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
-        keyframes_snapshot_mutex.lock();
-        snapshot = keyframes_snapshot;
-        keyframes_snapshot_mutex.unlock();
+        {
+            std::lock_guard<std::mutex> lock( keyframes_snapshot_mutex );
+
+            if( !graph_updated ) {
+                return false;
+            }
+            snapshot      = keyframes_snapshot;
+            graph_updated = false;
+        }
 
         auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution );
         if( !cloud ) {
@@ -649,6 +651,10 @@ private:
             return;
         }
 
+        if( !cloud_msg ) {
+            return;
+        }
+
         map_points_pub.publish( cloud_msg );
     }
 
@@ -666,7 +672,12 @@ private:
             return false;
         }
 
-        res.cloud_map = *cloud_msg;
+        if( req.last_stamp != cloud_msg->header.stamp ) {
+            res.updated   = true;
+            res.cloud_map = *cloud_msg;
+        } else {
+            res.updated = false;
+        }
 
         return true;
     }
@@ -754,8 +765,8 @@ private:
 
         keyframes_snapshot_mutex.lock();
         keyframes_snapshot.swap( snapshot );
-        keyframes_snapshot_mutex.unlock();
         graph_updated = true;
+        keyframes_snapshot_mutex.unlock();
 
         if( odom2map_pub.getNumSubscribers() ) {
             geometry_msgs::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(), map_frame_id,
