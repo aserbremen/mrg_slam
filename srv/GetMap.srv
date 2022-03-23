@@ -1,0 +1,6 @@
+# no request data required
+
+---
+
+# current map as point cloud
+sensor_msgs/PointCloud2 cloud_map

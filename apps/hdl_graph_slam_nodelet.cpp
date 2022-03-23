@@ -4,6 +4,7 @@
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <hdl_graph_slam/DumpGraph.h>
+#include <hdl_graph_slam/GetMap.h>
 #include <hdl_graph_slam/GraphRos.h>
 #include <hdl_graph_slam/PoseWithName.h>
 #include <hdl_graph_slam/PoseWithNameArray.h>
@@ -117,6 +118,7 @@ public:
 
         dump_service_server          = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamNodelet::dump_service, this );
         save_map_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamNodelet::save_map_service, this );
+        get_map_service_server       = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamNodelet::get_map_service, this );
         publish_graph_service_server = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph", &HdlGraphSlamNodelet::publish_graph_service,
                                                                this );
 
@@ -602,13 +604,13 @@ private:
     }
 
     /**
-     * @brief generate map point cloud and publish it
-     * @param event
+     * @brief update the cloud_msg with the latest map
+     * @return true if cloud_msg was updated (cloud_msg can still be valid even if not updated)
      */
-    void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
+    bool update_cloud_msg()
     {
-        if( !map_points_pub.getNumSubscribers() || !graph_updated ) {
-            return;
+        if( !graph_updated ) {
+            return false;
         }
 
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
@@ -619,16 +621,54 @@ private:
 
         auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution );
         if( !cloud ) {
-            return;
+            return false;
         }
 
         cloud->header.frame_id = map_frame_id;
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
-        sensor_msgs::PointCloud2Ptr cloud_msg( new sensor_msgs::PointCloud2() );
+        if( !cloud_msg ) {
+            cloud_msg = sensor_msgs::PointCloud2Ptr( new sensor_msgs::PointCloud2() );
+        }
         pcl::toROSMsg( *cloud, *cloud_msg );
 
+        return true;
+    }
+
+    /**
+     * @brief generate map point cloud and publish it
+     * @param event
+     */
+    void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
+    {
+        if( !map_points_pub.getNumSubscribers() ) {
+            return;
+        }
+
+        if( !update_cloud_msg() ) {
+            return;
+        }
+
         map_points_pub.publish( cloud_msg );
+    }
+
+    /**
+     * @brief get the curren map as point cloud
+     * @param req
+     * @param res
+     * @return
+     */
+    bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
+    {
+        update_cloud_msg();
+
+        if( !cloud_msg ) {
+            return false;
+        }
+
+        res.cloud_map = *cloud_msg;
+
+        return true;
     }
 
     /**
@@ -910,6 +950,7 @@ private:
     std::unordered_map<std::string, ros::ServiceClient> request_graph_service_clients;
     ros::ServiceServer                                  dump_service_server;
     ros::ServiceServer                                  save_map_service_server;
+    ros::ServiceServer                                  get_map_service_server;
     ros::ServiceServer                                  publish_graph_service_server;
 
     std::string              own_name;
@@ -920,6 +961,10 @@ private:
     FloorCoeffsProcessor floor_coeffs_processor;
 
     MarkersPublisher markers_pub;
+
+    // latest point cloud map
+    std::mutex                  cloud_msg_mutex;
+    sensor_msgs::PointCloud2Ptr cloud_msg;
 
     // getting init pose from topic
     ros::Subscriber              init_pose_sub;
