@@ -124,7 +124,7 @@ public:
             if( robot_name != own_name ) {
                 request_graph_service_clients[robot_name] = mt_nh.serviceClient<hdl_graph_slam::PublishGraph>(
                     "/" + robot_name + "/hdl_graph_slam/publish_graph" );
-                others_last_graph_request_accum_dist[robot_name] = -1;
+                others_accum_dist[robot_name] = std::make_pair<double, double>( 0, -1 );
             }
         }
 
@@ -157,89 +157,85 @@ private:
             base_frame_id = cloud_msg->header.frame_id;
         }
 
-        {
-            keyframe_updater_mutex.lock();
-            bool   update_required = keyframe_updater->update( odom );
-            double accum_d         = keyframe_updater->get_accum_distance();
-            keyframe_updater_mutex.unlock();
+        bool   update_required = keyframe_updater->update( odom );
+        double accum_d         = keyframe_updater->get_accum_distance();
 
-            if( !update_required ) {
-                if( keyframe_queue.empty() ) {
-                    std_msgs::Header read_until;
-                    read_until.stamp    = stamp + ros::Duration( 10, 0 );
-                    read_until.frame_id = points_topic;
-                    read_until_pub.publish( read_until );
-                    read_until.frame_id = "/filtered_points";
-                    read_until_pub.publish( read_until );
+        if( !update_required ) {
+            if( keyframe_queue.empty() ) {
+                std_msgs::Header read_until;
+                read_until.stamp    = stamp + ros::Duration( 10, 0 );
+                read_until.frame_id = points_topic;
+                read_until_pub.publish( read_until );
+                read_until.frame_id = "/filtered_points";
+                read_until_pub.publish( read_until );
+            }
+        } else {
+            pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
+            pcl::fromROSMsg( *cloud_msg, *cloud );
+            sensor_msgs::PointCloud2::ConstPtr cloud_msg_filtered = cloud_msg;
+
+            // get poses of other robots and remove corresponding points
+            Eigen::Isometry3d            map2odom;
+            std::vector<Eigen::Vector3d> others_positions;
+            {
+                std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
+                map2odom = trans_odom2map.cast<double>().inverse();
+
+                others_positions.resize( others_odom_poses.size() );
+                size_t i = 0;
+                for( const auto &odom_pose : others_odom_poses ) {
+                    others_positions[i].x() = odom_pose.second.second.position.x;
+                    others_positions[i].y() = odom_pose.second.second.position.y;
+                    others_positions[i].z() = odom_pose.second.second.position.z;
+                    i++;
                 }
-            } else {
-                pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-                pcl::fromROSMsg( *cloud_msg, *cloud );
-                sensor_msgs::PointCloud2::ConstPtr cloud_msg_filtered = cloud_msg;
+            }
+            if( !others_positions.empty() ) {
+                Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
 
-                // get poses of other robots and remove corresponding points
-                Eigen::Isometry3d            map2odom;
-                std::vector<Eigen::Vector3d> others_positions;
-                {
-                    std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
-                    map2odom = trans_odom2map.cast<double>().inverse();
-
-                    others_positions.resize( others_odom_poses.size() );
-                    size_t i = 0;
-                    for( const auto &odom_pose : others_odom_poses ) {
-                        others_positions[i].x() = odom_pose.second.second.position.x;
-                        others_positions[i].y() = odom_pose.second.second.position.y;
-                        others_positions[i].z() = odom_pose.second.second.position.z;
-                        i++;
-                    }
+                // transform other robots' positions to sensro frame
+                std::vector<Eigen::Vector3f> others_positions_sensor;
+                others_positions_sensor.resize( others_positions.size() );
+                for( size_t i = 0; i < others_positions.size(); i++ ) {
+                    others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
                 }
-                if( !others_positions.empty() ) {
-                    Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
 
-                    // transform other robots' positions to sensro frame
-                    std::vector<Eigen::Vector3f> others_positions_sensor;
-                    others_positions_sensor.resize( others_positions.size() );
-                    for( size_t i = 0; i < others_positions.size(); i++ ) {
-                        others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
-                    }
+                float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
+                robot_radius_sqr *= robot_radius_sqr;
 
-                    float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
-                    robot_radius_sqr *= robot_radius_sqr;
-
-                    // get points to be removed
-                    pcl::PointIndices::Ptr to_be_removed( new pcl::PointIndices() );
-                    to_be_removed->indices.reserve( cloud->size() );
-                    for( size_t i = 0; i < cloud->size(); i++ ) {
-                        const auto     &point_pcl = ( *cloud )[i];
-                        Eigen::Vector3f point( point_pcl.x, point_pcl.y, point_pcl.z );
-                        for( const auto &other_position_sensor : others_positions_sensor ) {
-                            float distSqr = ( point - other_position_sensor ).squaredNorm();
-                            if( distSqr < robot_radius_sqr ) {
-                                to_be_removed->indices.push_back( i );
-                                break;
-                            }
+                // get points to be removed
+                pcl::PointIndices::Ptr to_be_removed( new pcl::PointIndices() );
+                to_be_removed->indices.reserve( cloud->size() );
+                for( size_t i = 0; i < cloud->size(); i++ ) {
+                    const auto     &point_pcl = ( *cloud )[i];
+                    Eigen::Vector3f point( point_pcl.x, point_pcl.y, point_pcl.z );
+                    for( const auto &other_position_sensor : others_positions_sensor ) {
+                        float distSqr = ( point - other_position_sensor ).squaredNorm();
+                        if( distSqr < robot_radius_sqr ) {
+                            to_be_removed->indices.push_back( i );
+                            break;
                         }
                     }
-
-                    // remove points
-                    pcl::ExtractIndices<PointT> extract;
-                    extract.setInputCloud( cloud );
-                    extract.setIndices( to_be_removed );
-                    extract.setNegative( true );
-                    extract.filter( *cloud );
-
-                    // create ROS cloud to be stored within the keyframe
-                    sensor_msgs::PointCloud2::Ptr cloud_msg_tmp( new sensor_msgs::PointCloud2 );
-                    pcl::toROSMsg( *cloud, *cloud_msg_tmp );
-                    cloud_msg_filtered = cloud_msg_tmp;
                 }
 
-                // create keyframe and add it to the queue
-                KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
+                // remove points
+                pcl::ExtractIndices<PointT> extract;
+                extract.setInputCloud( cloud );
+                extract.setIndices( to_be_removed );
+                extract.setNegative( true );
+                extract.filter( *cloud );
 
-                std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
-                keyframe_queue.push_back( keyframe );
+                // create ROS cloud to be stored within the keyframe
+                sensor_msgs::PointCloud2::Ptr cloud_msg_tmp( new sensor_msgs::PointCloud2 );
+                pcl::toROSMsg( *cloud, *cloud_msg_tmp );
+                cloud_msg_filtered = cloud_msg_tmp;
             }
+
+            // create keyframe and add it to the queue
+            KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
+
+            std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
+            keyframe_queue.push_back( keyframe );
         }
 
         // publish own odometry
@@ -247,6 +243,7 @@ private:
         pose_msg.header     = odom_msg->header;
         pose_msg.robot_name = own_name;
         pose_msg.pose       = odom_msg->pose.pose;
+        pose_msg.accum_dist = accum_d;
         odom_broadcast_pub.publish( pose_msg );
     }
 
@@ -529,7 +526,6 @@ private:
         pose_array_msg.header.frame_id = map_frame_id;
 
         Eigen::Vector3d other_position, own_position;
-        double          accum_dist;
         std::string     other_name           = pose_msg->robot_name;
         bool            other_position_valid = false;
 
@@ -570,13 +566,11 @@ private:
             own_position = prev_robot_keyframe->node->estimate().translation();
         }
 
-        {
-            std::lock_guard<std::mutex> lock( keyframe_updater_mutex );
-            accum_dist = keyframe_updater->get_accum_distance();
-        }
-
-        double &last_accum_dist = others_last_graph_request_accum_dist[other_name];
-        double  min_accum_dist  = private_nh.param<double>( "graph_request_min_accum_dist", 2 );
+        auto   &accum_dist_pair = others_accum_dist[other_name];
+        double  accum_dist      = accum_dist_pair.first;   // get a copy of accum_dist to allow for updating the pair with current value
+        double &last_accum_dist = accum_dist_pair.second;  // get a reference here, because it may be updated below
+        accum_dist_pair.first   = pose_msg->accum_dist;
+        double min_accum_dist   = private_nh.param<double>( "graph_request_min_accum_dist", 2 );
         if( last_accum_dist >= 0 && fabs( last_accum_dist - accum_dist ) < min_accum_dist ) {
             return;
         }
@@ -900,13 +894,14 @@ private:
     ros::Publisher  odom_broadcast_pub;
     ros::Publisher  others_poses_pub;
 
-
     std::mutex                                         trans_odom2map_mutex;
     Eigen::Matrix4f                                    trans_odom2map;
     ros::Publisher                                     odom2map_pub;
     std::unordered_map<std::string, Eigen::Isometry3d> others_odom2map;  // odom2map transform for other robots
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::Pose>> others_odom_poses;
-    std::unordered_map<std::string, double>                                            others_last_graph_request_accum_dist;
+    std::unordered_map<std::string, std::pair<double, double>> others_accum_dist;  // first:  accumulated dist of other robot,
+                                                                                   // second: accumulated dist when last graph update was
+                                                                                   //         requested from that robot
 
     std::string    points_topic;
     ros::Publisher read_until_pub;
@@ -972,7 +967,6 @@ private:
     std::shared_ptr<GraphSLAM>       graph_slam;
     std::unique_ptr<LoopDetector>    loop_detector;
     std::unique_ptr<KeyframeUpdater> keyframe_updater;
-    std::mutex                       keyframe_updater_mutex;
 
     std::unique_ptr<InformationMatrixCalculator> inf_calclator;
 };
