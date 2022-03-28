@@ -811,7 +811,7 @@ private:
             anchor_node->setEstimate( anchor_target );
         }
 
-        if( keyframes.size() < 2 ) {
+        if( keyframes.empty() ) {
             return;
         }
 
