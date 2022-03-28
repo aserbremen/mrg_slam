@@ -3,6 +3,7 @@
 #ifndef KEYFRAME_HPP
 #define KEYFRAME_HPP
 
+#include <g2o/core/sparse_block_matrix.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <ros/ros.h>
@@ -72,17 +73,22 @@ public:
     using PointT = KeyFrame::PointT;
     using Ptr    = std::shared_ptr<KeyFrameSnapshot>;
 
-    KeyFrameSnapshot( const KeyFrame::Ptr& key );
-    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                      bool exclude_from_map = false );
+    KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals = nullptr );
+    /*
+    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool exclude_from_map = false,
+                      const Eigen::MatrixXd* covariance = nullptr );
+                      */
 
     ~KeyFrameSnapshot();
 
 public:
+    ros::Time                         stamp;  // timestamp
     long                              id;
+    GlobalId                          gid;               // global id
     Eigen::Isometry3d                 pose;              // pose estimated by graph optimization
     pcl::PointCloud<PointT>::ConstPtr cloud;             // point cloud
     bool                              exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
+    Eigen::MatrixXd                   covariance;
 };
 
 }  // namespace hdl_graph_slam

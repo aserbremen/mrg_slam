@@ -1,0 +1,10 @@
+# timestamp of the last received graph estimate
+time last_stamp
+
+---
+
+# whether the graph has been updated since last_stamp
+bool updated
+
+# current graph estimate if updated is true
+GraphEstimate graph_estimate

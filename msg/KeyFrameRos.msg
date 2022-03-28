@@ -1,3 +1,5 @@
+# KeyFrame of the graph
+
 uint64 gid
 
 time stamp

@@ -4,6 +4,7 @@
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <hdl_graph_slam/DumpGraph.h>
+#include <hdl_graph_slam/GetGraphEstimate.h>
 #include <hdl_graph_slam/GetMap.h>
 #include <hdl_graph_slam/GraphRos.h>
 #include <hdl_graph_slam/PoseWithName.h>
@@ -116,9 +117,11 @@ public:
         odom_broadcast_pub  = mt_nh.advertise<hdl_graph_slam::PoseWithName>( "/hdl_graph_slam/odom_broadcast", 16 );
         others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
 
-        dump_service_server          = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamNodelet::dump_service, this );
-        save_map_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamNodelet::save_map_service, this );
-        get_map_service_server       = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamNodelet::get_map_service, this );
+        dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamNodelet::dump_service, this );
+        save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamNodelet::save_map_service, this );
+        get_map_service_server  = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamNodelet::get_map_service, this );
+        get_graph_estimate_service_server = mt_nh.advertiseService( "/hdl_graph_slam/get_graph_estimate",
+                                                                    &HdlGraphSlamNodelet::get_graph_estimate_service, this );
         publish_graph_service_server = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph", &HdlGraphSlamNodelet::publish_graph_service,
                                                                this );
 
@@ -130,13 +133,14 @@ public:
             }
         }
 
-        graph_updated                    = false;
-        double graph_update_interval     = private_nh.param<double>( "graph_update_interval", 3.0 );
-        double map_cloud_update_interval = private_nh.param<double>( "map_cloud_update_interval", 10.0 );
-        optimization_timer               = mt_nh.createWallTimer( ros::WallDuration( graph_update_interval ),
-                                                                  &HdlGraphSlamNodelet::optimization_timer_callback, this );
-        map_publish_timer                = mt_nh.createWallTimer( ros::WallDuration( map_cloud_update_interval ),
-                                                                  &HdlGraphSlamNodelet::map_points_publish_timer_callback, this );
+        cloud_msg_update_required          = false;
+        graph_estimate_msg_update_required = false;
+        double graph_update_interval       = private_nh.param<double>( "graph_update_interval", 3.0 );
+        double map_cloud_update_interval   = private_nh.param<double>( "map_cloud_update_interval", 10.0 );
+        optimization_timer                 = mt_nh.createWallTimer( ros::WallDuration( graph_update_interval ),
+                                                                    &HdlGraphSlamNodelet::optimization_timer_callback, this );
+        map_publish_timer                  = mt_nh.createWallTimer( ros::WallDuration( map_cloud_update_interval ),
+                                                                    &HdlGraphSlamNodelet::map_points_publish_timer_callback, this );
 
         gps_processor.onInit( nh, mt_nh, private_nh );
         imu_processor.onInit( nh, mt_nh, private_nh );
@@ -609,16 +613,17 @@ private:
      */
     bool update_cloud_msg()
     {
+        if( !cloud_msg_update_required ) {
+            return false;
+        }
+
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
         {
-            std::lock_guard<std::mutex> lock( keyframes_snapshot_mutex );
+            std::lock_guard<std::mutex> lock( snapshots_mutex );
 
-            if( !graph_updated ) {
-                return false;
-            }
-            snapshot      = keyframes_snapshot;
-            graph_updated = false;
+            snapshot                  = keyframes_snapshot;
+            cloud_msg_update_required = false;
         }
 
         auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution );
@@ -647,6 +652,8 @@ private:
             return;
         }
 
+        std::lock_guard<std::mutex> lock( cloud_msg_mutex );
+
         if( !update_cloud_msg() ) {
             return;
         }
@@ -666,6 +673,8 @@ private:
      */
     bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
     {
+        std::lock_guard<std::mutex> lock( cloud_msg_mutex );
+
         update_cloud_msg();
 
         if( !cloud_msg ) {
@@ -675,6 +684,77 @@ private:
         if( req.last_stamp != cloud_msg->header.stamp ) {
             res.updated   = true;
             res.cloud_map = *cloud_msg;
+        } else {
+            res.updated = false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @brief get the curren graph estimate
+     * @param req
+     * @param res
+     * @return
+     */
+    bool get_graph_estimate_service( hdl_graph_slam::GetGraphEstimateRequest &req, hdl_graph_slam::GetGraphEstimateResponse &res )
+    {
+        std::lock_guard<std::mutex> lock( graph_estimate_msg_mutex );
+
+        if( graph_estimate_msg_update_required ) {
+            if( keyframes_snapshot.empty() || edges_snapshot.empty() ) {
+                return false;
+            }
+
+            if( !graph_estimate_msg ) {
+                graph_estimate_msg = hdl_graph_slam::GraphEstimatePtr( new hdl_graph_slam::GraphEstimate() );
+            }
+
+            std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp;
+            std::vector<EdgeSnapshot::Ptr>     edges_snapshot_tmp;
+
+            {
+                std::lock_guard<std::mutex> lock( snapshots_mutex );
+
+                keyframes_snapshot_tmp = keyframes_snapshot;
+                edges_snapshot_tmp     = edges_snapshot;
+            }
+
+            graph_estimate_msg->header.frame_id = map_frame_id;
+            pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_msg->header.stamp );
+
+            graph_estimate_msg->edges.resize( edges_snapshot_tmp.size() );
+            graph_estimate_msg->keyframes.resize( keyframes_snapshot_tmp.size() );
+
+            for( size_t i = 0; i < edges_snapshot_tmp.size(); i++ ) {
+                auto &edge_out    = graph_estimate_msg->edges[i];
+                auto &edge_in     = edges_snapshot_tmp[i];
+                edge_out.gid      = edge_in->gid;
+                edge_out.from_gid = edge_in->from_gid;
+                edge_out.to_gid   = edge_in->to_gid;
+                edge_out.type     = static_cast<uint8_t>( edge_in->type );
+            }
+
+            for( size_t i = 0; i < keyframes_snapshot_tmp.size(); i++ ) {
+                auto &keyframe_out = graph_estimate_msg->keyframes[i];
+                auto &keyframe_in  = keyframes_snapshot_tmp[i];
+                keyframe_out.gid   = keyframe_in->gid;
+                keyframe_out.stamp = keyframe_in->stamp;
+                tf::poseEigenToMsg( keyframe_in->pose, keyframe_out.estimate.pose );
+                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> covMap( keyframe_out.estimate.covariance.data() );
+                covMap = keyframe_in->covariance;
+            }
+
+            graph_estimate_msg_update_required = false;
+        }
+
+        if( !graph_estimate_msg ) {
+            return false;
+        }
+
+        if( req.last_stamp != graph_estimate_msg->header.stamp ) {
+            res.updated        = true;
+            res.graph_estimate = *graph_estimate_msg;
         } else {
             res.updated = false;
         }
@@ -731,6 +811,10 @@ private:
             anchor_node->setEstimate( anchor_target );
         }
 
+        if( keyframes.size() < 2 ) {
+            return;
+        }
+
         // optimize the pose graph
         int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
         graph_slam->optimize( num_iterations );
@@ -759,14 +843,21 @@ private:
         }
         trans_odom2map_mutex.unlock();
 
-        std::vector<KeyFrameSnapshot::Ptr> snapshot( keyframes.size() );
-        std::transform( keyframes.begin(), keyframes.end(), snapshot.begin(),
-                        [=]( const KeyFrame::Ptr &k ) { return std::make_shared<KeyFrameSnapshot>( k ); } );
+        auto marginals = graph_slam->compute_marginals();
 
-        keyframes_snapshot_mutex.lock();
-        keyframes_snapshot.swap( snapshot );
-        graph_updated = true;
-        keyframes_snapshot_mutex.unlock();
+        std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp( keyframes.size() );
+        std::transform( keyframes.begin(), keyframes.end(), keyframes_snapshot_tmp.begin(),
+                        [=]( const KeyFrame::Ptr &k ) { return std::make_shared<KeyFrameSnapshot>( k, marginals ); } );
+        std::vector<EdgeSnapshot::Ptr> edges_snapshot_tmp( edges.size() );
+        std::transform( edges.begin(), edges.end(), edges_snapshot_tmp.begin(),
+                        [=]( const Edge::Ptr &e ) { return std::make_shared<EdgeSnapshot>( e ); } );
+
+        snapshots_mutex.lock();
+        keyframes_snapshot.swap( keyframes_snapshot_tmp );
+        edges_snapshot.swap( edges_snapshot_tmp );
+        cloud_msg_update_required          = true;
+        graph_estimate_msg_update_required = true;
+        snapshots_mutex.unlock();
 
         if( odom2map_pub.getNumSubscribers() ) {
             geometry_msgs::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(), map_frame_id,
@@ -841,9 +932,9 @@ private:
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
-        keyframes_snapshot_mutex.lock();
+        snapshots_mutex.lock();
         snapshot = keyframes_snapshot;
-        keyframes_snapshot_mutex.unlock();
+        snapshots_mutex.unlock();
 
         auto cloud = map_cloud_generator->generate( snapshot, req.resolution );
         if( !cloud ) {
@@ -962,6 +1053,7 @@ private:
     ros::ServiceServer                                  dump_service_server;
     ros::ServiceServer                                  save_map_service_server;
     ros::ServiceServer                                  get_map_service_server;
+    ros::ServiceServer                                  get_graph_estimate_service_server;
     ros::ServiceServer                                  publish_graph_service_server;
 
     std::string              own_name;
@@ -975,7 +1067,13 @@ private:
 
     // latest point cloud map
     std::mutex                  cloud_msg_mutex;
+    std::atomic_bool            cloud_msg_update_required;
     sensor_msgs::PointCloud2Ptr cloud_msg;
+
+    // latest graph estimate
+    std::mutex                       graph_estimate_msg_mutex;
+    std::atomic_bool                 graph_estimate_msg_update_required;
+    hdl_graph_slam::GraphEstimatePtr graph_estimate_msg;
 
     // getting init pose from topic
     ros::Subscriber              init_pose_sub;
@@ -991,11 +1089,11 @@ private:
     std::mutex                                   graph_queue_mutex;
     std::deque<hdl_graph_slam::GraphRosConstPtr> graph_queue;
 
-    // for map cloud generation
-    std::atomic_bool                   graph_updated;
+    // for map cloud generation and graph publishing
     double                             map_cloud_resolution;
-    std::mutex                         keyframes_snapshot_mutex;
+    std::mutex                         snapshots_mutex;
     std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot;
+    std::vector<EdgeSnapshot::Ptr>     edges_snapshot;
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;
 
     // global id

@@ -61,6 +61,9 @@ add_message_files(FILES
   KeyFrameRos.msg
   EdgeRos.msg
   GraphRos.msg
+  KeyFrameEstimate.msg
+  EdgeEstimate.msg
+  GraphEstimate.msg
   PoseWithName.msg
   PoseWithNameArray.msg
 )
@@ -68,6 +71,7 @@ add_message_files(FILES
 add_service_files(FILES
   SaveMap.srv
   GetMap.srv
+  GetGraphEstimate.srv
   DumpGraph.srv
   PublishGraph.srv
 )

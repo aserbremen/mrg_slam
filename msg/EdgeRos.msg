@@ -1,3 +1,5 @@
+# Edge of a graph
+
 uint64 gid
 
 uint64 from_gid

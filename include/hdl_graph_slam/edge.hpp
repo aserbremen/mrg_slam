@@ -49,26 +49,22 @@ public:
 /**
  * @brief EdgeSnapshot for publishing graph
  */
-/*
 struct EdgeSnapshot {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    using Ptr = std::shared_ptr<EdgeSnapshot>;
 
-  using Ptr = std::shared_ptr<EdgeSnapshot>;
+    EdgeSnapshot( const Edge::Ptr& edge );
+    // EdgeSnapshot(...);
 
-  EdgeSnapshot(const Edge::Ptr& edge);
-  //EdgeSnapshot(...);
-
-  ~EdgeSnapshot();
+    ~EdgeSnapshot();
 
 public:
-  long                        id;
-  long                        from_id;
-  long                        to_id;
-  Eigen::Isometry3d           relative_pose;
-  Eigen::Matrix<double, 6, 6> information;
+    Edge::Type type;
+    GlobalId   gid;
+    GlobalId   from_gid;
+    GlobalId   to_gid;
 };
-*/
 
 }  // namespace hdl_graph_slam
 

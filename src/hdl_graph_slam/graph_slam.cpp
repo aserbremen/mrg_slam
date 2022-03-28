@@ -352,34 +352,58 @@ GraphSLAM::add_robust_kernel( g2o::HyperGraph::Edge* edge, const std::string& ke
 int
 GraphSLAM::optimize( int num_iterations )
 {
-    g2o::SparseOptimizer* graph = dynamic_cast<g2o::SparseOptimizer*>( this->graph.get() );
-    if( graph->edges().size() < 10 ) {
-        return -1;
-    }
+    g2o::SparseOptimizer* optimizer = dynamic_cast<g2o::SparseOptimizer*>( this->graph.get() );
 
     std::cout << std::endl;
     std::cout << "--- pose graph optimization ---" << std::endl;
-    std::cout << "nodes: " << graph->vertices().size() << "   edges: " << graph->edges().size() << std::endl;
+    std::cout << "nodes: " << optimizer->vertices().size() << "   edges: " << optimizer->edges().size() << std::endl;
     std::cout << "optimizing... " << std::flush;
 
     std::cout << "init" << std::endl;
-    graph->initializeOptimization();
-    graph->setVerbose( true );
+    optimizer->initializeOptimization();
+    optimizer->setVerbose( true );
 
     std::cout << "chi2" << std::endl;
-    double chi2 = graph->chi2();
+    double chi2 = optimizer->chi2();
 
     std::cout << "optimize!!" << std::endl;
     auto t1         = ros::WallTime::now();
-    int  iterations = graph->optimize( num_iterations );
+    int  iterations = optimizer->optimize( num_iterations );
 
     auto t2 = ros::WallTime::now();
     std::cout << "done" << std::endl;
     std::cout << "iterations: " << iterations << " / " << num_iterations << std::endl;
-    std::cout << "chi2: (before)" << chi2 << " -> (after)" << graph->chi2() << std::endl;
+    std::cout << "chi2: (before)" << chi2 << " -> (after)" << optimizer->chi2() << std::endl;
     std::cout << "time: " << boost::format( "%.3f" ) % ( t2 - t1 ).toSec() << "[sec]" << std::endl;
 
     return iterations;
+}
+
+std::shared_ptr<g2o::SparseBlockMatrixX>
+GraphSLAM::compute_marginals( const g2o::OptimizableGraph::VertexContainer& vertices )
+{
+    g2o::SparseOptimizer* optimizer = dynamic_cast<g2o::SparseOptimizer*>( this->graph.get() );
+
+    auto res = std::make_shared<g2o::SparseBlockMatrixX>();
+    optimizer->computeMarginals( *res, vertices );
+    return res;
+}
+
+std::shared_ptr<g2o::SparseBlockMatrixX>
+GraphSLAM::compute_marginals()
+{
+    g2o::OptimizableGraph::VertexContainer vertices( graph->vertices().size() );
+    size_t                                 i = 0;
+    for( auto& v : graph->vertices() ) {
+        auto vert = static_cast<g2o::OptimizableGraph::Vertex*>( v.second );
+        if( vert->hessianIndex() >= 0 ) {
+            vertices[i] = static_cast<g2o::OptimizableGraph::Vertex*>( vert );
+            i++;
+        }
+    }
+    vertices.resize( i );
+
+    return compute_marginals( vertices );
 }
 
 void

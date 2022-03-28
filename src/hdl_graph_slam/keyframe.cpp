@@ -211,17 +211,38 @@ KeyFrame::edge_exists( const KeyFrame& other ) const
     return exist;
 }
 
-
+/*
 KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                                    bool exclude_from_map ) :
+                                    bool exclude_from_map, const Eigen::MatrixXd* _covariance ) :
     id( id ), pose( pose ), exclude_from_map( exclude_from_map ), cloud( cloud )
 {
+    if( _covariance ) {
+        covariance = *_covariance;
+    }
 }
+*/
 
-
-KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key ) :
-    id( key->id() ), pose( key->node->estimate() ), exclude_from_map( key->exclude_from_map ), cloud( key->cloud )
+KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) :
+    stamp( key->stamp ),
+    id( key->id() ),
+    gid( key->gid ),
+    pose( key->node->estimate() ),
+    exclude_from_map( key->exclude_from_map ),
+    cloud( key->cloud )
 {
+    bool cov_valid = false;
+
+    if( marginals ) {
+        auto hidx = key->node->hessianIndex();
+        if( hidx >= 0 ) {
+            covariance = *marginals->block( hidx, hidx );
+            cov_valid  = true;
+        }
+    }
+
+    if( !cov_valid ) {
+        covariance = Eigen::Matrix<double, 6, 6>::Zero();
+    }
 }
 
 KeyFrameSnapshot::~KeyFrameSnapshot() {}

@@ -4,6 +4,7 @@
 #define GRAPH_SLAM_HPP
 
 #include <g2o/core/hyper_graph.h>
+#include <g2o/core/sparse_block_matrix.h>
 #include <ros/time.h>
 
 #include <memory>
@@ -137,6 +138,18 @@ public:
      * @brief perform graph optimization
      */
     int optimize( int num_iterations );
+
+    /**
+     * @brief computes the covariance matrices for the given vertices, access result via
+     * res.block( vertex->hessianIndex(), vertex->hessianIndex() )
+     */
+    std::shared_ptr<g2o::SparseBlockMatrixX> compute_marginals( const g2o::OptimizableGraph::VertexContainer& vertices );
+
+    /**
+     * @brief computes the covariance matrices for all vertices, access result via
+     * res.block( vertex->hessianIndex(), vertex->hessianIndex() )
+     */
+    std::shared_ptr<g2o::SparseBlockMatrixX> compute_marginals();
 
     /**
      * @brief save the pose graph to a file

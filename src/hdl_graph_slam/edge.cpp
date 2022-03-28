@@ -48,7 +48,14 @@ Edge::information() const
 }
 
 
-// EdgeSnapshot::EdgeSnapshot(const Edge::Ptr& edge) : id(edge->id()), from_id(edge->from_id()), to_id(edge->to_id()),
-// relative_pose(edge->relative_pose()), information(edge->information()) {}
+EdgeSnapshot::EdgeSnapshot( const Edge::Ptr& edge ) :
+    type( edge->type ), gid( edge->gid ), from_gid( edge->from_gid ), to_gid( edge->to_gid )
+{
+}
+
+EdgeSnapshot::~EdgeSnapshot()
+{
+    // Nothing to do here
+}
 
 }  // namespace hdl_graph_slam

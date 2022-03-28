@@ -220,16 +220,17 @@
       <remap from="/odom"            to="/$(arg model_namespace)/scan_matching_odometry/odom"    />
       <remap from="/floor_coeffs"    to="/$(arg model_namespace)/floor_detection/floor_coeffs"  />
 
-      <remap from="/hdl_graph_slam/map_points" to="/$(arg model_namespace)/hdl_graph_slam/map_points" />
-      <remap from="/hdl_graph_slam/markers"    to="/$(arg model_namespace)/hdl_graph_slam/markers"    />
-      <remap from="/hdl_graph_slam/odom2pub"   to="/$(arg model_namespace)/hdl_graph_slam/odom2pub"   />
-      <remap from="/hdl_graph_slam/read_until" to="/$(arg model_namespace)/hdl_graph_slam/read_until" />
-      <remap from="/hdl_graph_slam/others_poses" to="/$(arg model_namespace)/hdl_graph_slam/others_poses" />
+      <remap from="/hdl_graph_slam/map_points"    to="/$(arg model_namespace)/hdl_graph_slam/map_points" />
+      <remap from="/hdl_graph_slam/markers"       to="/$(arg model_namespace)/hdl_graph_slam/markers"    />
+      <remap from="/hdl_graph_slam/odom2pub"      to="/$(arg model_namespace)/hdl_graph_slam/odom2pub"   />
+      <remap from="/hdl_graph_slam/read_until"    to="/$(arg model_namespace)/hdl_graph_slam/read_until" />
+      <remap from="/hdl_graph_slam/others_poses"  to="/$(arg model_namespace)/hdl_graph_slam/others_poses" />
 
-      <remap from="/hdl_graph_slam/publish_graph" to="/$(arg model_namespace)/hdl_graph_slam/publish_graph" />
-      <remap from="/hdl_graph_slam/dump"          to="/$(arg model_namespace)/hdl_graph_slam/dump" />
-      <remap from="/hdl_graph_slam/save_map"      to="/$(arg model_namespace)/hdl_graph_slam/save_map" />
-      <remap from="/hdl_graph_slam/get_map"       to="/$(arg model_namespace)/hdl_graph_slam/get_map" />
+      <remap from="/hdl_graph_slam/publish_graph"       to="/$(arg model_namespace)/hdl_graph_slam/publish_graph" />
+      <remap from="/hdl_graph_slam/dump"                to="/$(arg model_namespace)/hdl_graph_slam/dump" />
+      <remap from="/hdl_graph_slam/save_map"            to="/$(arg model_namespace)/hdl_graph_slam/save_map" />
+      <remap from="/hdl_graph_slam/get_map"             to="/$(arg model_namespace)/hdl_graph_slam/get_map" />
+      <remap from="/hdl_graph_slam/get_graph_estimate"  to="/$(arg model_namespace)/hdl_graph_slam/get_graph_estimate" />
 
     </node>
 
