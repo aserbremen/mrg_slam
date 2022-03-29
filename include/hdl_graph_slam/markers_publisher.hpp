@@ -21,10 +21,15 @@ public:
                   const KeyFrame::ConstPtr &last_keyframe, const std::vector<KeyFrame::ConstPtr> &others_last_kf,
                   double loop_detector_distance_thresh, const GlobalIdGenerator &gid_gen );
 
+    void publishMarginals( const std::vector<KeyFrame::Ptr> &keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX> &marginals,
+                           const GlobalIdGenerator &gid_gen );
+
     uint32_t getNumSubscribers() const { return markers_pub.getNumSubscribers(); }
+    uint32_t getNumMarginalsSubscribers() const { return markers_marginals_pub.getNumSubscribers(); }
 
 private:
     ros::Publisher markers_pub;
+    ros::Publisher markers_marginals_pub;
     std::string    map_frame_id;
     std::string    own_name;
 

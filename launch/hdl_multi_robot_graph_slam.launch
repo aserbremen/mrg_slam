@@ -202,7 +202,7 @@
       <param name="use_const_inf_matrix" value="false" />
       <param name="const_stddev_x" value="0.5" />
       <param name="const_stddev_q" value="0.1" />
-      <param name="var_gain_a" value="20.0" />
+      <param name="var_gain_a" value="20.0" /> <!-- default value is 20 -->
       <param name="min_stddev_x" value="0.1" />
       <param name="max_stddev_x" value="5.0" />
       <param name="min_stddev_q" value="0.05" />
@@ -222,6 +222,7 @@
 
       <remap from="/hdl_graph_slam/map_points"    to="/$(arg model_namespace)/hdl_graph_slam/map_points" />
       <remap from="/hdl_graph_slam/markers"       to="/$(arg model_namespace)/hdl_graph_slam/markers"    />
+      <remap from="/hdl_graph_slam/markers_covariance"       to="/$(arg model_namespace)/hdl_graph_slam/markers_covariance"    />
       <remap from="/hdl_graph_slam/odom2pub"      to="/$(arg model_namespace)/hdl_graph_slam/odom2pub"   />
       <remap from="/hdl_graph_slam/read_until"    to="/$(arg model_namespace)/hdl_graph_slam/read_until" />
       <remap from="/hdl_graph_slam/others_poses"  to="/$(arg model_namespace)/hdl_graph_slam/others_poses" />

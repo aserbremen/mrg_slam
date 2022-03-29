@@ -869,6 +869,9 @@ private:
             markers_pub.publish( graph_slam, keyframes, edges, prev_robot_keyframe, others_last_kf, loop_detector->get_distance_thresh(),
                                  *gid_generator );
         }
+        if( markers_pub.getNumMarginalsSubscribers() ) {
+            markers_pub.publishMarginals( keyframes, marginals,*gid_generator );
+        }
     }
 
     /**

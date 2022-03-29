@@ -15,59 +15,71 @@ namespace hdl_graph_slam {
 void
 MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh )
 {
-    markers_pub  = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
-    map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
-    own_name     = private_nh.param<std::string>( "own_name", "atlas" );
+    markers_pub           = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
+    markers_marginals_pub = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers_covariance", 16 );
+    map_frame_id          = private_nh.param<std::string>( "map_frame_id", "map" );
+    own_name              = private_nh.param<std::string>( "own_name", "atlas" );
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
-    color_blue.r   = 31.0 / 255.0;
-    color_blue.g   = 119.0 / 255.0;
-    color_blue.b   = 180.0 / 255.0;
-    color_blue.a   = 1.0;
+    color_blue.r = 31.0 / 255.0;
+    color_blue.g = 119.0 / 255.0;
+    color_blue.b = 180.0 / 255.0;
+    color_blue.a = 1.0;
+
     color_orange.r = 255.0 / 255.0;
     color_orange.g = 127.0 / 255.0;
     color_orange.b = 14.0 / 255.0;
     color_orange.a = 1.0;
-    color_green.r  = 44.0 / 255.0;
-    color_green.g  = 160.0 / 255.0;
-    color_green.b  = 44.0 / 255.0;
-    color_green.a  = 1.0;
-    color_red.r    = 214.0 / 255.0;
-    color_red.g    = 39.0 / 255.0;
-    color_red.b    = 40.0 / 255.0;
-    color_red.a    = 1.0;
+
+    color_green.r = 44.0 / 255.0;
+    color_green.g = 160.0 / 255.0;
+    color_green.b = 44.0 / 255.0;
+    color_green.a = 1.0;
+
+    color_red.r = 214.0 / 255.0;
+    color_red.g = 39.0 / 255.0;
+    color_red.b = 40.0 / 255.0;
+    color_red.a = 1.0;
+
     color_purple.r = 148.0 / 255.0;
     color_purple.g = 103.0 / 255.0;
     color_purple.b = 189.0 / 255.0;
     color_purple.a = 1.0;
-    color_brown.r  = 140.0 / 255.0;
-    color_brown.g  = 86.0 / 255.0;
-    color_brown.b  = 75.0 / 255.0;
-    color_brown.a  = 1.0;
-    color_pink.r   = 227.0 / 255.0;
-    color_pink.g   = 119.0 / 255.0;
-    color_pink.b   = 194.0 / 255.0;
-    color_pink.a   = 1.0;
-    color_olive.r  = 188.0 / 255.0;
-    color_olive.g  = 189.0 / 255.0;
-    color_olive.b  = 34.0 / 255.0;
-    color_olive.a  = 1.0;
-    color_cyan.r   = 23.0 / 255.0;
-    color_cyan.g   = 190.0 / 255.0;
-    color_cyan.b   = 207.0 / 255.0;
-    color_cyan.a   = 1.0;
-    color_black.r  = 0;
-    color_black.g  = 0;
-    color_black.b  = 0;
-    color_black.a  = 1.0;
-    color_white.r  = 1.0;
-    color_white.g  = 1.0;
-    color_white.b  = 1.0;
-    color_white.a  = 1.0;
-    color_gray.r   = 0.5;
-    color_gray.g   = 0.5;
-    color_gray.b   = 0.5;
-    color_gray.a   = 1.0;
+
+    color_brown.r = 140.0 / 255.0;
+    color_brown.g = 86.0 / 255.0;
+    color_brown.b = 75.0 / 255.0;
+    color_brown.a = 1.0;
+
+    color_pink.r = 227.0 / 255.0;
+    color_pink.g = 119.0 / 255.0;
+    color_pink.b = 194.0 / 255.0;
+    color_pink.a = 1.0;
+
+    color_olive.r = 188.0 / 255.0;
+    color_olive.g = 189.0 / 255.0;
+    color_olive.b = 34.0 / 255.0;
+    color_olive.a = 1.0;
+
+    color_cyan.r = 23.0 / 255.0;
+    color_cyan.g = 190.0 / 255.0;
+    color_cyan.b = 207.0 / 255.0;
+    color_cyan.a = 1.0;
+
+    color_black.r = 0;
+    color_black.g = 0;
+    color_black.b = 0;
+    color_black.a = 1.0;
+
+    color_white.r = 1.0;
+    color_white.g = 1.0;
+    color_white.b = 1.0;
+    color_white.a = 1.0;
+
+    color_gray.r = 0.5;
+    color_gray.g = 0.5;
+    color_gray.b = 0.5;
+    color_gray.a = 1.0;
 }
 
 
@@ -377,6 +389,93 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     sphere_marker.color.a = 0.3;
 
     markers_pub.publish( markers );
+}
+
+
+void
+MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals,
+                                    const GlobalIdGenerator& gid_gen )
+{
+    // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
+
+    auto                            stamp   = ros::Time::now();
+    RobotId                         own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::MarkerArray markers;
+
+    markers.markers.resize( keyframes.size() );
+
+    for( size_t i = 0; i < keyframes.size(); i++ ) {
+        const auto& kf     = keyframes[i];
+        auto&       marker = markers.markers[i];
+
+        // general information
+        marker.header.frame_id = map_frame_id;
+        marker.header.stamp    = stamp;
+        marker.id              = i;
+        marker.ns              = "covariance";
+        marker.type            = visualization_msgs::Marker::SPHERE;
+
+        // color
+        if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
+            marker.color = color_blue;
+        } else {
+            marker.color = color_cyan;
+        }
+        marker.color.a = 0.25;  // semi-transparent
+
+        // Compute eigenvalues and eigenvectors
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver( kf->covariance( marginals ).topLeftCorner<3, 3>() );
+        Eigen::Vector3d                                eigenvalues( Eigen::Vector3d::Identity() );
+        Eigen::Matrix3d                                eigenvectors( Eigen::Matrix3d::Zero() );
+        if( eigensolver.info() == Eigen::Success ) {
+            eigenvalues  = eigensolver.eigenvalues();
+            eigenvectors = eigensolver.eigenvectors();
+        } else {
+            ROS_WARN_THROTTLE( 1, "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
+        }
+
+        {
+            // Note that sorting of eigenvalues may end up with left-hand coordinate system.
+            // So here we correctly sort it so that it does end up being righ-handed and normalised.
+            Eigen::Vector3d c0 = eigenvectors.block<3, 1>( 0, 0 );
+            c0.normalize();
+            Eigen::Vector3d c1 = eigenvectors.block<3, 1>( 0, 1 );
+            c1.normalize();
+            Eigen::Vector3d c2 = eigenvectors.block<3, 1>( 0, 2 );
+            c2.normalize();
+            Eigen::Vector3d cc = c0.cross( c1 );
+            if( cc.dot( c2 ) < 0 ) {
+                eigenvectors << c1, c0, c2;
+                double e       = eigenvalues[0];
+                eigenvalues[0] = eigenvalues[1];
+                eigenvalues[1] = e;
+            } else {
+                eigenvectors << c0, c1, c2;
+            }
+        }
+
+        // Define position (from node)
+        auto estimate          = kf->estimate();
+        marker.pose.position.x = estimate.translation().x();
+        marker.pose.position.y = estimate.translation().y();
+        marker.pose.position.z = estimate.translation().z();
+
+        // Define the rotation
+        Eigen::Quaterniond orientation( eigenvectors );
+        orientation = estimate.rotation() * orientation;  // rotate ellipsoide orientation with rotation of estimate because of the boxplus
+                                                          // definition of g2o (defined on SE(3))
+        marker.pose.orientation.w = orientation.w();
+        marker.pose.orientation.x = orientation.x();
+        marker.pose.orientation.y = orientation.y();
+        marker.pose.orientation.z = orientation.z();
+
+        // Define the scale. eigenvalues are the variances, so we take the sqrt to draw the standard deviation
+        marker.scale.x = std::sqrt( eigenvalues[0] );
+        marker.scale.y = std::sqrt( eigenvalues[1] );
+        marker.scale.z = std::sqrt( eigenvalues[2] );
+
+        markers_marginals_pub.publish( markers );
+    }
 }
 
 }  // namespace hdl_graph_slam

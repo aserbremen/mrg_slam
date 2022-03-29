@@ -38,6 +38,8 @@ public:
 
     void set_gid( const GlobalIdGenerator& gid_generator );
 
+    Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
+
     void save( const std::string& directory );
     bool load( const std::string& directory, g2o::HyperGraph* graph );
 

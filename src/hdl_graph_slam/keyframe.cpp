@@ -45,6 +45,18 @@ KeyFrame::set_gid( const GlobalIdGenerator& gid_generator )
 }
 
 
+Eigen::Matrix<double, 6, 6>
+KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const
+{
+    auto hidx = node->hessianIndex();
+    if( hidx >= 0 ) {
+        return *marginals->block( hidx, hidx );
+    } else {
+        return Eigen::Matrix<double, 6, 6>::Zero();
+    }
+}
+
+
 void
 KeyFrame::save( const std::string& directory )
 {
@@ -230,17 +242,9 @@ KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_
     exclude_from_map( key->exclude_from_map ),
     cloud( key->cloud )
 {
-    bool cov_valid = false;
-
     if( marginals ) {
-        auto hidx = key->node->hessianIndex();
-        if( hidx >= 0 ) {
-            covariance = *marginals->block( hidx, hidx );
-            cov_valid  = true;
-        }
-    }
-
-    if( !cov_valid ) {
+        covariance = key->covariance( marginals );
+    } else {
         covariance = Eigen::Matrix<double, 6, 6>::Zero();
     }
 }
