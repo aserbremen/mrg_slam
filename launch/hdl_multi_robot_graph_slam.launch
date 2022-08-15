@@ -21,6 +21,7 @@
   <arg name="enable_imu_acc"                   default="false" />
   <arg name="enable_imu_ori"                   default="false" />
   <!-- when using IMU, consider to add IMU fusion as well, see hdl_graph_slam_imu.launch in hdl_graph_slam package -->
+  <arg name="tf_link_values"  default="0.2 0 1 0 0.2617993877991494 0" />
 
   <arg name="points_topic"                     default="/velodyne/points" />
   <arg name="map_frame_id"                     default="map" />
@@ -46,7 +47,7 @@
     <node pkg ="tf" 
           type="static_transform_publisher" 
           name="lidar2base_publisher" 
-          args="0.2 0 1 0 0.2617993877991494 0 $(arg model_namespace)/base_link $(arg model_namespace)/velodyne 10" />
+          args="$(arg tf_link_values) $(arg model_namespace)/base_link $(arg model_namespace)/velodyne 10" />
 
     <!-- in case you use velodyne_driver, comment out the following line -->  
     <?ignore   launch-prefix="gdb -ex run --args" ?>
