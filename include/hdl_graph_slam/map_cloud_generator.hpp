@@ -27,7 +27,8 @@ public:
      * @param resolution  resolution of generated map
      * @return generated map point cloud
      */
-    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution ) const;
+    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution,
+                                           int count_threshold ) const;
 };
 
 }  // namespace hdl_graph_slam

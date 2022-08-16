@@ -73,9 +73,10 @@ public:
         private_nh = getPrivateNodeHandle();
 
         // init parameters
-        map_frame_id         = private_nh.param<std::string>( "map_frame_id", "map" );
-        odom_frame_id        = private_nh.param<std::string>( "odom_frame_id", "odom" );
-        map_cloud_resolution = private_nh.param<double>( "map_cloud_resolution", 0.05 );
+        map_frame_id              = private_nh.param<std::string>( "map_frame_id", "map" );
+        odom_frame_id             = private_nh.param<std::string>( "odom_frame_id", "odom" );
+        map_cloud_resolution      = private_nh.param<double>( "map_cloud_resolution", 0.05 );
+        map_cloud_count_threshold = private_nh.param<int>( "map_cloud_count_threshold", 2 );
         trans_odom2map.setIdentity();
 
         max_keyframes_per_update = private_nh.param<int>( "max_keyframes_per_update", 10 );
@@ -626,7 +627,7 @@ private:
             cloud_msg_update_required = false;
         }
 
-        auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution );
+        auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution, map_cloud_count_threshold );
         if( !cloud ) {
             return false;
         }
@@ -870,7 +871,7 @@ private:
                                  *gid_generator );
         }
         if( markers_pub.getNumMarginalsSubscribers() ) {
-            markers_pub.publishMarginals( keyframes, marginals,*gid_generator );
+            markers_pub.publishMarginals( keyframes, marginals, *gid_generator );
         }
     }
 
@@ -939,7 +940,7 @@ private:
         snapshot = keyframes_snapshot;
         snapshots_mutex.unlock();
 
-        auto cloud = map_cloud_generator->generate( snapshot, req.resolution );
+        auto cloud = map_cloud_generator->generate( snapshot, req.resolution, req.count_threshold );
         if( !cloud ) {
             res.success = false;
             return true;
@@ -1094,6 +1095,7 @@ private:
 
     // for map cloud generation and graph publishing
     double                             map_cloud_resolution;
+    double                             map_cloud_count_threshold;
     std::mutex                         snapshots_mutex;
     std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot;
     std::vector<EdgeSnapshot::Ptr>     edges_snapshot;

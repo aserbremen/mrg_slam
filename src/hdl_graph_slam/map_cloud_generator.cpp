@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <pcl/octree/octree_search.h>
+// #include <pcl/octree/octree_search.h>
+#include <pcl/filters/ApproximateMeanVoxelGrid.h>
 
 #include <hdl_graph_slam/map_cloud_generator.hpp>
 
@@ -11,7 +12,7 @@ MapCloudGenerator::MapCloudGenerator() {}
 MapCloudGenerator::~MapCloudGenerator() {}
 
 pcl::PointCloud<MapCloudGenerator::PointT>::Ptr
-MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution ) const
+MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution, int count_threshold ) const
 {
     if( keyframes.empty() ) {
         std::cerr << "warning: keyframes empty!!" << std::endl;
@@ -38,8 +39,11 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     cloud->height   = 1;
     cloud->is_dense = false;
 
-    if( resolution <= 0.0 ) return cloud;  // To get unfiltered point cloud with intensity
+    if( resolution <= 0.0 ) {
+        return cloud;  // To get unfiltered point cloud with intensity
+    }
 
+    /*
     pcl::octree::OctreePointCloud<PointT> octree( resolution );
     octree.setInputCloud( cloud );
     octree.addPointsFromInputCloud();
@@ -50,6 +54,17 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     filtered->width    = filtered->size();
     filtered->height   = 1;
     filtered->is_dense = false;
+    */
+
+    pcl::ApproximateMeanVoxelGrid<PointT> voxelGridFilter;
+    voxelGridFilter.setInputCloud( cloud );
+    voxelGridFilter.setLeafSize( resolution, resolution, resolution );
+    voxelGridFilter.setCountThreshold( count_threshold );
+
+    pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
+    voxelGridFilter.filter( *filtered );
+
+    std::cout << filtered->size() << std::endl;
 
     return filtered;
 }

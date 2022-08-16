@@ -211,7 +211,9 @@
       <!-- update params -->
       <param name="graph_update_interval" value="3.0" />
       <param name="map_cloud_update_interval" value="10.0" />
-      <param name="map_cloud_resolution" value="0.05" />
+      <param name="map_cloud_resolution" value="0.1" />
+      <param name="map_cloud_count_threshold" value="1" />
+      
 
       <!-- topics -->
       <param name="points_topic" value="$(arg points_topic)" />
