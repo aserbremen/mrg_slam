@@ -21,7 +21,7 @@
   <arg name="enable_imu_acc"                   default="false" />
   <arg name="enable_imu_ori"                   default="false" />
   <!-- when using IMU, consider to add IMU fusion as well, see hdl_graph_slam_imu.launch in hdl_graph_slam package -->
-  <arg name="tf_link_values"  default="0.2 0 1 0 0.2617993877991494 0" />
+  <arg name="tf_link_values"                   default="0.2 0 0.8 0 0.2617993877991494 0" />
 
   <arg name="points_topic"                     default="/velodyne/points" />
   <arg name="map_frame_id"                     default="map" />
@@ -212,7 +212,7 @@
       <param name="graph_update_interval" value="3.0" />
       <param name="map_cloud_update_interval" value="10.0" />
       <param name="map_cloud_resolution" value="0.1" />
-      <param name="map_cloud_count_threshold" value="1" />
+      <param name="map_cloud_count_threshold" value="2" />
       
 
       <!-- topics -->
