@@ -76,8 +76,8 @@ private:
     };
 
 public:
-    using Ptr      = shared_ptr<ApproximateMeanVoxelGrid<PointT> >;
-    using ConstPtr = shared_ptr<const ApproximateMeanVoxelGrid<PointT> >;
+    using Ptr      = boost::shared_ptr<ApproximateMeanVoxelGrid<PointT> >;
+    using ConstPtr = boost::shared_ptr<const ApproximateMeanVoxelGrid<PointT> >;
 
 
     /** \brief Empty constructor. */
@@ -223,4 +223,4 @@ protected:
 
 #include "ApproximateMeanVoxelGrid.hpp"
 
-#endif  //#ifndef B3S_APPROXIMATE_MEAN_VOXEL_GRID_H_
+#endif  // #ifndef B3S_APPROXIMATE_MEAN_VOXEL_GRID_H_
