@@ -66,6 +66,11 @@ add_message_files(FILES
   GraphEstimate.msg
   PoseWithName.msg
   PoseWithNameArray.msg
+  # Nebula Autonomy messages to test multi robot dataset https://github.com/NeBula-Autonomy/nebula-multirobot-dataset
+  NebulaKeyedScan.msg
+  NebulaPoseGraph.msg
+  NebulaPoseGraphEdge.msg
+  NebulaPoseGraphNode.msg
 )
 
 add_service_files(FILES

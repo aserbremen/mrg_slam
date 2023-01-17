@@ -55,6 +55,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// Nebula Autonomy
+#include <geometry_msgs/Pose.h>
+#include <hdl_graph_slam/NebulaKeyedScan.h>
+#include <hdl_graph_slam/NebulaPoseGraph.h>
+
+#include <boost/core/null_deleter.hpp>
+#include <queue>
 
 namespace hdl_graph_slam {
 
@@ -104,6 +111,10 @@ public:
         sync->registerCallback( boost::bind( &HdlGraphSlamNodelet::cloud_callback, this, _1, _2 ) );
         graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamNodelet::graph_callback, this );
         odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamNodelet::odom_broadcast_callback, this );
+        // subcribers for nebula autonomy datasets
+        nebula_keyed_scan_sub = nh.subscribe( "/husky3/lamp/keyed_scans", 32, &HdlGraphSlamNodelet::nebula_keyed_scan_callback, this );
+        nebula_pose_graph_sub = nh.subscribe( "/husky3/lamp/pose_graph_incremental", 128, &HdlGraphSlamNodelet::nebula_pose_graph_callback,
+                                              this );
 
         init_pose_topic = private_nh.param<std::string>( "init_pose_topic", "NONE" );
         if( init_pose_topic != "NONE" ) {
@@ -252,6 +263,147 @@ private:
         pose_msg.pose       = odom_msg->pose.pose;
         pose_msg.accum_dist = accum_d;
         odom_broadcast_pub.publish( pose_msg );
+    }
+
+    void nebula_keyed_scan_callback( const NebulaKeyedScanConstPtr &keyed_scan_msg )
+    {
+        std::lock_guard<std::mutex> lock( nebula_mutex );
+        nebula_keyed_scans.push( keyed_scan_msg );
+        process_nebula_msgs();
+    }
+
+    void nebula_pose_graph_callback( const NebulaPoseGraphConstPtr &pose_graph_msg )
+    {
+        std::lock_guard<std::mutex> lock( nebula_mutex );
+        nebula_pose_graphs.push( pose_graph_msg );
+        process_nebula_msgs();
+    }
+
+    void process_nebula_msgs()
+    {
+        // Make sure we have messages of both types
+        if( nebula_pose_graphs.empty() || nebula_keyed_scans.empty() ) {
+            return;
+        }
+
+        const auto         &npg         = nebula_pose_graphs.front();
+        const auto         &nebula_scan = nebula_keyed_scans.front();
+        NebulaPoseGraphNode odom_node   = npg->nodes[0];
+        double              accum_d;  // set below
+
+        // ASTODO, what would be the correct frame_id?
+        if( base_frame_id.empty() ) {
+            // base_frame_id = npg->header.frame_id;
+            base_frame_id = "atlas/base_link";
+        }
+
+        const ros::Time &stamp = npg->header.stamp;
+
+        bool contains_odom = false;
+        // Process the ODOM edge
+        for( size_t i = 0; i < npg->nodes.size(); i++ ) {
+            ROS_INFO( "%.6f edge %zu type %d", stamp.toSec(), i, npg->edges[i].type );
+            if( npg->edges[i].type == NebulaPoseGraphEdge::ODOM && npg->nodes[i].key == nebula_scan->key ) {
+                contains_odom = true;
+                odom_node     = npg->nodes[i];
+
+                Eigen::Isometry3d odom = pose2isometry( odom_node.pose );
+                // Create key frame
+                bool update_required = keyframe_updater->update( odom );
+                accum_d              = keyframe_updater->get_accum_distance();
+
+                // For now we perform update for every nebula scan (nebula keyed scan generation 2m, 30°)
+                update_required = true;
+
+                if( update_required ) {
+                    pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
+                    pcl::fromROSMsg( nebula_scan->scan, *cloud );
+                    // Create ConstPtr from member of nebula_scan according to
+                    // https://answers.ros.org/question/196697/get-constptr-from-message/
+                    sensor_msgs::PointCloud2::ConstPtr cloud_msg_filtered( &nebula_scan->scan, boost::null_deleter() );
+
+                    // get poses of other robots and remove corresponding points
+                    Eigen::Isometry3d            map2odom;
+                    std::vector<Eigen::Vector3d> others_positions;
+                    {
+                        std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
+                        map2odom = trans_odom2map.cast<double>().inverse();
+
+                        others_positions.resize( others_odom_poses.size() );
+                        size_t i = 0;
+                        for( const auto &odom_pose : others_odom_poses ) {
+                            others_positions[i].x() = odom_pose.second.second.position.x;
+                            others_positions[i].y() = odom_pose.second.second.position.y;
+                            others_positions[i].z() = odom_pose.second.second.position.z;
+                            i++;
+                        }
+                    }
+                    if( !others_positions.empty() ) {
+                        Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
+
+                        // transform other robots' positions to sensro frame
+                        std::vector<Eigen::Vector3f> others_positions_sensor;
+                        others_positions_sensor.resize( others_positions.size() );
+                        for( size_t i = 0; i < others_positions.size(); i++ ) {
+                            others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
+                        }
+
+                        float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
+                        robot_radius_sqr *= robot_radius_sqr;
+
+                        // get points to be removed
+                        pcl::PointIndices::Ptr to_be_removed( new pcl::PointIndices() );
+                        to_be_removed->indices.reserve( cloud->size() );
+                        for( size_t i = 0; i < cloud->size(); i++ ) {
+                            const auto     &point_pcl = ( *cloud )[i];
+                            Eigen::Vector3f point( point_pcl.x, point_pcl.y, point_pcl.z );
+                            for( const auto &other_position_sensor : others_positions_sensor ) {
+                                float distSqr = ( point - other_position_sensor ).squaredNorm();
+                                if( distSqr < robot_radius_sqr ) {
+                                    to_be_removed->indices.push_back( i );
+                                    break;
+                                }
+                            }
+                        }
+
+                        // remove points
+                        pcl::ExtractIndices<PointT> extract;
+                        extract.setInputCloud( cloud );
+                        extract.setIndices( to_be_removed );
+                        extract.setNegative( true );
+                        extract.filter( *cloud );
+
+                        // create ROS cloud to be stored within the keyframe
+                        sensor_msgs::PointCloud2::Ptr cloud_msg_tmp( new sensor_msgs::PointCloud2 );
+                        pcl::toROSMsg( *cloud, *cloud_msg_tmp );
+                        cloud_msg_filtered = cloud_msg_tmp;
+                    }
+
+                    // create keyframe and add it to the queue
+                    KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
+
+                    std::lock_guard<std::mutex> lock( keyframe_queue_mutex );  // ASQUESTION what does this lock_guard do exactly
+                    keyframe_queue.push_back( keyframe );
+                }
+            }
+        }
+
+        // publish own odometry
+        PoseWithName pose_msg;
+        pose_msg.header     = npg->header;
+        pose_msg.robot_name = own_name;
+        pose_msg.pose       = odom_node.pose;
+        pose_msg.accum_dist = accum_d;
+        odom_broadcast_pub.publish( pose_msg );
+
+        // ASTODO, implement prior edges
+        if( !contains_odom ) {
+            ROS_INFO( "Keyed scan does not contain odom edge, skipping keyed scan." );
+        }
+
+        // Pop oldest messages
+        nebula_pose_graphs.pop();
+        nebula_keyed_scans.pop();
     }
 
     /**
@@ -1039,6 +1191,13 @@ private:
     ros::Subscriber odom_broadcast_sub;
     ros::Publisher  odom_broadcast_pub;
     ros::Publisher  others_poses_pub;
+
+    // Nebula autonomy tests
+    std::mutex                          nebula_mutex;
+    ros::Subscriber                     nebula_keyed_scan_sub;
+    ros::Subscriber                     nebula_pose_graph_sub;
+    std::queue<NebulaKeyedScanConstPtr> nebula_keyed_scans;
+    std::queue<NebulaPoseGraphConstPtr> nebula_pose_graphs;
 
     std::mutex                                         trans_odom2map_mutex;
     Eigen::Matrix4f                                    trans_odom2map;
