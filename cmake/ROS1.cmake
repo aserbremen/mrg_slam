@@ -16,9 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
 )
 catkin_python_setup()
 
-if (catkin_FOUND) {
-    add_definitions(-DROS_AVAILABLE=1)
-}
+if (catkin_FOUND) 
+  add_definitions(-DROS_AVAILABLE=1)
+endif ()
 
 ########################
 ## message generation ##
