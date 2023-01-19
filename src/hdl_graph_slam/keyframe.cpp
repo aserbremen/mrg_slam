@@ -6,12 +6,13 @@
 
 #include <boost/filesystem.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
-
+// ROS2 migration
+#include <rclcpp/logging.hpp>
 
 namespace hdl_graph_slam {
 
-KeyFrame::KeyFrame( const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
-                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::PointCloud2::ConstPtr& cloud_msg ) :
+KeyFrame::KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
+                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstPtr& cloud_msg ) :
     stamp( stamp ),
     odom( odom ),
     accum_distance( accum_distance ),
@@ -65,7 +66,7 @@ KeyFrame::save( const std::string& directory )
     }
 
     std::ofstream ofs( directory + "/data" );
-    ofs << "stamp " << stamp.sec << " " << stamp.nsec << "\n";
+    ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
     ofs << node->estimate().matrix() << "\n";
@@ -114,7 +115,7 @@ KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
         ifs >> token;
 
         if( token == "stamp" ) {
-            ifs >> stamp.sec >> stamp.nsec;
+            ifs >> stamp.sec >> stamp.nanosec;
         } else if( token == "estimate" ) {
             Eigen::Matrix4d mat;
             for( int i = 0; i < 4; i++ ) {
@@ -160,19 +161,19 @@ KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
     }
 
     if( node_id < 0 ) {
-        ROS_ERROR_STREAM( "invalid node id!!" );
-        ROS_ERROR_STREAM( directory );
+        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "invalid node id!!" );
+        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), directory );
         return false;
     }
 
     if( graph->vertices().find( node_id ) == graph->vertices().end() ) {
-        ROS_ERROR_STREAM( "vertex ID=" << node_id << " does not exist!!" );
+        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "vertex ID=" << node_id << " does not exist!!" );
         return false;
     }
 
     node = dynamic_cast<g2o::VertexSE3*>( graph->vertices()[node_id] );
     if( node == nullptr ) {
-        ROS_ERROR_STREAM( "failed to downcast!!" );
+        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "failed to downcast!!" );
         return false;
     }
 

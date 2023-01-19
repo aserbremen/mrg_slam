@@ -72,6 +72,7 @@ include_directories(
 
 add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/keyframe_updater.cpp
+  src/hdl_graph_slam/keyframe.cpp
 )
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp

@@ -6,11 +6,13 @@
 #include <g2o/core/sparse_block_matrix.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <ros/ros.h>
-#include <sensor_msgs/PointCloud2.h>
 
 #include <boost/optional.hpp>
 #include <hdl_graph_slam/global_id.hpp>
+// ROS2 migration
+#include <builtin_interfaces/msg/time.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 
 
 namespace g2o {
@@ -31,8 +33,8 @@ public:
     using Ptr      = std::shared_ptr<KeyFrame>;
     using ConstPtr = std::shared_ptr<const KeyFrame>;
 
-    KeyFrame( const ros::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-              const sensor_msgs::PointCloud2::ConstPtr& cloud_msg = nullptr );
+    KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
+              const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
     virtual ~KeyFrame();
 
@@ -49,15 +51,15 @@ public:
     bool edge_exists( const KeyFrame& other ) const;
 
 public:
-    ros::Time                          stamp;             // timestamp
-    Eigen::Isometry3d                  odom;              // odometry (estimated by scan_matching_odometry)
-    double                             accum_distance;    // accumulated distance from the first node (by scan_matching_odometry)
-    GlobalId                           gid;               // global id
-    bool                               exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
-    pcl::PointCloud<PointT>::ConstPtr  cloud;             // point cloud
-    sensor_msgs::PointCloud2::ConstPtr cloud_msg;         // point cloud ROS msg
-    boost::optional<Eigen::Vector4d>   floor_coeffs;      // detected floor's coefficients
-    boost::optional<Eigen::Vector3d>   utm_coord;         // UTM coord obtained by GPS
+    builtin_interfaces::msg::Time           stamp;             // timestamp
+    Eigen::Isometry3d                       odom;              // odometry (estimated by scan_matching_odometry)
+    double                                  accum_distance;    // accumulated distance from the first node (by scan_matching_odometry)
+    GlobalId                                gid;               // global id
+    bool                                    exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
+    pcl::PointCloud<PointT>::ConstPtr       cloud;             // point cloud
+    sensor_msgs::msg::PointCloud2::ConstPtr cloud_msg;         // point cloud ROS msg
+    boost::optional<Eigen::Vector4d>        floor_coeffs;      // detected floor's coefficients
+    boost::optional<Eigen::Vector3d>        utm_coord;         // UTM coord obtained by GPS
 
     boost::optional<Eigen::Vector3d>    acceleration;  //
     boost::optional<Eigen::Quaterniond> orientation;   //
@@ -84,7 +86,7 @@ public:
     ~KeyFrameSnapshot();
 
 public:
-    ros::Time                         stamp;  // timestamp
+    builtin_interfaces::msg::Time     stamp;  // timestamp
     long                              id;
     GlobalId                          gid;               // global id
     Eigen::Isometry3d                 pose;              // pose estimated by graph optimization
