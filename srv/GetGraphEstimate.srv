@@ -1,5 +1,5 @@
 # timestamp of the last received graph estimate
-time last_stamp
+builtin_interfaces/Time last_stamp
 
 ---
 

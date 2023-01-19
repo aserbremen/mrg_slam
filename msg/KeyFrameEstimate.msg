@@ -2,5 +2,5 @@
 
 uint64 gid
 
-time stamp
+builtin_interfaces/Time stamp
 geometry_msgs/PoseWithCovariance estimate

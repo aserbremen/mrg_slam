@@ -23,8 +23,8 @@
   <depend condition="$ROS_VERSION == 1">message_generation</depend>
   <depend condition="$ROS_VERSION == 1">libg2o</depend>
 
-  <!-- I  believe these exec_depends are not necessary, though I leave them here for now. -->
-  <exec_depend condition="$ROS_VERSION == 1">ndt_omp</exec_depend>
+  <!-- If ROS1 pograms fail during execution, you might want to comment in the next lines -->
+  <!-- <exec_depend condition="$ROS_VERSION == 1">ndt_omp</exec_depend>
   <exec_depend condition="$ROS_VERSION == 1">fast_gicp</exec_depend>
   <exec_depend condition="$ROS_VERSION == 1">pcl_ros</exec_depend>
   <exec_depend condition="$ROS_VERSION == 1">roscpp</exec_depend>
@@ -33,10 +33,11 @@
   <exec_depend condition="$ROS_VERSION == 1">geodesy</exec_depend>
   <exec_depend condition="$ROS_VERSION == 1">nmea_msgs</exec_depend>
   <exec_depend condition="$ROS_VERSION == 1">sensor_msgs</exec_depend>
-  <exec_depend condition="$ROS_VERSION == 1">message_generation</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 1">message_generation</exec_depend> -->
 
   <!-- ROS2: Dependencies needed to compile this package -->
   <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake</buildtool_depend>
+  <buildtool_depend condition="$ROS_VERSION == 2">rosidl_default_generators</buildtool_depend>
   <depend condition="$ROS_VERSION == 2">ndt_omp</depend>
   <depend condition="$ROS_VERSION == 2">fast_gicp</depend>
   <depend condition="$ROS_VERSION == 2">pcl_ros</depend>
@@ -44,11 +45,13 @@
   <depend condition="$ROS_VERSION == 2">rospy</depend>
   <depend condition="$ROS_VERSION == 2">nodelet</depend>
   <depend condition="$ROS_VERSION == 2">geodesy</depend>
+  <depend condition="$ROS_VERSION == 2">std_msgs</depend>
   <depend condition="$ROS_VERSION == 2">nmea_msgs</depend>
   <depend condition="$ROS_VERSION == 2">sensor_msgs</depend>
   <depend condition="$ROS_VERSION == 2">geometry_msgs</depend>
-  <depend condition="$ROS_VERSION == 2">message_generation</depend>
-  <depend condition="$ROS_VERSION == 2">libg2o</depend>
+  <!-- <depend condition="$ROS_VERSION == 2">libg2o</depend> -->
+  <exec_depend condition="$ROS_VERSION == 2">rosidl_default_runtime</exec_depend>
+  <member_of_group condition="$ROS_VERSION == 2">rosidl_interface_packages</member_of_group>
 
   <exec_depend condition="$ROS_PYTHON_VERSION == 2">python-scipy</exec_depend>
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-scipy</exec_depend>
