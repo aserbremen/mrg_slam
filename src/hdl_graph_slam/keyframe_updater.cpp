@@ -4,10 +4,12 @@
 
 namespace hdl_graph_slam {
 
-KeyframeUpdater::KeyframeUpdater( ros::NodeHandle& pnh ) : is_first( true ), prev_keypose( Eigen::Isometry3d::Identity() )
+KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr _node ) :
+    node( _node ), is_first( true ), prev_keypose( Eigen::Isometry3d::Identity() )
 {
-    keyframe_delta_trans = pnh.param<double>( "keyframe_delta_trans", 2.0 );
-    keyframe_delta_angle = pnh.param<double>( "keyframe_delta_angle", 2.0 );
+    // ASTODO implement parameter handling for ROS2
+    // keyframe_delta_trans = pnh.param<double>( "keyframe_delta_trans", 2.0 );
+    // keyframe_delta_angle = pnh.param<double>( "keyframe_delta_angle", 2.0 );
 
     accum_distance = 0.0;
 }

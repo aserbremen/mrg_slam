@@ -20,11 +20,9 @@ if (ament_cmake_FOUND)
     add_definitions(-DROS_AVAILABLE=2)
 endif ()
 
-ament_export_dependencies(rosidl_default_runtime)
-ament_export_include_directories(include)
-# ament_export_libraries(hdl_graph_slam_nodelet) # TODO insert this once ROS2 version is implemented
-
-# the next line replaces add_message_files, add_service_files, generate_message in ROS2, TODO to be tested
+########################
+## message generation ##
+########################
 set(msg_files
   "msg/EdgeEstimate.msg"
   "msg/EdgeRos.msg"
@@ -63,6 +61,28 @@ rosidl_generate_interfaces(${PROJECT_NAME}
     ${srv_files}
     DEPENDENCIES std_msgs nmea_msgs sensor_msgs geometry_msgs 
 )
+
+###########
+## Build ##
+###########
+include_directories(include) # TODO is this needed when we use ament_export_include_directories()
+include_directories(
+  ${PCL_INCLUDE_DIRS}
+)
+
+add_library(hdl_graph_slam_nodelet
+  src/hdl_graph_slam/keyframe_updater.cpp
+)
+ament_target_dependencies(hdl_graph_slam_nodelet
+  rclcpp
+)
+target_link_libraries(hdl_graph_slam_nodelet 
+)
+
+
+ament_export_dependencies(rosidl_default_runtime)
+ament_export_include_directories(include)
+# ament_export_libraries(hdl_graph_slam_nodelet) # TODO insert this once ROS2 version is implemented
 
 # Finally create a pacakge
 ament_package()

@@ -3,9 +3,8 @@
 #ifndef KEYFRAME_UPDATER_HPP
 #define KEYFRAME_UPDATER_HPP
 
-#include <ros/ros.h>
-
 #include <Eigen/Dense>
+#include <rclcpp/rclcpp.hpp>
 
 namespace hdl_graph_slam {
 
@@ -18,9 +17,9 @@ public:
 
     /**
      * @brief constructor
-     * @param pnh
+     * @param sharedptr to the node
      */
-    KeyframeUpdater( ros::NodeHandle& pnh );
+    KeyframeUpdater( rclcpp::Node::SharedPtr _node );
 
     /**
      * @brief decide if a new frame should be registered to the graph
@@ -36,6 +35,9 @@ public:
     double get_accum_distance() const;
 
 private:
+    // ROS2 Node handling
+    rclcpp::Node::SharedPtr node;
+
     // parameters
     double keyframe_delta_trans;  //
     double keyframe_delta_angle;  //
