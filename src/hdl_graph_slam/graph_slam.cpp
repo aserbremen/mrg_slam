@@ -367,14 +367,17 @@ GraphSLAM::optimize( int num_iterations )
     double chi2 = optimizer->chi2();
 
     std::cout << "optimize!!" << std::endl;
-    auto t1         = ros::WallTime::now();
+    // ROS2 migration use std::chrono::system_clock insteead of ros::Walltime::now(), see https://github.com/ros-planning/moveit2/issues/31
+    // TODO: Potentially use a node handle to get time of a specific node.
+    auto t1         = std::chrono::system_clock::now();
     int  iterations = optimizer->optimize( num_iterations );
 
-    auto t2 = ros::WallTime::now();
+    auto t2 = std::chrono::system_clock::now();
     std::cout << "done" << std::endl;
     std::cout << "iterations: " << iterations << " / " << num_iterations << std::endl;
     std::cout << "chi2: (before)" << chi2 << " -> (after)" << optimizer->chi2() << std::endl;
-    std::cout << "time: " << boost::format( "%.3f" ) % ( t2 - t1 ).toSec() << "[sec]" << std::endl;
+    std::chrono::duration<double> diff = t2 - t1;
+    std::cout << "time: " << boost::format( "%.3f" ) % diff.count() << "[sec]" << std::endl;
 
     return iterations;
 }

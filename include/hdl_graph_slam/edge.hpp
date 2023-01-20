@@ -3,10 +3,11 @@
 #ifndef EDGE_HPP
 #define EDGE_HPP
 
-#include <ros/ros.h>
-
 #include <Eigen/Dense>
 #include <hdl_graph_slam/global_id.hpp>
+// ROS2 migration
+// ASTODO: Check whether ROS is needed at all in this class
+#include <rclcpp/rclcpp.hpp>
 
 
 namespace g2o {
