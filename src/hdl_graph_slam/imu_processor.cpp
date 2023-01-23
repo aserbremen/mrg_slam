@@ -5,35 +5,58 @@
 #include <Eigen/Dense>
 #include <g2o/edge_se3_priorquat.hpp>
 #include <g2o/edge_se3_priorvec.hpp>
+#include <geometry_msgs/msg/quaternion_stamped.hpp>
+#include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <hdl_graph_slam/imu_processor.hpp>
 
+using std::placeholders::_1;
 
 namespace hdl_graph_slam {
 
+// void
+// ImuProcessor::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh_ )
+// {
+//     private_nh = &private_nh_;
+
+//     imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
+//     enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
+//     enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
+//     imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
+//     imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
+
+//     imu_sub = nh.subscribe( "/imu/data", 1024, &ImuProcessor::imu_callback, this );
+// }
 void
-ImuProcessor::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh_ )
+ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
 {
-    private_nh = &private_nh_;
+    node = _node;
 
-    imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
-    enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
-    enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
-    imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
-    imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
+    // TODO: ROS2 parameter handling
+    // imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
+    // enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
+    // enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
+    // imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
+    // imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
 
-    imu_sub = nh.subscribe( "/imu/data", 1024, &ImuProcessor::imu_callback, this );
+    imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
+                                                                std::bind( &ImuProcessor::imu_callback, this, _1 ) );
 }
 
 
 void
-ImuProcessor::imu_callback( const sensor_msgs::ImuPtr& imu_msg )
+ImuProcessor::imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg )
 {
     if( !enable_imu_orientation && !enable_imu_acceleration ) {
         return;
     }
 
     std::lock_guard<std::mutex> lock( imu_queue_mutex );
-    imu_msg->header.stamp += ros::Duration( imu_time_offset );
+    // TODO: probably correct, needs testing
+    imu_msg->header.stamp.sec += (int32_t)imu_time_offset;
+    imu_msg->header.stamp.nanosec += (uint32_t)( ( imu_time_offset - (int)imu_time_offset ) * 1e9 );
+    // TODO discuss which version is better
+    // imu_msg->header.stamp = rclcpp::Time( imu_msg->header.stamp )
+    //                         + rclcpp::Duration( static_cast<rcl_duration_value_t>( imu_time_offset * 1e9 ) );
     imu_queue.push_back( imu_msg );
 }
 
@@ -50,19 +73,19 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
     auto imu_cursor = imu_queue.begin();
 
     for( auto& keyframe : keyframes ) {
-        if( keyframe->stamp > imu_queue.back()->header.stamp ) {
+        if( rclcpp::Time( keyframe->stamp ) > rclcpp::Time( imu_queue.back()->header.stamp ) ) {
             break;
         }
 
-        if( keyframe->stamp < ( *imu_cursor )->header.stamp || keyframe->acceleration ) {
+        if( rclcpp::Time( keyframe->stamp ) < rclcpp::Time( ( *imu_cursor )->header.stamp ) || keyframe->acceleration ) {
             continue;
         }
 
         // find imu data which is closest to the keyframe
         auto closest_imu = imu_cursor;
         for( auto imu = imu_cursor; imu != imu_queue.end(); imu++ ) {
-            auto dt  = ( ( *closest_imu )->header.stamp - keyframe->stamp ).toSec();
-            auto dt2 = ( ( *imu )->header.stamp - keyframe->stamp ).toSec();
+            auto dt  = ( rclcpp::Time( ( *closest_imu )->header.stamp ) - rclcpp::Time( keyframe->stamp ) ).seconds();
+            auto dt2 = ( rclcpp::Time( ( *imu )->header.stamp ) - rclcpp::Time( keyframe->stamp ) ).seconds();
             if( std::abs( dt ) < std::abs( dt2 ) ) {
                 break;
             }
@@ -71,26 +94,26 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         }
 
         imu_cursor = closest_imu;
-        if( 0.2 < std::abs( ( ( *closest_imu )->header.stamp - keyframe->stamp ).toSec() ) ) {
+        if( 0.2 < std::abs( ( rclcpp::Time( ( *closest_imu )->header.stamp ) - rclcpp::Time( keyframe->stamp ) ).seconds() ) ) {
             continue;
         }
 
         const auto& imu_ori = ( *closest_imu )->orientation;
         const auto& imu_acc = ( *closest_imu )->linear_acceleration;
 
-        geometry_msgs::Vector3Stamped    acc_imu;
-        geometry_msgs::Vector3Stamped    acc_base;
-        geometry_msgs::QuaternionStamped quat_imu;
-        geometry_msgs::QuaternionStamped quat_base;
+        geometry_msgs::msg::Vector3Stamped    acc_imu;
+        geometry_msgs::msg::Vector3Stamped    acc_base;
+        geometry_msgs::msg::QuaternionStamped quat_imu;
+        geometry_msgs::msg::QuaternionStamped quat_base;
 
         quat_imu.header.frame_id = acc_imu.header.frame_id = ( *closest_imu )->header.frame_id;
-        quat_imu.header.stamp = acc_imu.header.stamp = ros::Time( 0 );
+        quat_imu.header.stamp = acc_imu.header.stamp = rclcpp::Time( 0 );
         acc_imu.vector                               = ( *closest_imu )->linear_acceleration;
         quat_imu.quaternion                          = ( *closest_imu )->orientation;
 
         try {
-            tf_listener.transformVector( base_frame_id, acc_imu, acc_base );
-            tf_listener.transformQuaternion( base_frame_id, quat_imu, quat_base );
+            // tf_listener->transformVector( base_frame_id, acc_imu, acc_base );
+            // tf_listener->transformQuaternion( base_frame_id, quat_imu, quat_base );
         } catch( std::exception& e ) {
             std::cerr << "failed to find transform!!" << std::endl;
             return false;
@@ -107,22 +130,24 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         if( enable_imu_orientation ) {
             Eigen::MatrixXd info = Eigen::MatrixXd::Identity( 3, 3 ) / imu_orientation_edge_stddev;
             auto            edge = graph_slam->add_se3_prior_quat_edge( keyframe->node, *keyframe->orientation, info );
-            graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_orientation_edge_robust_kernel", "NONE" ),
-                                           private_nh->param<double>( "imu_orientation_edge_robust_kernel_size", 1.0 ) );
+            // TODO: ROS2 parameter handling
+            // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_orientation_edge_robust_kernel", "NONE" ),
+            //                                private_nh->param<double>( "imu_orientation_edge_robust_kernel_size", 1.0 ) );
         }
 
         if( enable_imu_acceleration ) {
             Eigen::MatrixXd info = Eigen::MatrixXd::Identity( 3, 3 ) / imu_acceleration_edge_stddev;
             auto edge = graph_slam->add_se3_prior_vec_edge( keyframe->node, -Eigen::Vector3d::UnitZ(), *keyframe->acceleration, info );
-            graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" ),
-                                           private_nh->param<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 ) );
+            // TODO: ROS2 parameter handling
+            // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" ),
+            //                                private_nh->param<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 ) );
         }
         updated = true;
     }
 
-    auto remove_loc = std::upper_bound( imu_queue.begin(), imu_queue.end(), keyframes.back()->stamp,
-                                        [=]( const ros::Time& stamp, const sensor_msgs::ImuConstPtr& imu ) {
-                                            return stamp < imu->header.stamp;
+    auto remove_loc = std::upper_bound( imu_queue.begin(), imu_queue.end(), rclcpp::Time( keyframes.back()->stamp ),
+                                        [=]( const rclcpp::Time& stamp, const sensor_msgs::msg::Imu::ConstPtr imu ) {
+                                            return stamp < rclcpp::Time( imu->header.stamp );
                                         } );
     imu_queue.erase( imu_queue.begin(), remove_loc );
 

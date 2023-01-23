@@ -75,13 +75,24 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/keyframe.cpp
   src/hdl_graph_slam/keyframe_updater.cpp
   src/hdl_graph_slam/graph_slam.cpp
+  src/hdl_graph_slam/gps_processor.cpp
+  src/hdl_graph_slam/imu_processor.cpp
 )
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp
+  std_msgs
+  nmea_msgs
+  sensor_msgs
+  geometry_msgs 
 )
-target_link_libraries(hdl_graph_slam_nodelet 
+target_link_libraries(hdl_graph_slam_nodelet
+  
 )
 
+install(TARGETS
+  hdl_graph_slam_nodelet
+  DESTINATION lib/${PROJECT_NAME}  
+)
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
