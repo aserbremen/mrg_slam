@@ -22,13 +22,9 @@
 
 namespace hdl_graph_slam {
 
-class ImuProcessor : public rclcpp::Node {
+class ImuProcessor {
 public:
-    ImuProcessor() : Node( "imu_processor" )
-    {
-        tf2_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
-        tf2_listener = std::make_shared<tf2_ros::TransformListener>( *tf2_buffer );
-    }
+    ImuProcessor() {}
 
     // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr &_node );

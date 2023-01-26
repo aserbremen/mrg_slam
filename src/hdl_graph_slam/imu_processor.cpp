@@ -31,6 +31,9 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
 {
     node = _node;
 
+    tf2_buffer   = std::make_unique<tf2_ros::Buffer>( node->get_clock() );
+    tf2_listener = std::make_shared<tf2_ros::TransformListener>( *tf2_buffer );
+
     // TODO: ROS2 parameter handling
     // imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
     // enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
@@ -38,7 +41,7 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
     // imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
     // imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
 
-    imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
+    imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
                                                                 std::bind( &ImuProcessor::imu_callback, this, _1 ) );
 }
 
@@ -127,7 +130,7 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             tf2_buffer->transform( acc_imu, acc_base, base_frame_id );
             tf2_buffer->transform( quat_imu, quat_base, base_frame_id );
         } catch( const tf2::TransformException& e ) {
-            RCLCPP_INFO( this->get_logger(), "Could not transform from %s to %s: %s", acc_imu.header.frame_id.c_str(),
+            RCLCPP_INFO( node->get_logger(), "Could not transform from %s to %s: %s", acc_imu.header.frame_id.c_str(),
                          base_frame_id.c_str(), e.what() );
             return false;
         }

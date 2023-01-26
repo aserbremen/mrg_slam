@@ -22,19 +22,14 @@
 
 namespace hdl_graph_slam {
 
-// class needs to inherit from rclcpp::Node, Can't make subscription to work without following the tutorial
-// https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Cpp-Publisher-And-Subscriber.html#write-the-subscriber-node
-class GpsProcessor : public rclcpp::Node {
+class GpsProcessor {
 public:
-    GpsProcessor() : Node( "gps_processor" ), node( nullptr ) {}
+    GpsProcessor() : node( nullptr ) {}
 
     // TODO check if one node in ROS2 is sufficient to replace three node handles below
     // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr _node );
 
-    // void nmea_callback( const nmea_msgs::SentenceConstPtr &nmea_msg );
-    // void navsat_callback( const sensor_msgs::NavSatFixConstPtr &navsat_msg );
-    // void gps_callback( const geographic_msgs::GeoPointStampedPtr &gps_msg );
     void nmea_callback( const nmea_msgs::msg::Sentence::SharedPtr nmea_msg );
     void navsat_callback( const sensor_msgs::msg::NavSatFix::SharedPtr navsat_msg );
     void gps_callback( geographic_msgs::msg::GeoPointStamped::SharedPtr gps_msg );
@@ -44,7 +39,6 @@ public:
     const boost::optional<Eigen::Vector3d> &zero_utm() const { return zero_utm_vec; }
 
 private:
-    // ros::NodeHandle        *private_nh;
     rclcpp::Node::SharedPtr                                                node;
     rclcpp::Subscription<nmea_msgs::msg::Sentence>::SharedPtr              nmea_sub;
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr           navsat_sub;

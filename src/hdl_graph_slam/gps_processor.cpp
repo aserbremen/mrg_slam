@@ -46,11 +46,11 @@ GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 
     // TODO: ROS2 parameter handling and check subscriptions
     // if( private_nh->param<bool>( "enable_gps", true ) ) {
-    nmea_sub   = this->create_subscription<nmea_msgs::msg::Sentence>( "/gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
+    nmea_sub   = node->create_subscription<nmea_msgs::msg::Sentence>( "/gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
                                                                     std::bind( &GpsProcessor::nmea_callback, this, _1 ) );
-    navsat_sub = this->create_subscription<sensor_msgs::msg::NavSatFix>( "/gps/navsat", rclcpp::QoS( 1024 ),
+    navsat_sub = node->create_subscription<sensor_msgs::msg::NavSatFix>( "/gps/navsat", rclcpp::QoS( 1024 ),
                                                                          std::bind( &GpsProcessor::navsat_callback, this, _1 ) );
-    gps_sub    = this->create_subscription<geographic_msgs::msg::GeoPointStamped>( "/gps/geopoint", rclcpp::QoS( 1024 ),
+    gps_sub    = node->create_subscription<geographic_msgs::msg::GeoPointStamped>( "/gps/geopoint", rclcpp::QoS( 1024 ),
                                                                                 std::bind( &GpsProcessor::gps_callback, this, _1 ) );
     // }
 }
