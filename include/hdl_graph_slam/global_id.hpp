@@ -5,6 +5,7 @@
 
 #include <inttypes.h>
 
+#include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -16,7 +17,8 @@ typedef uint8_t  RobotId;
 
 class GlobalIdGenerator {
 public:
-    GlobalIdGenerator( const std::string &own_name, const std::vector<std::string> &robot_names );
+    // ROS2 migration, also pass the node ptr to get ROS2 time
+    GlobalIdGenerator( rclcpp::Node::SharedPtr _node, const std::string &own_name, const std::vector<std::string> &robot_names );
 
     RobotId getRobotId() const;
     RobotId getRobotId( const std::string &robot_name ) const;

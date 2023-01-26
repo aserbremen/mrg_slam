@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <ros/time.h>
+#include <rclcpp/time.hpp>
+// #include <ros/time.h>
 
 #include <algorithm>
 #include <hdl_graph_slam/global_id.hpp>
@@ -10,7 +11,8 @@
 namespace hdl_graph_slam {
 
 
-GlobalIdGenerator::GlobalIdGenerator( const std::string &own_name, const std::vector<std::string> &robot_names )
+GlobalIdGenerator::GlobalIdGenerator( rclcpp::Node::SharedPtr _node, const std::string &own_name,
+                                      const std::vector<std::string> &robot_names )
 {
     robot_names_sorted = robot_names;
     std::sort( robot_names_sorted.begin(), robot_names_sorted.end() );
@@ -22,10 +24,14 @@ GlobalIdGenerator::GlobalIdGenerator( const std::string &own_name, const std::ve
     own_id         = robot_names_mapping[own_name];
     own_id_shifted = ( (GlobalId)own_id ) << 56;  // 8bit for robot id, rest of 64bit for id (56bit)
 
-    // get start gid from time to prevent id clashes if one robot should be restartet
-    auto time = ros::Time::now();
+    // get start gid from time to prevent id clashes if one robot should be restartet, convert to builtin_interfaces::msg::Time to get acces
+    // to sec and nanosec members
+    // auto time = ros::Time::now();  // ROS1
+    auto time = builtin_interfaces::msg::Time( _node->now() );
+
     // take all 32 bit from sec and use the remaining 24bit (64bit - 32bit - 8bit for robot id) for the upper 24bit of nsec
-    start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nsec ) >> ( 32 - 24 );
+    // start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nsec ) >> ( 32 - 24 );
+    start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nanosec ) >> ( 32 - 24 );
 }
 
 

@@ -78,6 +78,7 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/gps_processor.cpp
   src/hdl_graph_slam/imu_processor.cpp
   src/hdl_graph_slam/markers_publisher.cpp
+  src/hdl_graph_slam/global_id.cpp
 )
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp
