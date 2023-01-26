@@ -4,6 +4,8 @@
 #define IMU_PROCESSOR_HPP
 
 // ROS2 migration
+#include <tf2/exceptions.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
 #include <rclcpp/rclcpp.hpp>
@@ -22,7 +24,11 @@ namespace hdl_graph_slam {
 
 class ImuProcessor : public rclcpp::Node {
 public:
-    ImuProcessor() : Node( "imu_processor" ) {}
+    ImuProcessor() : Node( "imu_processor" )
+    {
+        tf2_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
+        tf2_listener = std::make_shared<tf2_ros::TransformListener>( *tf2_buffer );
+    }
 
     // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr &_node );
@@ -38,8 +44,8 @@ private:
     // ros::Subscriber imu_sub;
 
     // https://docs.ros.org/en/foxy/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Listener-Cpp.html
-    // tf::TransformListener tf_listener;
-    tf2_ros::TransformListener::shared_ptr tf_listener;
+    std::unique_ptr<tf2_ros::Buffer>            tf2_buffer;
+    std::shared_ptr<tf2_ros::TransformListener> tf2_listener;
 
     double                                      imu_time_offset;
     bool                                        enable_imu_orientation;

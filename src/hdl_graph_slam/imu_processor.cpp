@@ -51,7 +51,7 @@ ImuProcessor::imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg )
     }
 
     std::lock_guard<std::mutex> lock( imu_queue_mutex );
-    // TODO: probably correct, needs testing
+    // TODO: probably correct, needs verification
     imu_msg->header.stamp.sec += (int32_t)imu_time_offset;
     imu_msg->header.stamp.nanosec += (uint32_t)( ( imu_time_offset - (int)imu_time_offset ) * 1e9 );
     // TODO discuss which version is better
@@ -111,11 +111,24 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         acc_imu.vector                               = ( *closest_imu )->linear_acceleration;
         quat_imu.quaternion                          = ( *closest_imu )->orientation;
 
+        // TODO: The commented code needs to be migrated to ROS2 and verified
+        // try {
+        //     transformVector( string target_frame, stamped_in, stamped_out );
+        //     tf_listener->transformVector( base_frame_id, acc_imu, acc_base );
+        //     tf_listener->transformQuaternion( base_frame_id, quat_imu, quat_base );
+        // } catch( std::exception& e ) {
+        //     std::cerr << "failed to find transform!!" << std::endl;
+        //     return false;
+        // }
+        geometry_msgs::msg::TransformStamped t;
         try {
-            // tf_listener->transformVector( base_frame_id, acc_imu, acc_base );
-            // tf_listener->transformQuaternion( base_frame_id, quat_imu, quat_base );
-        } catch( std::exception& e ) {
-            std::cerr << "failed to find transform!!" << std::endl;
+            // tf2_buffer->transform(const T &in, T &out, const std::string &target_frame, tf2::Duration timeout =
+            // tf2::durationFromSec((0.0))) TODO: maybe add timeout? Verify this
+            tf2_buffer->transform( acc_imu, acc_base, base_frame_id );
+            tf2_buffer->transform( quat_imu, quat_base, base_frame_id );
+        } catch( const tf2::TransformException& e ) {
+            RCLCPP_INFO( this->get_logger(), "Could not transform from %s to %s: %s", acc_imu.header.frame_id.c_str(),
+                         base_frame_id.c_str(), e.what() );
             return false;
         }
 
@@ -145,6 +158,7 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         updated = true;
     }
 
+    // TODO: verify this lambda expression
     auto remove_loc = std::upper_bound( imu_queue.begin(), imu_queue.end(), rclcpp::Time( keyframes.back()->stamp ),
                                         [=]( const rclcpp::Time& stamp, const sensor_msgs::msg::Imu::ConstPtr imu ) {
                                             return stamp < rclcpp::Time( imu->header.stamp );
