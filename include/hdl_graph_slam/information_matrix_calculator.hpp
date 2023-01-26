@@ -5,7 +5,8 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <ros/ros.h>
+// #include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
 namespace hdl_graph_slam {
 
@@ -14,9 +15,11 @@ public:
     using PointT = pcl::PointXYZI;
 
     InformationMatrixCalculator() {}
-    InformationMatrixCalculator( ros::NodeHandle& nh );
+    // InformationMatrixCalculator( ros::NodeHandle& nh );
+    InformationMatrixCalculator( rclcpp::Node::SharedPtr _node );
     ~InformationMatrixCalculator();
 
+    // TODO: ROS2 migrations is this function ever called?
     template<typename ParamServer>
     void load( ParamServer& params )
     {
@@ -46,6 +49,8 @@ private:
     }
 
 private:
+    rclcpp::Node::SharedPtr node;
+
     bool   use_const_inf_matrix;
     double const_stddev_x;
     double const_stddev_q;
