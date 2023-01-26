@@ -2,23 +2,37 @@
 
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/vertex_se3.h>
-#include <visualization_msgs/MarkerArray.h>
 
 #include <g2o/edge_se3_plane.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
 #include <hdl_graph_slam/markers_publisher.hpp>
+// #include <visualization_msgs/MarkerArray.h>
+#include <rclcpp/logging.hpp>
 
 
 namespace hdl_graph_slam {
 
+// void
+// MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh )
+// {
+//     markers_pub           = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
+//     markers_marginals_pub = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers_covariance", 16 );
+//     map_frame_id          = private_nh.param<std::string>( "map_frame_id", "map" );
+//     own_name              = private_nh.param<std::string>( "own_name", "atlas" );
+
 void
-MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh )
+MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 {
-    markers_pub           = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
-    markers_marginals_pub = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers_covariance", 16 );
-    map_frame_id          = private_nh.param<std::string>( "map_frame_id", "map" );
-    own_name              = private_nh.param<std::string>( "own_name", "atlas" );
+    node = _node;
+
+    markers_pub           = node->create_publisher<visualization_msgs::msg::MarkerArray>( "/hdl_graph_slam/markers", rclcpp::QoS( 16 ) );
+    markers_marginals_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers_covariance",
+                                                                                          rclcpp::QoS( 16 ) );
+
+    // TODO: ROS2 parameter handling
+    // map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
+    // own_name     = private_nh.param<std::string>( "own_name", "atlas" );
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
     color_blue.r = 31.0 / 255.0;
@@ -98,18 +112,19 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         MARKER_MISC_EDGES,
         __NUM_MARKERS__,
     };
-    auto                            stamp   = ros::Time::now();
-    RobotId                         own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::MarkerArray markers;
+    // auto                            stamp   = ros::Time::now();
+    auto                                 stamp   = node->now();
+    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray markers;
     markers.markers.resize( __NUM_MARKERS__ );
 
     // node markers
-    visualization_msgs::Marker& traj_marker = markers.markers[MARKER_NODES];
-    traj_marker.header.frame_id             = map_frame_id;
-    traj_marker.header.stamp                = stamp;
-    traj_marker.ns                          = "nodes";
-    traj_marker.id                          = MARKER_NODES;
-    traj_marker.type                        = visualization_msgs::Marker::SPHERE_LIST;
+    visualization_msgs::msg::Marker& traj_marker = markers.markers[MARKER_NODES];
+    traj_marker.header.frame_id                  = map_frame_id;
+    traj_marker.header.stamp                     = stamp;
+    traj_marker.ns                               = "nodes";
+    traj_marker.id                               = MARKER_NODES;
+    traj_marker.type                             = visualization_msgs::msg::Marker::SPHERE_LIST;
 
     traj_marker.pose.orientation.w = 1.0;
     traj_marker.scale.x = traj_marker.scale.y = traj_marker.scale.z = 0.3;
@@ -164,12 +179,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         */
     }
 
-    visualization_msgs::Marker& last_node_marker = markers.markers[MARKER_LAST_NODES];
-    last_node_marker.header.frame_id             = map_frame_id;
-    last_node_marker.header.stamp                = stamp;
-    last_node_marker.ns                          = "last_nodes";
-    last_node_marker.id                          = MARKER_LAST_NODES;
-    last_node_marker.type                        = visualization_msgs::Marker::SPHERE_LIST;
+    visualization_msgs::msg::Marker& last_node_marker = markers.markers[MARKER_LAST_NODES];
+    last_node_marker.header.frame_id                  = map_frame_id;
+    last_node_marker.header.stamp                     = stamp;
+    last_node_marker.ns                               = "last_nodes";
+    last_node_marker.id                               = MARKER_LAST_NODES;
+    last_node_marker.type                             = visualization_msgs::msg::Marker::SPHERE_LIST;
 
     last_node_marker.pose.orientation.w = 1.0;
     last_node_marker.scale.x = last_node_marker.scale.y = last_node_marker.scale.z = 0.5;
@@ -199,12 +214,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // main edges
     {
-        visualization_msgs::Marker& main_edge_marker = markers.markers[MARKER_MAIN_EDGES];
-        main_edge_marker.header.frame_id             = map_frame_id;
-        main_edge_marker.header.stamp                = stamp;
-        main_edge_marker.id                          = MARKER_MISC_EDGES;
-        main_edge_marker.ns                          = "main_edges";
-        main_edge_marker.type                        = visualization_msgs::Marker::LINE_LIST;
+        visualization_msgs::msg::Marker& main_edge_marker = markers.markers[MARKER_MAIN_EDGES];
+        main_edge_marker.header.frame_id                  = map_frame_id;
+        main_edge_marker.header.stamp                     = stamp;
+        main_edge_marker.id                               = MARKER_MISC_EDGES;
+        main_edge_marker.ns                               = "main_edges";
+        main_edge_marker.type                             = visualization_msgs::msg::Marker::LINE_LIST;
 
         main_edge_marker.pose.orientation.w = 1.0;
         main_edge_marker.scale.x            = 0.07;
@@ -247,12 +262,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // misc edges
     {
-        visualization_msgs::Marker& misc_edge_marker = markers.markers[MARKER_MISC_EDGES];
-        misc_edge_marker.header.frame_id             = map_frame_id;
-        misc_edge_marker.header.stamp                = stamp;
-        misc_edge_marker.id                          = MARKER_MISC_EDGES;
-        misc_edge_marker.ns                          = "misc_edges";
-        misc_edge_marker.type                        = visualization_msgs::Marker::LINE_LIST;
+        visualization_msgs::msg::Marker& misc_edge_marker = markers.markers[MARKER_MISC_EDGES];
+        misc_edge_marker.header.frame_id                  = map_frame_id;
+        misc_edge_marker.header.stamp                     = stamp;
+        misc_edge_marker.id                               = MARKER_MISC_EDGES;
+        misc_edge_marker.ns                               = "misc_edges";
+        misc_edge_marker.type                             = visualization_msgs::msg::Marker::LINE_LIST;
 
         misc_edge_marker.pose.orientation.w = 1.0;
         misc_edge_marker.scale.x            = 0.05;
@@ -369,12 +384,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     }
 
     // sphere
-    visualization_msgs::Marker& sphere_marker = markers.markers[MARKER_SPHERE];
-    sphere_marker.header.frame_id             = map_frame_id;
-    sphere_marker.header.stamp                = stamp;
-    sphere_marker.ns                          = "loop_close_radius";
-    sphere_marker.id                          = MARKER_SPHERE;
-    sphere_marker.type                        = visualization_msgs::Marker::SPHERE;
+    visualization_msgs::msg::Marker& sphere_marker = markers.markers[MARKER_SPHERE];
+    sphere_marker.header.frame_id                  = map_frame_id;
+    sphere_marker.header.stamp                     = stamp;
+    sphere_marker.ns                               = "loop_close_radius";
+    sphere_marker.id                               = MARKER_SPHERE;
+    sphere_marker.type                             = visualization_msgs::msg::Marker::SPHERE;
 
     if( !keyframes.empty() ) {
         Eigen::Vector3d pos           = last_keyframe->node->estimate().translation();
@@ -388,7 +403,8 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     sphere_marker.color.r = 1.0;
     sphere_marker.color.a = 0.3;
 
-    markers_pub.publish( markers );
+    // markers_pub.publish( markers );
+    markers_pub->publish( markers );
 }
 
 
@@ -398,9 +414,10 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
 {
     // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
 
-    auto                            stamp   = ros::Time::now();
-    RobotId                         own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::MarkerArray markers;
+    // auto                            stamp   = ros::Time::now(); TODO: verify this
+    auto                                 stamp   = node->now();
+    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray markers;
 
     markers.markers.resize( keyframes.size() );
 
@@ -413,7 +430,7 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
         marker.header.stamp    = stamp;
         marker.id              = i;
         marker.ns              = "covariance";
-        marker.type            = visualization_msgs::Marker::SPHERE;
+        marker.type            = visualization_msgs::msg::Marker::SPHERE;
 
         // color
         if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
@@ -431,7 +448,9 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
             eigenvalues  = eigensolver.eigenvalues();
             eigenvectors = eigensolver.eigenvectors();
         } else {
-            ROS_WARN_THROTTLE( 1, "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
+            // ROS_WARN_THROTTLE( 1, "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
+            RCLCPP_WARN_THROTTLE( node->get_logger(), *( node->get_clock() ), 1000,
+                                  "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
         }
 
         {
@@ -474,7 +493,7 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
         marker.scale.y = std::sqrt( eigenvalues[1] );
         marker.scale.z = std::sqrt( eigenvalues[2] );
 
-        markers_marginals_pub.publish( markers );
+        markers_marginals_pub->publish( markers );
     }
 }
 
