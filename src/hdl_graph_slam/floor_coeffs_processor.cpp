@@ -6,23 +6,35 @@
 
 namespace hdl_graph_slam {
 
+// void
+// FloorCoeffsProcessor::onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh_ )
+// {
+//     private_nh           = &private_nh_;
+//     floor_plane_node_ptr = nullptr;
+
+//     floor_edge_stddev = private_nh->param<double>( "floor_edge_stddev", 10.0 );
+//     floor_sub         = nh.subscribe( "/floor_coeffs", 1024, &FloorCoeffsProcessor::floor_coeffs_callback, this );
+// }
+
 void
-FloorCoeffsProcessor::onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh_ )
+FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
-    private_nh           = &private_nh_;
+    node                 = _node;
     floor_plane_node_ptr = nullptr;
 
-    floor_edge_stddev = private_nh->param<double>( "floor_edge_stddev", 10.0 );
-    floor_sub         = nh.subscribe( "/floor_coeffs", 1024, &FloorCoeffsProcessor::floor_coeffs_callback, this );
+    // TODO: ROS2 parameter handling, verify
+    floor_edge_stddev = node->declare_parameter<double>( "floor_edge_stddev", 10.0 );
+    floor_sub         = node->create_subscription<hdl_graph_slam::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
+                                                                             std::bind( &FloorCoeffsProcessor::floor_coeffs_callback, this,
+                                                                                                std::placeholders::_1 ) );
 }
-
 
 /**
  * @brief received floor coefficients are added to #floor_coeffs_queue
  * @param floor_coeffs_msg
  */
 void
-FloorCoeffsProcessor::floor_coeffs_callback( const hdl_graph_slam::FloorCoeffsConstPtr &floor_coeffs_msg )
+FloorCoeffsProcessor::floor_coeffs_callback( const hdl_graph_slam::msg::FloorCoeffs::SharedPtr floor_coeffs_msg )
 {
     if( floor_coeffs_msg->coeffs.empty() ) {
         return;
@@ -39,9 +51,12 @@ FloorCoeffsProcessor::floor_coeffs_callback( const hdl_graph_slam::FloorCoeffsCo
  * @return if true, at least one floor plane edge is added to the pose graph
  */
 bool
+// FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
+//                              const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
+//                              const ros::Time                                                 &latest_keyframe_stamp )
 FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
-                             const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-                             const ros::Time                                                 &latest_keyframe_stamp )
+                             const std::unordered_map<rclcpp::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
+                             const rclcpp::Time                                                 &latest_keyframe_stamp )
 {
     std::lock_guard<std::mutex> lock( floor_coeffs_queue_mutex );
 
@@ -51,7 +66,7 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
 
     bool updated = false;
     for( const auto &floor_coeffs : floor_coeffs_queue ) {
-        if( floor_coeffs->header.stamp > latest_keyframe_stamp ) {
+        if( rclcpp::Time( floor_coeffs->header.stamp ) > rclcpp::Time( latest_keyframe_stamp ) ) {
             break;
         }
 
@@ -70,16 +85,36 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
         Eigen::Vector4d coeffs( floor_coeffs->coeffs[0], floor_coeffs->coeffs[1], floor_coeffs->coeffs[2], floor_coeffs->coeffs[3] );
         Eigen::Matrix3d information = Eigen::Matrix3d::Identity() * ( 1.0 / floor_edge_stddev );
         auto            edge        = graph_slam->add_se3_plane_edge( keyframe->node, floor_plane_node_ptr, coeffs, information );
-        graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "floor_edge_robust_kernel", "NONE" ),
-                                       private_nh->param<double>( "floor_edge_robust_kernel_size", 1.0 ) );
+        // TODO: ROS2 parameter handling, do floor_edge_robust_kernel or floor_edge_robust_kernel_size change over time? declare member
+        // variable and set in onInit method?
+        // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>("floor_edge_robust_kernel", "NONE" ),
+        //                                private_nh->param<double>( "floor_edge_robust_kernel_size", 1.0 ) );
+        std::string floor_edge_robust_kernel;
+        if( node->has_parameter( "floor_edge_robust_kernel" ) ) {
+            floor_edge_robust_kernel = node->get_parameter( "floor_edge_robust_kernel" ).as_string();
+        } else {
+            floor_edge_robust_kernel = node->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
+        }
+        double floor_edge_robust_kernel_size;
+        if( node->has_parameter( "floor_edge_robust_kernel_size" ) ) {
+            floor_edge_robust_kernel_size = node->get_parameter( "floor_edge_robust_kernel_size" ).as_double();
+        } else {
+            floor_edge_robust_kernel_size = node->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
+        }
+        graph_slam->add_robust_kernel( edge, floor_edge_robust_kernel, floor_edge_robust_kernel_size );
 
         keyframe->floor_coeffs = coeffs;
 
         updated = true;
     }
 
-    auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), latest_keyframe_stamp,
-                                        [=]( const ros::Time &stamp, const hdl_graph_slam::FloorCoeffsConstPtr &coeffs ) {
+    // TODO: verify
+    // auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), latest_keyframe_stamp,
+    //                                     [=]( const ros::Time &stamp, const hdl_graph_slam::FloorCoeffsConstPtr &coeffs ) {
+    //                                         return stamp < coeffs->header.stamp;
+    //                                     } );
+    auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), rclcpp::Time( latest_keyframe_stamp ),
+                                        [=]( const rclcpp::Time &stamp, const hdl_graph_slam::msg::FloorCoeffs::ConstPtr &coeffs ) {
                                             return stamp < coeffs->header.stamp;
                                         } );
     floor_coeffs_queue.erase( floor_coeffs_queue.begin(), remove_loc );

@@ -18,7 +18,7 @@ find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
 
 if (ament_cmake_FOUND)
-    add_definitions(-DROS_AVAILABLE=2)
+  add_definitions(-DROS_AVAILABLE=2)
 endif ()
 
 ########################
@@ -60,7 +60,7 @@ set(srv_files
 rosidl_generate_interfaces(${PROJECT_NAME}
     ${msg_files}
     ${srv_files}
-    DEPENDENCIES std_msgs nmea_msgs sensor_msgs geometry_msgs 
+    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs 
 )
 
 ###########
@@ -81,9 +81,15 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/markers_publisher.cpp
   src/hdl_graph_slam/global_id.cpp
   src/hdl_graph_slam/registrations.cpp
+  src/hdl_graph_slam/floor_coeffs_processor.cpp
 )
+target_include_directories(hdl_graph_slam_nodelet PUBLIC include)
+# The next line is needed for custom messages to be used within the same message.
+# https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
+rosidl_target_interfaces(hdl_graph_slam_nodelet ${PROJECT_NAME} "rosidl_typesupport_cpp")
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp
+  builtin_interfaces
   std_msgs
   nmea_msgs
   sensor_msgs
@@ -93,16 +99,12 @@ ament_target_dependencies(hdl_graph_slam_nodelet
 )
 target_link_libraries(hdl_graph_slam_nodelet
   ${rclcpp_LIBRARIES}
-)
-
-install(TARGETS
-  hdl_graph_slam_nodelet
-  DESTINATION lib/${PROJECT_NAME}  
+  ${PCL_LIBRARIES}
 )
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
-# ament_export_libraries(hdl_graph_slam_nodelet) # TODO insert this once ROS2 version is implemented
+ament_export_libraries(hdl_graph_slam_nodelet)
 
 # Finally create a pacakge
 ament_package()
