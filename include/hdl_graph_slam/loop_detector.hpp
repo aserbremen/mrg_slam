@@ -35,11 +35,17 @@ class LoopDetector {
 public:
     typedef pcl::PointXYZI PointT;
 
+    // /**
+    //  * @brief constructor
+    //  * @param pnh
+    //  */
+    // LoopDetector( ros::NodeHandle& pnh );
+
     /**
-     * @brief constructor
-     * @param pnh
+     * @brief Construct a new Loop Detector object
+     * @param _node Shared pointer to the main node
      */
-    LoopDetector( ros::NodeHandle& pnh );
+    LoopDetector( rclcpp::Node::SharedPtr _node );
 
     /**
      * @brief detect loops and add them to the pose graph
@@ -72,6 +78,8 @@ private:
                         hdl_graph_slam::GraphSLAM& graph_slam );
 
 private:
+    rclcpp::Node::SharedPtr node;
+
     double distance_thresh,
         distance_thresh_squared;            // estimated distance between keyframes consisting a loop must be less than this distance
     double accum_distance_thresh;           // traveled distance between ...

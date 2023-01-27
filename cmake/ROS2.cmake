@@ -82,9 +82,10 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/global_id.cpp
   src/hdl_graph_slam/registrations.cpp
   src/hdl_graph_slam/floor_coeffs_processor.cpp
+  src/hdl_graph_slam/loop_detector.cpp
 )
 target_include_directories(hdl_graph_slam_nodelet PUBLIC include)
-# The next line is needed for custom messages to be used within the same message.
+# The next line is needed for custom messages to be used within the same package.
 # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
 rosidl_target_interfaces(hdl_graph_slam_nodelet ${PROJECT_NAME} "rosidl_typesupport_cpp")
 ament_target_dependencies(hdl_graph_slam_nodelet
