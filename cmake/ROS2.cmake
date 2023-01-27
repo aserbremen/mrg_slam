@@ -13,7 +13,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
-find_package(pclomp REQUIRED) # instead of ndt_omp for ROS2
+# find_package(pclomp REQUIRED) # instead of ndt_omp for ROS2
+find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
 
 if (ament_cmake_FOUND)
@@ -79,16 +80,19 @@ add_library(hdl_graph_slam_nodelet
   src/hdl_graph_slam/imu_processor.cpp
   src/hdl_graph_slam/markers_publisher.cpp
   src/hdl_graph_slam/global_id.cpp
+  src/hdl_graph_slam/registrations.cpp
 )
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp
   std_msgs
   nmea_msgs
   sensor_msgs
-  geometry_msgs 
+  geometry_msgs
+  fast_gicp
+  ndt_omp
 )
 target_link_libraries(hdl_graph_slam_nodelet
-  
+  ${rclcpp_LIBRARIES}
 )
 
 install(TARGETS
