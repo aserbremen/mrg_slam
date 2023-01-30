@@ -71,18 +71,44 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
-add_library(hdl_graph_slam_nodelet
+set(LIBRARY_HEADERS
+  include/hdl_graph_slam/edge.hpp
+  include/hdl_graph_slam/floor_coeffs_processor.hpp
+  include/hdl_graph_slam/global_id.hpp
+  include/hdl_graph_slam/gps_processor.hpp
+  include/hdl_graph_slam/graph_slam.hpp
+  include/hdl_graph_slam/imu_processor.hpp
+  include/hdl_graph_slam/information_matrix_calculator.hpp
+  include/hdl_graph_slam/keyframe_updater.hpp
+  include/hdl_graph_slam/keyframe.hpp
+  include/hdl_graph_slam/loop_detector.hpp
+  include/hdl_graph_slam/map_cloud_generator.hpp
+  include/hdl_graph_slam/markers_publisher.hpp
+  include/hdl_graph_slam/nmea_sentence_parser.hpp
+  include/hdl_graph_slam/registrations.hpp
+  include/hdl_graph_slam/ros_time_hash.hpp
+  include/hdl_graph_slam/ros_utils.hpp
+)
+
+set(LIBRARY_SOURCE_FILES
   src/hdl_graph_slam/edge.cpp
-  src/hdl_graph_slam/keyframe.cpp
-  src/hdl_graph_slam/keyframe_updater.cpp
-  src/hdl_graph_slam/graph_slam.cpp
-  src/hdl_graph_slam/gps_processor.cpp
-  src/hdl_graph_slam/imu_processor.cpp
-  src/hdl_graph_slam/markers_publisher.cpp
-  src/hdl_graph_slam/global_id.cpp
-  src/hdl_graph_slam/registrations.cpp
   src/hdl_graph_slam/floor_coeffs_processor.cpp
+  src/hdl_graph_slam/global_id.cpp
+  src/hdl_graph_slam/gps_processor.cpp
+  src/hdl_graph_slam/graph_slam.cpp
+  src/hdl_graph_slam/imu_processor.cpp
+  src/hdl_graph_slam/information_matrix_calculator.cpp
+  src/hdl_graph_slam/keyframe_updater.cpp
+  src/hdl_graph_slam/keyframe.cpp
   src/hdl_graph_slam/loop_detector.cpp
+  src/hdl_graph_slam/map_cloud_generator.cpp
+  src/hdl_graph_slam/markers_publisher.cpp
+  src/hdl_graph_slam/registrations.cpp
+)
+
+add_library(hdl_graph_slam_nodelet
+  ${LIBRARY_HEADERS}
+  ${LIBRARY_SOURCE_FILES}
 )
 target_include_directories(hdl_graph_slam_nodelet PUBLIC include)
 # The next line is needed for custom messages to be used within the same package.
