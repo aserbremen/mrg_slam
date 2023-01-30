@@ -82,7 +82,7 @@ target_link_libraries(floor_detection_component
 # add_dependencies(floor_detection_component )
 # Make the component depend on custom messages in its own package.
 rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
-rclcpp_components_register_nodes(floor_detection_component "composition::FloorDetection")
+rclcpp_components_register_nodes(floor_detection_component "apps::FloorDetection")
 
 set(LIBRARY_HEADERS
   include/hdl_graph_slam/edge.hpp
