@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-// #include <gicp_omp.h>
 #include <pcl/registration/gicp.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/ndt.h>
+
+#include <hdl_graph_slam/registrations.hpp>
+#include <iostream>
+
+// ndt and fast_gicp includes
 #include <pclomp/gicp_omp.h>
 #include <pclomp/ndt_omp.h>
 
-// #include <pclomp/gicp_omp.h>
-// #include <pclomp/ndt_omp.h>
-// #include <pclomp/gicp_omp.h>
-// #include <pclomp/ndt_omp.h>
-
 #include <fast_gicp/gicp/fast_gicp.hpp>
 #include <fast_gicp/gicp/fast_vgicp.hpp>
-#include <hdl_graph_slam/registrations.hpp>
-#include <iostream>
 
 #ifdef USE_VGICP_CUDA
 #    include <fast_gicp/gicp/fast_vgicp_cuda.hpp>

@@ -66,7 +66,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ###########
 ## Build ##
 ###########
-include_directories(include) # TODO is this needed when we use ament_export_include_directories()
+# Include local hdl_graph_slam headers
+include_directories(include)
 include_directories(
   ${PCL_INCLUDE_DIRS}
 )
@@ -74,14 +75,16 @@ include_directories(
 # ROS2 components are shared libraries
 add_library(floor_detection_component SHARED
   apps/floor_detection_component.cpp
+  src/hdl_graph_slam/registrations.cpp
 )
+ament_target_dependencies(floor_detection_component rclcpp ndt_omp fast_gicp)
+# Non ament packages have to be linked as well
 target_link_libraries(floor_detection_component
-  ${rclcpp_LIBRARIES}
   ${PCL_LIBRARIES}
 )
-# add_dependencies(floor_detection_component )
 # Make the component depend on custom messages in its own package.
 rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(floor_detection_component "apps::FloorDetection")
 
 set(LIBRARY_HEADERS
@@ -142,6 +145,7 @@ target_link_libraries(hdl_graph_slam_nodelet
   ${PCL_LIBRARIES}
 )
 
+# Here we can export all downstream dependencies and include directories
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
 ament_export_libraries(hdl_graph_slam_nodelet)
