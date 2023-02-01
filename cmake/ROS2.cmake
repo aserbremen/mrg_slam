@@ -13,9 +13,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
-# find_package(pclomp REQUIRED) # instead of ndt_omp for ROS2
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
+find_package(rclcpp_components) # To define apps as "nodelets" aka ROS2 components
 
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
@@ -72,20 +72,30 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
-# ROS2 components are shared libraries
+###############################
+## Floor Detection Component ##
+###############################
 add_library(floor_detection_component SHARED
   apps/floor_detection_component.cpp
   src/hdl_graph_slam/registrations.cpp
 )
-ament_target_dependencies(floor_detection_component rclcpp ndt_omp fast_gicp)
-# Non ament packages have to be linked as well
+# Link non ament packages
 target_link_libraries(floor_detection_component
   ${PCL_LIBRARIES}
 )
+ament_target_dependencies(floor_detection_component rclcpp ndt_omp fast_gicp rclcpp_components)
 # Make the component depend on custom messages in its own package.
 rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
-rclcpp_components_register_nodes(floor_detection_component "apps::FloorDetection")
+rclcpp_components_register_nodes(floor_detection_component "hdl_graph_slam::FloorDetectionComponent")
+
+# Install the floor_detection_component (libfloor_detection_component.so) in workspace install folder
+install(
+  TARGETS floor_detection_component
+  EXPORT floor_detection_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
 
 set(LIBRARY_HEADERS
   include/hdl_graph_slam/edge.hpp

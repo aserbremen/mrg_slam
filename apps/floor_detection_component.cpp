@@ -12,12 +12,12 @@
 // #include <sensor_msgs/PointCloud2.h>
 // #include <std_msgs/Time.h>
 // #include <pcl_ros/point_cloud.h>
+// #include <pluginlib/class_list_macros.h>  // deprecated
 #include <pcl/common/transforms.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/sample_consensus/sac_model_plane.h>
-#include <pluginlib/class_list_macros.h>  // deprecated
 
 #include <boost/optional.hpp>
 #include <iostream>
@@ -34,13 +34,14 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // FloorDetectionComponent() {}
-    FloorDetectionComponent() : Node( "floor_detection_component" ) {}
+    // For ROS2 components it is necessary to pass rclcpp::NodeOptions
+    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options ) {}
     virtual ~FloorDetectionComponent() {}
 
     virtual void onInit()
     {
         // NODELET_DEBUG( "initializing floor_detection_nodelet..." );
-        RCLCPP_DEBUG( this->get_logger(), "initializing floor_detection_component ..." );
+        RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
         // No node handles in ROS2
         // nh         = getNodeHandle();
         // private_nh = getPrivateNodeHandle();
@@ -352,5 +353,9 @@ private:
 
 }  // namespace hdl_graph_slam
 
-// TODO: is this needed for ROS2 components? https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Pluginlib.html
-// PLUGINLIB_EXPORT_CLASS( hdl_graph_slam::FloorDetectionComponent, nodelet::Nodelet )
+
+// Register the component with class_loader.
+// This acts as a sort of entry point, allowing the component to be discoverable when its library
+// is being loaded into a running process.
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE( hdl_graph_slam::FloorDetectionComponent )
