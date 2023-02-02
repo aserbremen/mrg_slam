@@ -83,7 +83,8 @@ add_library(floor_detection_component SHARED
 target_link_libraries(floor_detection_component
   ${PCL_LIBRARIES}
 )
-ament_target_dependencies(floor_detection_component rclcpp ndt_omp fast_gicp rclcpp_components)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(floor_detection_component rclcpp rclcpp_components ndt_omp fast_gicp)
 # Make the component depend on custom messages in its own package.
 rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
@@ -93,6 +94,32 @@ rclcpp_components_register_nodes(floor_detection_component "hdl_graph_slam::Floo
 install(
   TARGETS floor_detection_component
   EXPORT floor_detection_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
+
+######################################
+## Scan Matching Odometry Component ##
+######################################
+add_library(scan_matching_odometry_component SHARED
+  apps/scan_matching_odometry_component.cpp
+  src/hdl_graph_slam/registrations.cpp
+)
+# Link non ament packages
+target_link_libraries(scan_matching_odometry_component
+  ${PCL_LIBRARIES}
+)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(scan_matching_odometry_component rclcpp rclcpp_components ndt_omp fast_gicp)
+# Make the component depend on custom messages in its own package.
+rosidl_target_interfaces(scan_matching_odometry_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# Register the component as part of hdl_graph_slam (project) ComponentManager
+rclcpp_components_register_nodes(scan_matching_odometry_component "hdl_graph_slam::ScanMatchingOdometryComponent")
+
+# Install the scan_matching_odometry_component (scan_matching_odometry_component.so) in workspace install folder
+install(
+  TARGETS scan_matching_odometry_component
+  EXPORT scan_matching_odometry_component
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
 )
