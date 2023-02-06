@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <pcl_conversions/pcl_conversions.h>
+#include <tf2_eigen/tf2_eigen.h>
+
+#include <chrono>
 #include <hdl_graph_slam/msg/graph_ros.hpp>
 #include <hdl_graph_slam/msg/pose_with_name.hpp>
 #include <hdl_graph_slam/msg/pose_with_name_array.hpp>
@@ -242,14 +246,17 @@ private:
                 std_msgs::msg::Header read_until;
                 read_until.stamp    = rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 );
                 read_until.frame_id = points_topic;
-                read_until_pub.publish( read_until );
+                // read_until_pub.publish( read_until );
+                read_until_pub->publish( read_until );
                 read_until.frame_id = "/filtered_points";
-                read_until_pub.publish( read_until );
+                // read_until_pub.publish( read_until );
+                read_until_pub->publish( read_until );
             }
         } else {
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( *cloud_msg, *cloud );
-            sensor_msgs::PointCloud2::ConstPtr cloud_msg_filtered = cloud_msg;
+            // TODO: use unique_ptr for efficient intraprocess communication?
+            sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg_filtered = cloud_msg;
 
             // get poses of other robots and remove corresponding points
             Eigen::Isometry3d            map2odom;
@@ -277,7 +284,13 @@ private:
                     others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
                 }
 
-                float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
+                // float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
+                float robot_radius_sqr;
+                if( this->has_parameter( "robot_remove_points_radius" ) ) {
+                    robot_radius_sqr = static_cast<float>( this->get_parameter( "robot_remove_points_radius" ).as_double() );
+                } else {
+                    robot_radius_sqr = static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2 ) );
+                }
                 robot_radius_sqr *= robot_radius_sqr;
 
                 // get points to be removed
@@ -303,8 +316,9 @@ private:
                 extract.filter( *cloud );
 
                 // create ROS cloud to be stored within the keyframe
-                sensor_msgs::PointCloud2::Ptr cloud_msg_tmp( new sensor_msgs::PointCloud2 );
+                sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg_tmp( new sensor_msgs::msg::PointCloud2 );
                 pcl::toROSMsg( *cloud, *cloud_msg_tmp );
+                // TODO does this work? as cloud_msg_filtered is assigned above as well
                 cloud_msg_filtered = cloud_msg_tmp;
             }
 
@@ -316,12 +330,13 @@ private:
         }
 
         // publish own odometry
-        PoseWithName pose_msg;
+        hdl_graph_slam::msg::PoseWithName pose_msg;
         pose_msg.header     = odom_msg->header;
         pose_msg.robot_name = own_name;
         pose_msg.pose       = odom_msg->pose.pose;
         pose_msg.accum_dist = accum_d;
-        odom_broadcast_pub.publish( pose_msg );
+        // odom_broadcast_pub.publish( pose_msg );
+        odom_broadcast_pub->publish( pose_msg );
     }
 
     /**
@@ -341,12 +356,22 @@ private:
             Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
             if( init_pose != nullptr ) {
                 Eigen::Isometry3d pose;
-                tf::poseMsgToEigen( init_pose->pose.pose, pose );
+                // tf::poseMsgToEigen( init_pose->pose.pose, pose );
+                tf2::fromMsg( init_pose->pose.pose, pose );
                 pose = pose * keyframe_queue[0]->odom.inverse();  // "remove" odom (which will be added later again) such that the init
                                                                   // pose actually corresponds to the received pose
                 pose_mat = pose.matrix();
             } else {
-                std::stringstream           sstp( private_nh.param<std::string>( "init_pose", "0 0 0 0 0 0" ) );
+                // std::stringstream           sstp( private_nh.param<std::string>( "init_pose", "0 0 0 0 0 0" ) );
+                // TODO declare init_pose fix_first_node_stddev as double arrays?
+                std::stringstream sstp;
+                if( this->has_parameter( "init_pose" ) ) {
+                    sstp << this->get_parameter( "init_pose" ).as_string();
+                    RCLCPP_INFO( this->get_logger(), "TAKE me out, init pose %s", sstp.str().c_str() );
+                } else {
+                    sstp << this->declare_parameter<std::string>( "init_pose", "0 0 0 0 0 0" );
+                    RCLCPP_INFO( this->get_logger(), "TAKE me out, init pose %s", sstp.str().c_str() );
+                }
                 Eigen::Matrix<double, 6, 1> p;
                 for( int i = 0; i < 6; i++ ) {
                     sstp >> p[i];
@@ -389,9 +414,25 @@ private:
                                                     // other robots have not been filtered for this keyframe
 
                 // fix the first node
-                if( private_nh.param<bool>( "fix_first_node", false ) ) {
-                    Eigen::MatrixXd   information = Eigen::MatrixXd::Identity( 6, 6 );
-                    std::stringstream sststd( private_nh.param<std::string>( "fix_first_node_stddev", "1 1 1 1 1 1" ) );
+                // if( private_nh.param<bool>( "fix_first_node", false ) ) {
+                bool fix_first_node;
+                // TODO: use member variable instead?
+                if( this->has_parameter( "fix_first_node" ) ) {
+                    fix_first_node = this->get_parameter( "fix_first_node" ).as_bool();
+                } else {
+                    fix_first_node = this->declare_parameter<bool>( "fix_first_node", false );
+                }
+                if( fix_first_node ) {
+                    Eigen::MatrixXd information = Eigen::MatrixXd::Identity( 6, 6 );
+                    // std::stringstream sststd( private_nh.param<std::string>( "fix_first_node_stddev", "1 1 1 1 1 1" ) );
+                    std::stringstream sststd;
+                    if( this->has_parameter( "fix_first_node_stddev" ) ) {
+                        sststd << this->get_parameter( "fix_first_node_stddev" ).as_string();
+                        RCLCPP_INFO( this->get_logger(), "TAKE me out, fix_first_node_stddev %s", sststd.str().c_str() );
+                    } else {
+                        sststd << this->declare_parameter<std::string>( "fix_first_node_stddev", "0 0 0 0 0 0" );
+                        RCLCPP_INFO( this->get_logger(), "TAKE me out, fix_first_node_stddev %s", sststd.str().c_str() );
+                    }
                     for( int i = 0; i < 6; i++ ) {
                         double stddev = 1.0;
                         sststd >> stddev;
@@ -400,8 +441,16 @@ private:
 
                     anchor_node = graph_slam->add_se3_node( Eigen::Isometry3d::Identity() );
                     anchor_node->setFixed( true );
-                    KeyFrame::Ptr anchor_kf( new KeyFrame( ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
-                    if( !private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+                    // KeyFrame::Ptr anchor_kf( new KeyFrame( ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
+                    KeyFrame::Ptr anchor_kf( new KeyFrame( rclcpp::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
+                    bool          fix_first_node_adaptive;
+                    if( this->has_parameter( "fix_first_node_adaptive" ) ) {
+                        fix_first_node_adaptive = this->get_parameter( "fix_first_node_adaptive" ).as_bool();
+                    } else {
+                        fix_first_node_adaptive = this->declare_parameter<bool>( "fix_first_node_adaptive", true );
+                    }
+                    // if( !private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+                    if( !fix_first_node_adaptive ) {
                         anchor_kf->gid = 0;  // if anchor node is not adaptive (i.e. stays at the origin), its GID needs to be 0 for all
                                              // robots
                     }
@@ -428,17 +477,34 @@ private:
             auto edge       = new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
-            graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
-                                           private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
+            // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
+            //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
+            std::string odometry_edge_robust_kernel;
+            if( this->has_parameter( "odometry_edge_robust_kernel" ) ) {
+                odometry_edge_robust_kernel = this->get_parameter( "odometry_edge_robust_kernel" ).as_string();
+            } else {
+                this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
+            }
+            double odometry_edge_robust_kernel_size;
+            if( this->has_parameter( "odometry_edge_robust_kernel_size" ) ) {
+                odometry_edge_robust_kernel_size = this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
+            } else {
+                odometry_edge_robust_kernel_size = this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
+            }
+            graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
             prev_robot_keyframe = keyframe;
         }
 
-        std_msgs::Header read_until;
-        read_until.stamp    = keyframe_queue[num_processed]->stamp + ros::Duration( 10, 0 );
+        // std_msgs::Header read_until;
+        std_msgs::msg::Header read_until;
+        // read_until.stamp    = keyframe_queue[num_processed]->stamp + ros::Duration( 10, 0 );
+        read_until.stamp    = rclcpp::Time( keyframe_queue[num_processed]->stamp ) + rclcpp::Duration( 10, 0 );
         read_until.frame_id = points_topic;
-        read_until_pub.publish( read_until );
+        // read_until_pub.publish( read_until );
+        read_until_pub->publish( read_until );
         read_until.frame_id = "/filtered_points";
-        read_until_pub.publish( read_until );
+        // read_until_pub.publish( read_until );
+        read_until_pub->publish( read_until );
 
         keyframe_queue.erase( keyframe_queue.begin(), keyframe_queue.begin() + num_processed + 1 );
         return true;
@@ -470,12 +536,15 @@ private:
             return false;
         }
 
-        ROS_INFO_STREAM( "Received graph msgs: " << graph_queue.size() );
+        // ROS_INFO_STREAM( "Received graph msgs: " << graph_queue.size() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Received graph msgs: " << graph_queue.size() );
 
-        std::unordered_map<GlobalId, const KeyFrameRos *> unique_keyframes;
-        std::unordered_map<GlobalId, const EdgeRos *>     unique_edges;
+        // std::unordered_map<GlobalId, const KeyFrameRos *> unique_keyframes;
+        // std::unordered_map<GlobalId, const EdgeRos *>     unique_edges;
+        std::unordered_map<GlobalId, const hdl_graph_slam::msg::KeyFrameRos *> unique_keyframes;
+        std::unordered_map<GlobalId, const hdl_graph_slam::msg::EdgeRos *>     unique_edges;
 
-        std::unordered_map<std::string, std::pair<const GlobalId *, const geometry_msgs::Pose *>> latest_robot_keyframes;
+        std::unordered_map<std::string, std::pair<const GlobalId *, const geometry_msgs::msg::Pose *>> latest_robot_keyframes;
 
         for( const auto &graph_msg : graph_queue ) {
             for( const auto &edge_ros : graph_msg->edges ) {
@@ -505,12 +574,14 @@ private:
                 }
             }
 
-            latest_robot_keyframes[graph_msg->robot_name] = std::make_pair<const GlobalId *, const geometry_msgs::Pose *>(
+            latest_robot_keyframes[graph_msg->robot_name] = std::make_pair<const GlobalId *, const geometry_msgs::msg::Pose *>(
                 &graph_msg->latest_keyframe_gid, &graph_msg->latest_keyframe_odom );
         }
 
-        ROS_INFO_STREAM( "Unique keyframes: " << unique_keyframes.size() );
-        ROS_INFO_STREAM( "Unique edges:     " << unique_edges.size() );
+        // ROS_INFO_STREAM( "Unique keyframes: " << unique_keyframes.size() );
+        // ROS_INFO_STREAM( "Unique edges:     " << unique_edges.size() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Unique keyframes: " << unique_keyframes.size() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Unique edges:     " << unique_edges.size() );
         if( unique_keyframes.empty() || unique_edges.empty() ) {
             graph_queue.clear();
             return false;
@@ -519,16 +590,20 @@ private:
         for( const auto &kf : unique_keyframes ) {
             const auto &keyframe_ros = *kf.second;
 
-            ROS_INFO_STREAM( "Adding keyframe: " << keyframe_ros.gid );
+            // ROS_INFO_STREAM( "Adding keyframe: " << keyframe_ros.gid );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe: " << keyframe_ros.gid );
 
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
             // ros::Time stamp(keyframe_ros.stamp);
-            sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>( keyframe_ros.cloud );
+            // sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>( keyframe_ros.cloud );
+            // TODO use unique ptr for efficient intraprocess communication instead?
+            sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
             KeyFrame::Ptr keyframe( new KeyFrame( keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros ) );
 
             Eigen::Isometry3d pose;
-            tf::poseMsgToEigen( keyframe_ros.estimate, pose );
+            // tf::poseMsgToEigen( keyframe_ros.estimate, pose );
+            tf2::fromMsg( keyframe_ros.estimate, pose );
             keyframe->node               = graph_slam->add_se3_node( pose );
             keyframe->gid                = keyframe_ros.gid;
             keyframe->exclude_from_map   = keyframe_ros.exclude_from_map;
@@ -548,10 +623,13 @@ private:
                 continue;
             }
 
-            ROS_INFO_STREAM( "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
+            // ROS_INFO_STREAM( "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
 
             Eigen::Isometry3d relpose;
-            tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
+            // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
+            tf2::fromMsg( edge_ros.relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros.information.data() );
             auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
             auto edge       = new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP );
@@ -562,18 +640,40 @@ private:
             edge_gids.insert( edge->gid );
 
             if( edge->type == Edge::TYPE_ODOM ) {
-                graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
-                                               private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
+                // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
+                //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
+                // TODO: add class member for odometry_edge_robust_kernel, loop_closure_edge_robust_kernel if the params dont change
+                // during runtime
+                std::string odometry_edge_robust_kernel      = this->has_parameter( "odometry_edge_robust_kernel" )
+                                                                   ? this->get_parameter( "odometry_edge_robust_kernel" ).as_string()
+                                                                   : this->declare_parameter<std::string>( "odometry_edge_robust_kernel",
+                                                                                                      "NONE" );
+                double      odometry_edge_robust_kernel_size = this->has_parameter( "odometry_edge_robust_kernel_size" )
+                                                                   ? this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double()
+                                                                   : this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
+                graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
             } else {
-                graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "loop_closure_edge_robust_kernel", "NONE" ),
-                                               private_nh.param<double>( "loop_closure_edge_robust_kernel_size", 1.0 ) );
+                // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "loop_closure_edge_robust_kernel", "NONE" ),
+                //                                private_nh.param<double>( "loop_closure_edge_robust_kernel_size", 1.0 ) );
+                // TODO: add class member for loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size if the params dont
+                // change during runtime
+                std::string loop_closure_edge_robust_kernel = this->has_parameter( "loop_closure_edge_robust_kernel" )
+                                                                  ? this->get_parameter( "loop_closure_edge_robust_kernel" ).as_string()
+                                                                  : this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel",
+                                                                                                          "NONE" );
+                double      loop_closure_edge_robust_kernel_size =
+                    this->has_parameter( "loop_closure_edge_robust_kernel_size" )
+                             ? this->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double()
+                             : this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
+                graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
             }
         }
 
         for( const auto &latest_keyframe : latest_robot_keyframes ) {
             auto &kf = others_prev_robot_keyframes[latest_keyframe.first];
-            kf.first = keyframe_gids[*latest_keyframe.second.first];          // pointer to keyframe
-            tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
+            kf.first = keyframe_gids[*latest_keyframe.second.first];  // pointer to keyframe
+            // tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
+            tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
         }
 
         graph_queue.clear();
@@ -581,12 +681,13 @@ private:
     }
 
 
-    void update_pose( const Eigen::Isometry3d &odom2map, std::pair<Eigen::Isometry3d, geometry_msgs::Pose> &odom_pose )
+    void update_pose( const Eigen::Isometry3d &odom2map, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose> &odom_pose )
     {
         auto             &odom     = odom_pose.first;
         auto             &pose     = odom_pose.second;
         Eigen::Isometry3d new_pose = odom2map * odom;
-        tf::poseEigenToMsg( new_pose, pose );
+        // tf::poseEigenToMsg( new_pose, pose );
+        tf2::fromMsg( new_pose, pose );
     }
 
 
@@ -601,7 +702,8 @@ private:
             return;
         }
 
-        PoseWithNameArray pose_array_msg;
+        // PoseWithNameArray pose_array_msg;
+        hdl_graph_slam::msg::PoseWithNameArray pose_array_msg;
         pose_array_msg.header.stamp    = pose_msg->header.stamp;
         pose_array_msg.header.frame_id = map_frame_id;
 
@@ -615,7 +717,8 @@ private:
             const auto                  iter = others_odom2map.find( other_name );
             if( iter != others_odom2map.end() ) {
                 auto &odom_pose = others_odom_poses[other_name];
-                tf::poseMsgToEigen( pose_msg->pose, odom_pose.first );
+                // tf::poseMsgToEigen( pose_msg->pose, odom_pose.first );
+                tf2::fromMsg( pose_msg->pose, odom_pose.first );
                 update_pose( iter->second, odom_pose );
 
                 other_position << odom_pose.second.position.x, odom_pose.second.position.y, odom_pose.second.position.z;
@@ -634,7 +737,8 @@ private:
 
         // publish this information
         if( !pose_array_msg.poses.empty() ) {
-            others_poses_pub.publish( pose_array_msg );
+            // others_poses_pub.publish( pose_array_msg );
+            others_poses_pub->publish( pose_array_msg );
         }
 
         // check whether the graph should be requested of this rover
@@ -650,12 +754,20 @@ private:
         double  accum_dist      = accum_dist_pair.first;   // get a copy of accum_dist to allow for updating the pair with current value
         double &last_accum_dist = accum_dist_pair.second;  // get a reference here, because it may be updated below
         accum_dist_pair.first   = pose_msg->accum_dist;
-        double min_accum_dist   = private_nh.param<double>( "graph_request_min_accum_dist", 2 );
+        // double min_accum_dist   = private_nh.param<double>( "graph_request_min_accum_dist", 2 );
+        // TODO add class member for graph_request_min_accum_dist if this parameter is not changing during runtime
+        double min_accum_dist = this->has_parameter( "graph_request_min_accum_dist" )
+                                    ? this->get_parameter( "graph_request_min_accum_dist" ).as_double()
+                                    : this->declare_parameter<double>( "graph_request_min_accum_dist", 2 );
         if( last_accum_dist >= 0 && fabs( last_accum_dist - accum_dist ) < min_accum_dist ) {
             return;
         }
 
-        double max_robot_dist_sqr = private_nh.param<double>( "graph_request_max_robot_dist", 10 );
+        // double max_robot_dist_sqr = private_nh.param<double>( "graph_request_max_robot_dist", 10 );
+        // TODO add class member for graph_request_max_robot_dist if this parameter is not changing during runtime
+        double max_robot_dist_sqr = this->has_parameter( "graph_request_max_robot_dist" )
+                                        ? this->get_parameter( "graph_request_max_robot_dist" ).as_double()
+                                        : this->declare_parameter<double>( "graph_request_max_robot_dist", 10 );
         max_robot_dist_sqr *= max_robot_dist_sqr;
         if( last_accum_dist >= 0 && ( !other_position_valid || ( own_position - other_position ).squaredNorm() > max_robot_dist_sqr ) ) {
             return;
@@ -675,7 +787,8 @@ private:
      * @brief receive anchor node pose from topic
      * @param
      */
-    void init_pose_callback( const nav_msgs::Odometry::ConstPtr &msg )
+    // void init_pose_callback( const nav_msgs::Odometry::ConstPtr &msg )
+    void init_pose_callback( const nav_msgs::msg::Odometry::ConstSharedPtr msg )
     {
         std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
         init_pose = msg;
@@ -709,7 +822,9 @@ private:
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         if( !cloud_msg ) {
-            cloud_msg = sensor_msgs::PointCloud2Ptr( new sensor_msgs::PointCloud2() );
+            // cloud_msg = sensor_msgs::PointCloud2Ptr( new sensor_msgs::PointCloud2() );
+            // TODO use unique_ptr for efficient intraprocess communication?
+            cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
         }
         pcl::toROSMsg( *cloud, *cloud_msg );
 
@@ -720,9 +835,13 @@ private:
      * @brief generate map point cloud and publish it
      * @param event
      */
-    void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
+    // void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
+    // TODO does the ros::WallTimerEvent needs to be used in ROS2?
+    void map_points_publish_timer_callback()
     {
-        if( !map_points_pub.getNumSubscribers() ) {
+        RCLCPP_INFO( this->get_logger(), "INSIDE map points timer callback, TAKE ME OUT" );
+        // if( !map_points_pub.getNumSubscribers() ) {
+        if( !map_points_pub->get_subscription_count() ) {
             return;
         }
 
@@ -736,7 +855,8 @@ private:
             return;
         }
 
-        map_points_pub.publish( cloud_msg );
+        // map_points_pub.publish( cloud_msg );
+        map_points_pub->publish( *cloud_msg );
     }
 
     /**
@@ -840,7 +960,9 @@ private:
      * @brief this methods adds all the data in the queues to the pose graph, and then optimizes the pose graph
      * @param event
      */
-    void optimization_timer_callback( const ros::WallTimerEvent &event )
+    // void optimization_timer_callback( const ros::WallTimerEvent &event )
+    // TODO verify that ros::Walltimerevent does not need to be replaced
+    void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
@@ -848,12 +970,15 @@ private:
         bool keyframe_updated = flush_keyframe_queue();
 
         if( !keyframe_updated ) {
-            std_msgs::Header read_until;
-            read_until.stamp    = ros::Time::now() + ros::Duration( 30, 0 );
+            std_msgs::msg::Header read_until;
+            // read_until.stamp    = ros::Time::now() + ros::Duration( 30, 0 );
+            read_until.stamp    = this->now() + rclcpp::Duration( 30, 0 );
             read_until.frame_id = points_topic;
-            read_until_pub.publish( read_until );
+            // read_until_pub->publish( read_until );
+            read_until_pub->publish( read_until );
             read_until.frame_id = "/filtered_points";
-            read_until_pub.publish( read_until );
+            // read_until_pub.publish( read_until );
+            read_until_pub->publish( read_until );
         }
 
         if( !keyframe_updated & !flush_graph_queue()
@@ -871,8 +996,17 @@ private:
             auto              edge       = new Edge( graph_edge, Edge::TYPE_LOOP, loop->key1->gid, loop->key2->gid, *gid_generator );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
-            graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "loop_closure_edge_robust_kernel", "NONE" ),
-                                           private_nh.param<double>( "loop_closure_edge_robust_kernel_size", 1.0 ) );
+            // TODO maybe add loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size as class members if they dont change
+            // during runtime
+            std::string loop_closure_edge_robust_kernel      = this->has_parameter( "loop_closure_edge_robust_kernel" )
+                                                                   ? this->get_parameter( "loop_closure_edge_robust_kernel" ).as_string()
+                                                                   : this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel",
+                                                                                                      "NONDE" );
+            double      loop_closure_edge_robust_kernel_size = this->has_parameter( "loop_closure_edge_robust_kernel_size" )
+                                                                   ? this->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double()
+                                                                   : this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size",
+                                                                                                 1.0 );
+            graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
 
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
@@ -880,7 +1014,12 @@ private:
 
         // move the first node anchor position to the current estimate of the first node pose
         // so the first node moves freely while trying to stay around the origin
-        if( anchor_node && private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+        // TODO maybe add fix_first_node_adaptive as class member if it doesnt change during runtime
+        bool fix_first_node_adaptive = this->has_parameter( "fix_first_node_adaptive" )
+                                           ? this->get_parameter( "fix_first_node_adaptive" ).as_bool()
+                                           : this->declare_parameter<bool>( "fix_first_node_adaptive", true );
+        // if( anchor_node && private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+        if( anchor_node && fix_first_node_adaptive ) {
             Eigen::Isometry3d anchor_target = static_cast<g2o::VertexSE3 *>( anchor_edge->vertices()[1] )->estimate();
             anchor_node->setEstimate( anchor_target );
         }
@@ -890,7 +1029,11 @@ private:
         }
 
         // optimize the pose graph
-        int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
+        // int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
+        // TODO maybe add g2o_solver_num_iterations as class member if it doesnt change during runtime
+        int num_iterations = this->has_parameter( "g2o_solver_num_iterations" )
+                                 ? this->get_parameter( "g2o_solver_num_iterations" ).as_int()
+                                 : this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
         graph_slam->optimize( num_iterations );
 
         // get transformations between map and robots
@@ -934,10 +1077,12 @@ private:
         graph_estimate_msg_update_required = true;
         snapshots_mutex.unlock();
 
-        if( odom2map_pub.getNumSubscribers() ) {
-            geometry_msgs::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(), map_frame_id,
-                                                                   odom_frame_id );
-            odom2map_pub.publish( ts );
+        // if( odom2map_pub.getNumSubscribers() ) {
+        if( odom2map_pub->get_subscription_count() ) {
+            geometry_msgs::msg::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(),
+                                                                        map_frame_id, odom_frame_id );
+            // odom2map_pub.publish( ts );
+            odom2map_pub->publish( ts );
         }
 
         if( markers_pub.getNumSubscribers() ) {
