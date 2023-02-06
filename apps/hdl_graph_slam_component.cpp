@@ -134,9 +134,17 @@ public:
         gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( node_ros, own_name, robot_names ) );
 
         // subscribers
-        odom_sub.reset( new message_filters::Subscriber<nav_msgs::Odometry>( mt_nh, "/odom", 256 ) );
-        cloud_sub.reset( new message_filters::Subscriber<sensor_msgs::PointCloud2>( mt_nh, "/filtered_points", 32 ) );
-        sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
+        // odom_sub.reset( new message_filters::Subscriber<nav_msgs::Odometry>( mt_nh, "/odom", 256 ) );
+        // cloud_sub.reset( new message_filters::Subscriber<sensor_msgs::PointCloud2>( mt_nh, "/filtered_points", 32 ) );
+        // TODO further specify qos profile
+        auto qos  = rmw_qos_profile_default;
+        qos.depth = 256;
+        odom_sub.subscribe( node_ros, "/odom", qos );
+        qos.depth = 32;
+        cloud_sub.subscribe( node_ros, "/filtered_points", qos );
+        // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
+        // TODO: verify synced callbacks
+        sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
         // graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamComponent::graph_callback, this );
         // odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamComponent::odom_broadcast_callback, this
@@ -151,7 +159,9 @@ public:
         // init_pose_topic = private_nh.param<std::string>( "init_pose_topic", "NONE" );
         init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
         if( init_pose_topic != "NONE" ) {
-            init_pose_sub = mt_nh.subscribe( init_pose_topic, 32, &HdlGraphSlamComponent::init_pose_callback, this );
+            init_pose_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_pose_topic, rclcpp::QoS( 32 ),
+                                                                                std::bind( &HdlGraphSlamComponent::init_pose_callback, this,
+                                                                                           std::placeholders::_1 ) );
         }
 
         // publishers
@@ -230,6 +240,8 @@ private:
     void cloud_callback( const nav_msgs::msg::Odometry::ConstSharedPtr       &odom_msg,
                          const sensor_msgs::msg::PointCloud2::ConstSharedPtr &cloud_msg )
     {
+        RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in synced callback odom ts %.9f, cloud ts %.9f",
+                     rclcpp::Time( odom_msg->header.stamp ).seconds(), rclcpp::Time( cloud_msg->header.stamp ).seconds() );
         // const ros::Time  &stamp = cloud_msg->header.stamp;
         const builtin_interfaces::msg::Time &stamp = cloud_msg->header.stamp;
         Eigen::Isometry3d                    odom  = odom2isometry( odom_msg );
@@ -1247,9 +1259,12 @@ private:
     rclcpp::TimerBase::SharedPtr optimization_timer;
     rclcpp::TimerBase::SharedPtr map_publish_timer;
 
-    std::unique_ptr<message_filters::Subscriber<nav_msgs::Odometry>>       odom_sub;
-    std::unique_ptr<message_filters::Subscriber<sensor_msgs::PointCloud2>> cloud_sub;
-    std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>>       sync;
+    // std::unique_ptr<message_filters::Subscriber<nav_msgs::Odometry>>       odom_sub;
+    // std::unique_ptr<message_filters::Subscriber<sensor_msgs::PointCloud2>> cloud_sub;
+    // std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>>       sync;
+    message_filters::Subscriber<nav_msgs::msg::Odometry>             odom_sub;
+    message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub;
+    std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>> sync;
 
     // ros::Subscriber graph_broadcast_sub;
     // ros::Publisher  graph_broadcast_pub;

@@ -12,6 +12,7 @@ find_package(nmea_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
+find_package(message_filters REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
@@ -217,6 +218,7 @@ rosidl_target_interfaces(hdl_graph_slam_nodelet ${PROJECT_NAME} "rosidl_typesupp
 ament_target_dependencies(hdl_graph_slam_nodelet
   rclcpp
   builtin_interfaces
+  message_filters
   std_msgs
   nmea_msgs
   sensor_msgs
