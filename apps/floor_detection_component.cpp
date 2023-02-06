@@ -42,7 +42,7 @@ public:
     {
         // NODELET_DEBUG( "initializing floor_detection_nodelet..." );
         RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
-        // No node handles in ROS2
+        // This class is the node handle as it is derived from rclcpp::Node
         // nh         = getNodeHandle();
         // private_nh = getPrivateNodeHandle();
 
