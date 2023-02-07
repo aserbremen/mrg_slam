@@ -172,50 +172,42 @@ install(
   ARCHIVE DESTINATION lib
 )
 
-set(LIBRARY_HEADERS
-  include/hdl_graph_slam/edge.hpp
-  include/hdl_graph_slam/floor_coeffs_processor.hpp
-  include/hdl_graph_slam/global_id.hpp
-  include/hdl_graph_slam/gps_processor.hpp
-  include/hdl_graph_slam/graph_slam.hpp
-  include/hdl_graph_slam/imu_processor.hpp
-  include/hdl_graph_slam/information_matrix_calculator.hpp
-  include/hdl_graph_slam/keyframe_updater.hpp
-  include/hdl_graph_slam/keyframe.hpp
-  include/hdl_graph_slam/loop_detector.hpp
-  include/hdl_graph_slam/map_cloud_generator.hpp
-  include/hdl_graph_slam/markers_publisher.hpp
-  include/hdl_graph_slam/nmea_sentence_parser.hpp
-  include/hdl_graph_slam/registrations.hpp
-  include/hdl_graph_slam/ros_time_hash.hpp
-  include/hdl_graph_slam/ros_utils.hpp
-)
-
-set(LIBRARY_SOURCE_FILES
-  src/hdl_graph_slam/edge.cpp
-  src/hdl_graph_slam/floor_coeffs_processor.cpp
-  src/hdl_graph_slam/global_id.cpp
-  src/hdl_graph_slam/gps_processor.cpp
+##############################
+## HDL Graph Slam Component ##
+##############################
+add_library(hdl_graph_slam_component SHARED
+  apps/hdl_graph_slam_component.cpp
   src/hdl_graph_slam/graph_slam.cpp
-  src/hdl_graph_slam/imu_processor.cpp
-  src/hdl_graph_slam/information_matrix_calculator.cpp
-  src/hdl_graph_slam/keyframe_updater.cpp
-  src/hdl_graph_slam/keyframe.cpp
+  src/hdl_graph_slam/edge.cpp
+  src/hdl_graph_slam/global_id.cpp
   src/hdl_graph_slam/loop_detector.cpp
+  src/hdl_graph_slam/keyframe.cpp
+  src/hdl_graph_slam/keyframe_updater.cpp
   src/hdl_graph_slam/map_cloud_generator.cpp
-  src/hdl_graph_slam/markers_publisher.cpp
   src/hdl_graph_slam/registrations.cpp
+  src/hdl_graph_slam/information_matrix_calculator.cpp
+  src/hdl_graph_slam/imu_processor.cpp
+  src/hdl_graph_slam/gps_processor.cpp
+  src/hdl_graph_slam/floor_coeffs_processor.cpp
+  src/hdl_graph_slam/markers_publisher.cpp
+  src/g2o/robust_kernel_io.cpp
 )
-
-add_library(hdl_graph_slam_nodelet
-  ${LIBRARY_HEADERS}
-  ${LIBRARY_SOURCE_FILES}
+# Link non ament packages
+target_link_libraries(hdl_graph_slam_component
+  ${PCL_LIBRARIES}
+  ${G2O_TYPES_DATA}
+  ${G2O_CORE_LIBRARY}
+  ${G2O_STUFF_LIBRARY}
+  ${G2O_SOLVER_PCG}
+  ${G2O_SOLVER_CSPARSE}   # be aware of that CSPARSE is released under LGPL
+  ${G2O_SOLVER_CHOLMOD}   # be aware of that cholmod is released under GPL
+  ${G2O_TYPES_SLAM3D}
+  ${G2O_TYPES_SLAM3D_ADDONS}
 )
-target_include_directories(hdl_graph_slam_nodelet PUBLIC include)
-# The next line is needed for custom messages to be used within the same package.
-# https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
-rosidl_target_interfaces(hdl_graph_slam_nodelet ${PROJECT_NAME} "rosidl_typesupport_cpp")
-ament_target_dependencies(hdl_graph_slam_nodelet
+# Handles includes and linking of other ament targets
+# target_include_directories(hdl_graph_slam_component PUBLIC include)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(hdl_graph_slam_component
   rclcpp
   builtin_interfaces
   message_filters
@@ -226,15 +218,32 @@ ament_target_dependencies(hdl_graph_slam_nodelet
   fast_gicp
   ndt_omp
 )
-target_link_libraries(hdl_graph_slam_nodelet
-  ${rclcpp_LIBRARIES}
-  ${PCL_LIBRARIES}
+# target_link_libraries(hdl_graph_slam_component
+#   ${rclcpp_LIBRARIES}
+#   ${PCL_LIBRARIES}
+# )
+# The next line is needed for custom messages to be used within the same package.
+# https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
+rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# Register the component as part of hdl_graph_slam (project) ComponentManager
+rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")
+
+# TODO map2odom publisher python scripts
+
+# Install the hdl_graph_slam_component (hdl_graph_slam_component.so) in workspace install folder
+# TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
+install(
+  TARGETS hdl_graph_slam_component
+  EXPORT hdl_graph_slam_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
 )
 
 # Here we can export all downstream dependencies and include directories
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
-ament_export_libraries(hdl_graph_slam_nodelet)
+ament_export_libraries(hdl_graph_slam_component)
+# TODO: ament_export_targets
 
 # Finally create a pacakge
 ament_package()

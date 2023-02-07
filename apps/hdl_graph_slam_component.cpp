@@ -4,6 +4,7 @@
 #include <tf2_eigen/tf2_eigen.h>
 
 #include <chrono>
+#include <functional>
 #include <hdl_graph_slam/msg/graph_ros.hpp>
 #include <hdl_graph_slam/msg/pose_with_name.hpp>
 #include <hdl_graph_slam/msg/pose_with_name_array.hpp>
@@ -187,18 +188,55 @@ public:
         others_poses_pub    = this->create_publisher<hdl_graph_slam::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
                                                                                            rclcpp::QoS( 16 ) );
 
-        dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamComponent::dump_service, this );
-        save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamComponent::save_map_service, this );
-        get_map_service_server  = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamComponent::get_map_service, this );
-        get_graph_estimate_service_server = mt_nh.advertiseService( "/hdl_graph_slam/get_graph_estimate",
-                                                                    &HdlGraphSlamComponent::get_graph_estimate_service, this );
-        publish_graph_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph",
-                                                                    &HdlGraphSlamComponent::publish_graph_service, this );
+        // dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamComponent::dump_service, this );
+        // save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamComponent::save_map_service, this );
+        // get_map_service_server  = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamComponent::get_map_service, this );
+        // get_graph_estimate_service_server = mt_nh.advertiseService( "/hdl_graph_slam/get_graph_estimate",
+        //                                                             &HdlGraphSlamComponent::get_graph_estimate_service, this );
+        // publish_graph_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph",
+        //                                                             &HdlGraphSlamComponent::publish_graph_service, this );
+        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when the callback is a class
+        // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ TODO: verify
+        // If these service callbacks dont work during runtime, try using lambda functions as in
+        // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
+        // Dumb service
+        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::DumpGraph::Request> req,
+                            std::shared_ptr<hdl_graph_slam::srv::DumpGraph::Response>      res )>
+            dump_service_callback = std::bind( &HdlGraphSlamComponent::dump_service, this, std::placeholders::_1, std::placeholders::_2 );
+        dump_service_server       = this->create_service<hdl_graph_slam::srv::DumpGraph>( "/hdl_graph_slam/dump", dump_service_callback );
+        // Save map service
+        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::SaveMap::Request> req,
+                            std::shared_ptr<hdl_graph_slam::srv::SaveMap::Response>      res )>
+            save_map_service_callback = std::bind( &HdlGraphSlamComponent::save_map_service, this, std::placeholders::_1,
+                                                   std::placeholders::_2 );
+        save_map_service_server       = this->create_service<hdl_graph_slam::srv::SaveMap>( "/hdl_graph_slam/save_map",
+                                                                                      save_map_service_callback );
+        // Get map service
+        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetMap::Request> req,
+                            std::shared_ptr<hdl_graph_slam::srv::GetMap::Response>      res )>
+            get_map_service_callback = std::bind( &HdlGraphSlamComponent::get_map_service, this, std::placeholders::_1,
+                                                  std::placeholders::_2 );
+        get_map_service_server = this->create_service<hdl_graph_slam::srv::GetMap>( "/hdl_graph_slam/get_map", get_map_service_callback );
+        // Get graph estimate service
+        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Request> req,
+                            std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Response>      res )>
+            get_graph_estimate_service_callback = std::bind( &HdlGraphSlamComponent::get_graph_estimate_service, this,
+                                                             std::placeholders::_1, std::placeholders::_2 );
+        get_graph_estimate_service_server       = this->create_service<hdl_graph_slam::srv::GetGraphEstimate>(
+            "/hdl_graph_slam/get_graph_estimate", get_graph_estimate_service_callback );
+        // Publish graph service
+        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Request> req,
+                            std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Response>      res )>
+            publish_graph_service_callback = std::bind( &HdlGraphSlamComponent::publish_graph_service, this, std::placeholders::_1,
+                                                        std::placeholders::_2 );
+        publish_graph_service_server       = this->create_service<hdl_graph_slam::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
+                                                                                                publish_graph_service_callback );
 
         for( const auto &robot_name : robot_names ) {
             if( robot_name != own_name ) {
                 // request_graph_service_clients[robot_name] = mt_nh.serviceClient<hdl_graph_slam::PublishGraph>(
-                request_graph_service_clients[robot_name] = mt_nh.serviceClient<hdl_graph_slam::PublishGraph>(
+                // "/" + robot_name + "/hdl_graph_slam/publish_graph" );
+                request_graph_service_clients[robot_name] = this->create_client<hdl_graph_slam::srv::PublishGraph>(
                     "/" + robot_name + "/hdl_graph_slam/publish_graph" );
                 others_accum_dist[robot_name] = std::make_pair<double, double>( 0, -1 );
             }
@@ -237,8 +275,7 @@ private:
      * @param cloud_msg
      */
     // void cloud_callback( const nav_msgs::OdometryConstPtr &odom_msg, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg )
-    void cloud_callback( const nav_msgs::msg::Odometry::ConstSharedPtr       &odom_msg,
-                         const sensor_msgs::msg::PointCloud2::ConstSharedPtr &cloud_msg )
+    void cloud_callback( nav_msgs::msg::Odometry::ConstSharedPtr odom_msg, sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
         RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in synced callback odom ts %.9f, cloud ts %.9f",
                      rclcpp::Time( odom_msg->header.stamp ).seconds(), rclcpp::Time( cloud_msg->header.stamp ).seconds() );
@@ -527,7 +564,7 @@ private:
      * @param graph_msg
      */
     // void graph_callback( const hdl_graph_slam::GraphRos::ConstPtr &graph_msg )
-    void graph_callback( const hdl_graph_slam::msg::GraphRos::ConstSharedPtr graph_msg )
+    void graph_callback( hdl_graph_slam::msg::GraphRos::ConstSharedPtr graph_msg )
     {
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
         if( graph_msg->robot_name != own_name ) {
@@ -708,7 +745,7 @@ private:
      * @param graph_msg
      */
     // void odom_broadcast_callback( const hdl_graph_slam::PoseWithName::ConstPtr &pose_msg )
-    void odom_broadcast_callback( const hdl_graph_slam::msg::PoseWithName::ConstSharedPtr pose_msg )
+    void odom_broadcast_callback( hdl_graph_slam::msg::PoseWithName::ConstSharedPtr pose_msg )
     {
         if( pose_msg->robot_name == own_name ) {
             return;
@@ -785,12 +822,26 @@ private:
             return;
         }
 
-        hdl_graph_slam::PublishGraph srv;
-        if( request_graph_service_clients[other_name].call( srv ) ) {
-            ROS_INFO_STREAM( "Successfully requested graph from " << other_name );
-            last_accum_dist = accum_dist;
+        // if( request_graph_service_clients[other_name].call( srv ) ) {
+        //     ROS_INFO_STREAM( "Successfully requested graph from " << other_name );
+        //     last_accum_dist = accum_dist;
+        // } else {
+        //     ROS_WARN_STREAM( "Failed to request graph from " << other_name );
+        // }
+        // Check if service call succeeds for ROS2 humble or rolling can be performed as in
+        // https://github.com/ros2/examples/blob/rolling/rclcpp/services/minimal_client/main.cpp
+        // However for ROS2 foxy client->remove_pending_request() is not available.
+        // Thats why we rely on the foxy implementation and hope it works
+        // https://github.com/ros2/examples/blob/foxy/rclcpp/services/minimal_client/main.cpp
+        // TODO verify this method of checking the result
+        auto client        = request_graph_service_clients[other_name];
+        auto request       = std::make_shared<hdl_graph_slam::srv::PublishGraph::Request>();
+        auto result_future = client->async_send_request( request );
+        if( rclcpp::spin_until_future_complete( shared_from_this(), result_future ) != rclcpp::FutureReturnCode::SUCCESS ) {
+            RCLCPP_ERROR_STREAM( this->get_logger(), "Failed to request graph from " << other_name );
         } else {
-            ROS_WARN_STREAM( "Failed to request graph from " << other_name );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << other_name );
+            last_accum_dist = accum_dist;
         }
     }
 
@@ -877,24 +928,32 @@ private:
      * @param res
      * @return
      */
-    bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
+    // bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
+    void get_map_service( hdl_graph_slam::srv::GetMap::Request::ConstSharedPtr req, hdl_graph_slam::srv::GetMap::Response::SharedPtr res )
     {
         std::lock_guard<std::mutex> lock( cloud_msg_mutex );
 
         update_cloud_msg();
 
         if( !cloud_msg ) {
-            return false;
+            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // return false;
+            return;
         }
 
-        if( req.last_stamp != cloud_msg->header.stamp ) {
-            res.updated   = true;
-            res.cloud_map = *cloud_msg;
+        // == and != operators are defined for builtin_interfaces::msg::Time
+        if( req->last_stamp != cloud_msg->header.stamp ) {
+            // res.updated   = true;
+            // res.cloud_map = *cloud_msg;
+            res->updated   = true;
+            res->cloud_map = *cloud_msg;
         } else {
-            res.updated = false;
+            // res.updated = false;
+            res->updated = false;
         }
 
-        return true;
+        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // return true;
     }
 
     /**
@@ -903,17 +962,22 @@ private:
      * @param res
      * @return
      */
-    bool get_graph_estimate_service( hdl_graph_slam::GetGraphEstimateRequest &req, hdl_graph_slam::GetGraphEstimateResponse &res )
+    // bool get_graph_estimate_service( hdl_graph_slam::GetGraphEstimateRequest &req, hdl_graph_slam::GetGraphEstimateResponse &res )
+    void get_graph_estimate_service( hdl_graph_slam::srv::GetGraphEstimate::Request::ConstSharedPtr req,
+                                     hdl_graph_slam::srv::GetGraphEstimate::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( graph_estimate_msg_mutex );
 
         if( graph_estimate_msg_update_required ) {
             if( keyframes_snapshot.empty() || edges_snapshot.empty() ) {
-                return false;
+                // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+                // return false;
+                return;
             }
 
             if( !graph_estimate_msg ) {
-                graph_estimate_msg = hdl_graph_slam::GraphEstimatePtr( new hdl_graph_slam::GraphEstimate() );
+                // graph_estimate_msg = hdl_graph_slam::GraphEstimatePtr( new hdl_graph_slam::GraphEstimate() );
+                graph_estimate_msg = hdl_graph_slam::msg::GraphEstimate::SharedPtr( new hdl_graph_slam::msg::GraphEstimate() );
             }
 
             std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp;
@@ -927,7 +991,10 @@ private:
             }
 
             graph_estimate_msg->header.frame_id = map_frame_id;
-            pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_msg->header.stamp );
+            // pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_msg->header.stamp );
+            rclcpp::Time graph_estimate_stamp;
+            pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_stamp );
+            graph_estimate_msg->header.stamp = graph_estimate_stamp;
 
             graph_estimate_msg->edges.resize( edges_snapshot_tmp.size() );
             graph_estimate_msg->keyframes.resize( keyframes_snapshot_tmp.size() );
@@ -946,7 +1013,8 @@ private:
                 auto &keyframe_in  = keyframes_snapshot_tmp[i];
                 keyframe_out.gid   = keyframe_in->gid;
                 keyframe_out.stamp = keyframe_in->stamp;
-                tf::poseEigenToMsg( keyframe_in->pose, keyframe_out.estimate.pose );
+                // tf::poseEigenToMsg( keyframe_in->pose, keyframe_out.estimate.pose );
+                keyframe_out.estimate.pose = tf2::toMsg( keyframe_in->pose );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> covMap( keyframe_out.estimate.covariance.data() );
                 covMap = keyframe_in->covariance;
             }
@@ -955,17 +1023,26 @@ private:
         }
 
         if( !graph_estimate_msg ) {
-            return false;
+            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // return false;
+            return;
         }
 
-        if( req.last_stamp != graph_estimate_msg->header.stamp ) {
-            res.updated        = true;
-            res.graph_estimate = *graph_estimate_msg;
+        // if( req.last_stamp != graph_estimate_msg->header.stamp ) {
+        //     res.updated        = true;
+        //     res.graph_estimate = *graph_estimate_msg;
+        // } else {
+        //     res.updated = false;
+        // }
+        if( req->last_stamp != graph_estimate_msg->header.stamp ) {
+            res->updated        = true;
+            res->graph_estimate = *graph_estimate_msg;
         } else {
-            res.updated = false;
+            res->updated = false;
         }
 
-        return true;
+        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // return true;
     }
 
     /**
@@ -1106,17 +1183,20 @@ private:
         }
     }
 
-    /**
-     * @brief dump all data to the current directory
-     * @param req
-     * @param res
-     * @return
-     */
-    bool dump_service( hdl_graph_slam::DumpGraphRequest &req, hdl_graph_slam::DumpGraphResponse &res )
+    // /**
+    //  * @brief dump all data to the current directory
+    //  * @param req
+    //  * @param res
+    //  * @return
+    //  */
+    // bool dump_service( hdl_graph_slam::DumpGraphRequest &req, hdl_graph_slam::DumpGraphResponse &res )
+    void dump_service( hdl_graph_slam::srv::DumpGraph::Request::ConstSharedPtr req,
+                       hdl_graph_slam::srv::DumpGraph::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
-        std::string directory = req.destination;
+        // std::string directory = req.destination;
+        std::string directory = req->destination;
 
         if( directory.empty() ) {
             std::array<char, 64> buffer;
@@ -1153,8 +1233,10 @@ private:
         ofs << "anchor_edge " << ( anchor_edge == nullptr ? -1 : anchor_edge->id() ) << std::endl;
         ofs << "floor_node " << ( floor_plane_node == nullptr ? -1 : floor_plane_node->id() ) << std::endl;
 
-        res.success = true;
-        return true;
+        // res.success = true;
+        res->success = true;
+        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // return true;
     }
 
     /**
@@ -1163,7 +1245,9 @@ private:
      * @param res
      * @return
      */
-    bool save_map_service( hdl_graph_slam::SaveMapRequest &req, hdl_graph_slam::SaveMapResponse &res )
+    // bool save_map_service( hdl_graph_slam::SaveMapRequest &req, hdl_graph_slam::SaveMapResponse &res )
+    void save_map_service( hdl_graph_slam::srv::SaveMap::Request::ConstSharedPtr req,
+                           hdl_graph_slam::srv::SaveMap::Response::SharedPtr     res )
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
@@ -1171,14 +1255,19 @@ private:
         snapshot = keyframes_snapshot;
         snapshots_mutex.unlock();
 
-        auto cloud = map_cloud_generator->generate( snapshot, req.resolution, req.count_threshold );
+        // auto cloud = map_cloud_generator->generate( snapshot, req.resolution, req.count_threshold );
+        auto cloud = map_cloud_generator->generate( snapshot, req->resolution, req->count_threshold );
         if( !cloud ) {
-            res.success = false;
-            return true;
+            // res.success = false;
+            res->success = false;
+            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // return true;
+            return;
         }
 
         const auto &zero_utm = gps_processor.zero_utm();
-        if( zero_utm && req.utm ) {
+        // if( zero_utm && req.utm ) {
+        if( zero_utm && req->utm ) {
             for( auto &pt : cloud->points ) {
                 pt.getVector3fMap() += ( *zero_utm ).cast<float>();
             }
@@ -1188,14 +1277,18 @@ private:
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         if( zero_utm ) {
-            std::ofstream ofs( req.destination + ".utm" );
+            // std::ofstream ofs( req.destination + ".utm" );
+            std::ofstream ofs( req->destination + ".utm" );
             ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
 
-        int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
-        res.success = ret == 0;
+        // int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
+        // res.success = ret == 0;
+        int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
+        res->success = ret == 0;
 
-        return true;
+        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // return true;
     }
 
 
@@ -1205,19 +1298,25 @@ private:
      * @param res
      * @return
      */
-    bool publish_graph_service( hdl_graph_slam::PublishGraphRequest &req, hdl_graph_slam::PublishGraphResponse &res )
+    // bool publish_graph_service( hdl_graph_slam::PublishGraphRequest &req, hdl_graph_slam::PublishGraphResponse &res )
+    // TODO ROS2 verify it seems
+    void publish_graph_service( hdl_graph_slam::srv::PublishGraph::Request::ConstSharedPtr req,
+                                hdl_graph_slam::srv::PublishGraph::Response::SharedPtr     res )
     {
-        GraphRos msg;
+        // GraphRos msg;
+        hdl_graph_slam::msg::GraphRos msg;
         {
             std::lock_guard<std::mutex> lock( main_thread_mutex );
 
             if( keyframes.empty() ) {
-                return false;
+                // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+                // return false;
             }
 
             msg.robot_name          = own_name;
             msg.latest_keyframe_gid = prev_robot_keyframe->gid;
-            tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
+            // tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
+            msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
             msg.keyframes.resize( keyframes.size() );
             for( size_t i = 0; i < keyframes.size(); i++ ) {
@@ -1226,8 +1325,9 @@ private:
                 dst.gid              = src->gid;
                 dst.stamp            = src->stamp;
                 dst.exclude_from_map = src->exclude_from_map;
-                tf::poseEigenToMsg( src->estimate(), dst.estimate );
-                dst.cloud = *src->cloud_msg;
+                // tf::poseEigenToMsg( src->estimate(), dst.estimate );
+                dst.estimate = tf2::toMsg( src->estimate() );
+                dst.cloud    = *src->cloud_msg;
             }
 
             msg.edges.resize( edges.size() );
@@ -1238,15 +1338,18 @@ private:
                 dst.gid      = src->gid;
                 dst.from_gid = src->from_gid;
                 dst.to_gid   = src->to_gid;
-                tf::poseEigenToMsg( src->relative_pose(), dst.relative_pose );
+                // tf::poseEigenToMsg( src->relative_pose(), dst.relative_pose );
+                dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();
             }
         }
 
-        graph_broadcast_pub.publish( msg );
+        // graph_broadcast_pub.publish( msg );
+        graph_broadcast_pub->publish( msg );
 
-        return true;
+        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // return true;
     }
 
 private:
@@ -1300,12 +1403,18 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
     // TODO find a way to replace ros::ServiceClient
-    std::unordered_map<std::string, ros::ServiceClient> request_graph_service_clients;
-    ros::ServiceServer                                  dump_service_server;
-    ros::ServiceServer                                  save_map_service_server;
-    ros::ServiceServer                                  get_map_service_server;
-    ros::ServiceServer                                  get_graph_estimate_service_server;
-    ros::ServiceServer                                  publish_graph_service_server;
+    // std::unordered_map<std::string, ros::ServiceClient> request_graph_service_clients;
+    // ros::ServiceServer                                  dump_service_server;
+    // ros::ServiceServer                                  save_map_service_server;
+    // ros::ServiceServer                                  get_map_service_server;
+    // ros::ServiceServer                                  get_graph_estimate_service_server;
+    // ros::ServiceServer                                  publish_graph_service_server;
+    std::unordered_map<std::string, rclcpp::Client<hdl_graph_slam::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+    rclcpp::Service<hdl_graph_slam::srv::DumpGraph>::SharedPtr                                    dump_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::SaveMap>::SharedPtr                                      save_map_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::GetMap>::SharedPtr                                       get_map_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::GetGraphEstimate>::SharedPtr                             get_graph_estimate_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::PublishGraph>::SharedPtr                                 publish_graph_service_server;
 
     std::string              own_name;
     std::vector<std::string> robot_names;
