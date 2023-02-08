@@ -205,10 +205,9 @@ target_link_libraries(hdl_graph_slam_component
   ${G2O_TYPES_SLAM3D_ADDONS}
 )
 # Handles includes and linking of other ament targets
-# target_include_directories(hdl_graph_slam_component PUBLIC include)
-# Handles includes and linking of other ament targets
 ament_target_dependencies(hdl_graph_slam_component
   rclcpp
+  rclcpp_components
   builtin_interfaces
   message_filters
   std_msgs
@@ -218,10 +217,6 @@ ament_target_dependencies(hdl_graph_slam_component
   fast_gicp
   ndt_omp
 )
-# target_link_libraries(hdl_graph_slam_component
-#   ${rclcpp_LIBRARIES}
-#   ${PCL_LIBRARIES}
-# )
 # The next line is needed for custom messages to be used within the same package.
 # https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
 rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesupport_cpp")

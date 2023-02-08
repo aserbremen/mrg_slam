@@ -3,6 +3,7 @@
 #ifndef ROS_UTILS_HPP
 #define ROS_UTILS_HPP
 
+#include <rclcpp/rclcpp.hpp>
 // #include <geometry_msgs/Pose.h>
 // #include <geometry_msgs/TransformStamped.h>
 // #include <nav_msgs/Odometry.h>
@@ -182,6 +183,68 @@ odom2isometry( const nav_msgs::msg::Odometry::ConstPtr& odom_msg )
     isometry.translation()     = Eigen::Vector3d( position.x, position.y, position.z );
     return isometry;
 }
+
+void
+print_ros2_parameters( const std::vector<rclcpp::Parameter>& ros_params, const rclcpp::Logger& logger )
+{
+    for( size_t i = 0; i < ros_params.size(); i++ ) {
+        const auto& param = ros_params[i];
+        std::string param_array_string;
+        switch( param.get_type() ) {
+            case rclcpp::ParameterType::PARAMETER_NOT_SET:
+                RCLCPP_INFO_STREAM( logger, param.get_name() << " NOT_SET" );
+                break;
+            case rclcpp::ParameterType::PARAMETER_BOOL:
+                RCLCPP_INFO_STREAM( logger, param.get_name() << ( param.as_bool() ? " true" : " false" ) );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER:
+                RCLCPP_INFO_STREAM( logger, param.get_name() << " " << param.as_int() );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE:
+                RCLCPP_INFO_STREAM( logger, param.get_name() << " " << param.as_double() );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_STRING:
+                RCLCPP_INFO_STREAM( logger, param.get_name() << " " << param.as_string() );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_BYTE_ARRAY:
+                for( const auto& byte : param.as_byte_array() ) {
+                    param_array_string += byte + " ";
+                }
+                RCLCPP_INFO_STREAM( logger, param.get_name() << param_array_string );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_BOOL_ARRAY:
+                for( const auto& b : param.as_bool_array() ) {
+                    param_array_string += b ? " true" : " false";
+                }
+                RCLCPP_INFO_STREAM( logger, param.get_name() << param_array_string );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_INTEGER_ARRAY:
+                for( const auto& i : param.as_integer_array() ) {
+                    param_array_string += " " + std::to_string( i );
+                }
+                RCLCPP_INFO_STREAM( logger, param.get_name() << param_array_string );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_DOUBLE_ARRAY:
+                for( const auto& d : param.as_double_array() ) {
+                    param_array_string += " " + std::to_string( d );
+                }
+                RCLCPP_INFO_STREAM( logger, param.get_name() << param_array_string );
+                break;
+            case rcl_interfaces::msg::ParameterType::PARAMETER_STRING_ARRAY:
+                for( const auto& s : param.as_string_array() ) {
+                    param_array_string += " " + s;
+                }
+                RCLCPP_INFO_STREAM( logger, param.get_name() << param_array_string );
+                break;
+
+
+            default:
+                RCLCPP_WARN_STREAM( logger, "Cannot identiy parameter type for " << param.get_name() );
+                break;
+        }
+    }
+}
+
 
 }  // namespace hdl_graph_slam
 

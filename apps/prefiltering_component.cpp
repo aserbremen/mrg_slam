@@ -6,6 +6,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <hdl_graph_slam/ros_utils.hpp>
 #include <pcl_ros/transforms.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -39,12 +40,37 @@ public:
     // We need to pass NodeOptions in ROS2 to register a component
     PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
     {
+        RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
+
+        initialize_params();
+
+        if( this->declare_parameter<bool>( "deskewing", false ) ) {
+            // TODO: QOS? sensordata qos?
+            imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1 ),
+                                                                        std::bind( &PrefilteringComponent::imu_callback, this,
+                                                                                   std::placeholders::_1 ) );
+        }
+
+        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/velodyne_points", rclcpp::QoS( 64 ),
+                                                                               std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                           std::placeholders::_1 ) );
+        points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
+        colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
+
+
         // setup transform listener
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
+
+        // auto node = shared_from_this();
+        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
     }
+
     virtual ~PrefilteringComponent() {}
 
+    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
+    /*
     virtual void onInit()
     {
         // This class is the node handle as it is derived from rclcpp::Node
@@ -74,6 +100,7 @@ public:
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
     }
+    */
 
 private:
     void initialize_params()
@@ -140,6 +167,7 @@ private:
         distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
         distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
 
+        // TODO set base_link_frame externally since it is not set in this node?
         base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "" );
     }
 
@@ -147,7 +175,7 @@ private:
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
 
     // void cloud_callback( const pcl::PointCloud<PointT>& src_cloud_r )
-    // ROS2 pass unique_ptr for efficient intra process communication?
+    // TODO ROS2 pass unique_ptr for efficient intra process communication?
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros )
     {
         // Convert to pcl pointcloud from ros PointCloud2
@@ -310,12 +338,9 @@ private:
         deskewed->resize( cloud->size() );
 
         // double scan_period = private_nh.param<double>( "scan_period", 0.1 );
-        double scan_period;
-        if( this->has_parameter( "scan_period" ) ) {
-            scan_period = this->get_parameter( "scan_period" ).as_double();
-        } else {
-            scan_period = this->declare_parameter<double>( "scan_period", 0.1 );
-        }
+        // TODO potentially add class member for scan period if it doesnt change during runtime
+        double scan_period = this->has_parameter( "scan_period" ) ? this->get_parameter( "scan_period" ).as_double()
+                                                                  : this->declare_parameter<double>( "scan_period", 0.1 );
         for( int i = 0; i < cloud->size(); i++ ) {
             const auto& pt = cloud->at( i );
 

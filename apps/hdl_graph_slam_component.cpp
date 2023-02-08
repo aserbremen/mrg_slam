@@ -84,6 +84,7 @@ public:
     HdlGraphSlamComponent( const rclcpp::NodeOptions &options ) : Node( "hdl_graph_slam_component", options ) {}
     virtual ~HdlGraphSlamComponent() {}
 
+    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
     virtual void onInit()
     {
         // Get the shared pointer to the ROS2 node to pass it to other classes and functions
@@ -1393,8 +1394,7 @@ private:
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
     std::unordered_map<std::string, std::pair<double, double>> others_accum_dist;  // first:  accumulated dist of other robot,
                                                                                    // second: accumulated dist when last graph update
-                                                                                   // was
-                                                                                   //         requested from that robot
+                                                                                   // was requested from that robot
 
     std::string points_topic;
     // ros::Publisher read_until_pub;
