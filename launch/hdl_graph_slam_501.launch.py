@@ -19,18 +19,18 @@ from launch_ros.actions import LoadComposableNodes
 
 def generate_launch_description():
 
-    print("get_package_share_directory(hdl_graph_slam) ", get_package_share_directory("hdl_graph_slam"))
-    configFilePath = os.path.join(
+    config_file_path = os.path.join(
         get_package_share_directory("hdl_graph_slam"), 
         "config",
         "params.yaml"
     )
-    print(configFilePath)
 
-    with open(configFilePath, "r") as file:
-        configParams = yaml.safe_load(file)["/prefiltering_component"]["ros__parameters"]
-    print(configParams)
+    with open(config_file_path, "r") as file:
+        config_params = yaml.safe_load(file)
+        print(yaml.dump( config_params, default_flow_style=False))
+        prefiltering_config_params =  config_params["/prefiltering_component"]["ros__parameters"]
 
+    # Create the container node
     container = Node(
         name='hdl_graph_slam_container',
         package='rclcpp_components',
@@ -46,7 +46,7 @@ def generate_launch_description():
                 package="hdl_graph_slam",
                 plugin="hdl_graph_slam::PrefilteringComponent",
                 name="prefiltering_component",
-                parameters=[configParams],
+                parameters=[prefiltering_config_params],
                 extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
             )
         ]

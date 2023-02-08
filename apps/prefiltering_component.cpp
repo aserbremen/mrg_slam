@@ -57,14 +57,12 @@ public:
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
-
         // setup transform listener
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
 
-        // auto node = shared_from_this();
-        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
-        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+        // const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        // print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
     }
 
     virtual ~PrefilteringComponent() {}
