@@ -1,3 +1,6 @@
 .vscode/*
 imgui.ini
 rviz/*
+
+# Python cache files
+*.pyc
