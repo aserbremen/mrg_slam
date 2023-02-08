@@ -234,6 +234,12 @@ install(
   ARCHIVE DESTINATION lib
 )
 
+# Install the config directory to work with parameter yaml files
+install( 
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Here we can export all downstream dependencies and include directories
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)

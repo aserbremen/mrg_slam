@@ -1,0 +1,29 @@
+
+# Prefiltering component parameters
+/prefiltering_component:
+  ros__parameters:
+    deskewing: false
+    
+    # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
+    downsample_method: "VOXELGRID"
+    downsample_resolution: 0.1
+    
+    # Outlier removal method options [STATISTICAL, RADIUS, NONE]
+    outlier_removal_method: "STATISTICAL" 
+    # Further parameters when choosing STATISTICAL
+    statistical_mean_k: 20
+    statistical_stddev: 1.0
+    # Further parameters when choosing RADIUS
+    radius_radius: 0.8
+    radius_min_neighbors: 2
+
+    use_distance_filter: true
+    distance_near_thresh: 1.0
+    distance_far_thresh: 100.0
+
+    # TODO set base_link_frame?
+    base_link_frame: ""
+
+    scan_period: 0.1
+
+# Parameters shared across multiple nodes
