@@ -26,4 +26,8 @@
 
     scan_period: 0.1
 
-# Parameters shared across multiple nodes
+# Parameters shared across all nodes
+/**:
+  ros__parameters:
+    use_sim_time: true
+

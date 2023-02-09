@@ -8,14 +8,14 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import IncludeLaunchDescription
 from launch.actions import GroupAction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import TextSubstitution
 from launch_ros.actions import Node
+from launch_ros.actions import LoadComposableNodes
 from launch_ros.actions import PushRosNamespace
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
-from launch_ros.actions import LoadComposableNodes
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
 
@@ -27,7 +27,9 @@ def generate_launch_description():
 
     with open(config_file_path, "r") as file:
         config_params = yaml.safe_load(file)
+        # Print all parameters from the yaml file for convenience when launching the nodes
         print(yaml.dump( config_params, default_flow_style=False))
+        shared_params = config_params["/**"]["ros__parameters"]
         prefiltering_config_params =  config_params["/prefiltering_component"]["ros__parameters"]
 
     # Create the container node
@@ -36,6 +38,7 @@ def generate_launch_description():
         package='rclcpp_components',
         executable='component_container',
         output='both',
+        parameters=[shared_params]
     )
 
     # https://docs.ros.org/en/foxy/How-To-Guides/Launching-composable-nodes.html
@@ -46,7 +49,7 @@ def generate_launch_description():
                 package="hdl_graph_slam",
                 plugin="hdl_graph_slam::PrefilteringComponent",
                 name="prefiltering_component",
-                parameters=[prefiltering_config_params],
+                parameters=[prefiltering_config_params, shared_params],
                 extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
             )
         ]
