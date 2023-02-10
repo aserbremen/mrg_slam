@@ -22,14 +22,14 @@ namespace hdl_graph_slam {
 
 pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr
 // select_registration_method( ros::NodeHandle& pnh )
-select_registration_method( rclcpp::Node::SharedPtr node )
+select_registration_method( rclcpp::Node* node_raw_ptr )
 {
     using PointT = pcl::PointXYZI;
 
     // select a registration method (ICP, GICP, NDT)
-    // TODO: ROS2 parameter handling, verify this
+    // TODO: ROS2 parameter handling, declare all variables only once, as this is also called by the loop closure class
     // std::string registration_method = pnh.param<std::string>( "registration_method", "NDT_OMP" );
-    std::string registration_method = node->declare_parameter<std::string>( "registration_method", "NDT_OMP" );
+    std::string registration_method = node_raw_ptr->declare_parameter<std::string>( "registration_method", "NDT_OMP" );
     if( registration_method == "FAST_GICP" ) {
         std::cout << "registration: FAST_GICP" << std::endl;
         fast_gicp::FastGICP<PointT, PointT>::Ptr gicp( new fast_gicp::FastGICP<PointT, PointT>() );
@@ -39,62 +39,62 @@ select_registration_method( rclcpp::Node::SharedPtr node )
         // gicp->setMaxCorrespondenceDistance( pnh.param<double>( "reg_max_correspondence_distance", 2.5 ) );
         // gicp->setCorrespondenceRandomness( pnh.param<int>( "reg_correspondence_randomness", 20 ) );
         // TODO: ROS2 parameter handling, is declaring the parameter sufficient?, verify
-        gicp->setNumThreads( node->declare_parameter<int>( "reg_num_threads", 0 ) );
-        gicp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-        gicp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-        gicp->setMaxCorrespondenceDistance( node->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
-        gicp->setCorrespondenceRandomness( node->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
+        gicp->setNumThreads( node_raw_ptr->declare_parameter<int>( "reg_num_threads", 0 ) );
+        gicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+        gicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+        gicp->setMaxCorrespondenceDistance( node_raw_ptr->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
+        gicp->setCorrespondenceRandomness( node_raw_ptr->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
         return gicp;
     }
 #ifdef USE_VGICP_CUDA
     else if( registration_method == "FAST_VGICP_CUDA" ) {
         std::cout << "registration: FAST_VGICP_CUDA" << std::endl;
         fast_gicp::FastVGICPCuda<PointT, PointT>::Ptr vgicp( new fast_gicp::FastVGICPCuda<PointT, PointT>() );
-        vgicp->setResolution( node->declare_parameter<double>( "reg_resolution", 1.0 ) );
-        vgicp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-        vgicp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-        vgicp->setCorrespondenceRandomness( node->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
+        vgicp->setResolution( node_raw_ptr->declare_parameter<double>( "reg_resolution", 1.0 ) );
+        vgicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+        vgicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+        vgicp->setCorrespondenceRandomness( node_raw_ptr->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
         return vgicp;
     }
 #endif
     else if( registration_method == "FAST_VGICP" ) {
         std::cout << "registration: FAST_VGICP" << std::endl;
         fast_gicp::FastVGICP<PointT, PointT>::Ptr vgicp( new fast_gicp::FastVGICP<PointT, PointT>() );
-        vgicp->setNumThreads( node->declare_parameter<int>( "reg_num_threads", 0 ) );
-        vgicp->setResolution( node->declare_parameter<double>( "reg_resolution", 1.0 ) );
-        vgicp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-        vgicp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-        vgicp->setCorrespondenceRandomness( node->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
+        vgicp->setNumThreads( node_raw_ptr->declare_parameter<int>( "reg_num_threads", 0 ) );
+        vgicp->setResolution( node_raw_ptr->declare_parameter<double>( "reg_resolution", 1.0 ) );
+        vgicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+        vgicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+        vgicp->setCorrespondenceRandomness( node_raw_ptr->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
         return vgicp;
     } else if( registration_method == "ICP" ) {
         std::cout << "registration: ICP" << std::endl;
         pcl::IterativeClosestPoint<PointT, PointT>::Ptr icp( new pcl::IterativeClosestPoint<PointT, PointT>() );
-        icp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-        icp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-        icp->setMaxCorrespondenceDistance( node->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
-        icp->setUseReciprocalCorrespondences( node->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
+        icp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+        icp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+        icp->setMaxCorrespondenceDistance( node_raw_ptr->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
+        icp->setUseReciprocalCorrespondences( node_raw_ptr->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
         return icp;
     } else if( registration_method.find( "GICP" ) != std::string::npos ) {
         if( registration_method.find( "OMP" ) == std::string::npos ) {
             std::cout << "registration: GICP" << std::endl;
             pcl::GeneralizedIterativeClosestPoint<PointT, PointT>::Ptr gicp( new pcl::GeneralizedIterativeClosestPoint<PointT, PointT>() );
-            gicp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-            gicp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-            gicp->setUseReciprocalCorrespondences( node->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
-            gicp->setMaxCorrespondenceDistance( node->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
-            gicp->setCorrespondenceRandomness( node->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
-            gicp->setMaximumOptimizerIterations( node->declare_parameter<int>( "reg_max_optimizer_iterations", 20 ) );
+            gicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+            gicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+            gicp->setUseReciprocalCorrespondences( node_raw_ptr->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
+            gicp->setMaxCorrespondenceDistance( node_raw_ptr->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
+            gicp->setCorrespondenceRandomness( node_raw_ptr->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
+            gicp->setMaximumOptimizerIterations( node_raw_ptr->declare_parameter<int>( "reg_max_optimizer_iterations", 20 ) );
             return gicp;
         } else {
             std::cout << "registration: GICP_OMP" << std::endl;
             pclomp::GeneralizedIterativeClosestPoint<PointT, PointT>::Ptr gicp(
                 new pclomp::GeneralizedIterativeClosestPoint<PointT, PointT>() );
-            gicp->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-            gicp->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
-            gicp->setUseReciprocalCorrespondences( node->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
-            gicp->setMaxCorrespondenceDistance( node->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
-            gicp->setCorrespondenceRandomness( node->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
-            gicp->setMaximumOptimizerIterations( node->declare_parameter<int>( "reg_max_optimizer_iterations", 20 ) );
+            gicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+            gicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+            gicp->setUseReciprocalCorrespondences( node_raw_ptr->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false ) );
+            gicp->setMaxCorrespondenceDistance( node_raw_ptr->declare_parameter<double>( "reg_max_correspondence_distance", 2.5 ) );
+            gicp->setCorrespondenceRandomness( node_raw_ptr->declare_parameter<int>( "reg_correspondence_randomness", 20 ) );
+            gicp->setMaximumOptimizerIterations( node_raw_ptr->declare_parameter<int>( "reg_max_optimizer_iterations", 20 ) );
             return gicp;
         }
     } else {
@@ -103,25 +103,25 @@ select_registration_method( rclcpp::Node::SharedPtr node )
             std::cerr << "       : use NDT" << std::endl;
         }
 
-        double ndt_resolution = node->declare_parameter<double>( "reg_resolution", 0.5 );
+        double ndt_resolution = node_raw_ptr->declare_parameter<double>( "reg_resolution", 0.5 );
         if( registration_method.find( "OMP" ) == std::string::npos ) {
             std::cout << "registration: NDT " << ndt_resolution << std::endl;
             pcl::NormalDistributionsTransform<PointT, PointT>::Ptr ndt( new pcl::NormalDistributionsTransform<PointT, PointT>() );
-            ndt->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-            ndt->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+            ndt->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+            ndt->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
             ndt->setResolution( ndt_resolution );
             return ndt;
         } else {
-            int         num_threads      = node->declare_parameter<int>( "reg_num_threads", 0 );
-            std::string nn_search_method = node->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+            int         num_threads      = node_raw_ptr->declare_parameter<int>( "reg_num_threads", 0 );
+            std::string nn_search_method = node_raw_ptr->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
             std::cout << "registration: NDT_OMP " << nn_search_method << " " << ndt_resolution << " (" << num_threads << " threads)"
                       << std::endl;
             pclomp::NormalDistributionsTransform<PointT, PointT>::Ptr ndt( new pclomp::NormalDistributionsTransform<PointT, PointT>() );
             if( num_threads > 0 ) {
                 ndt->setNumThreads( num_threads );
             }
-            ndt->setTransformationEpsilon( node->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
-            ndt->setMaximumIterations( node->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
+            ndt->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
+            ndt->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );
             ndt->setResolution( ndt_resolution );
             if( nn_search_method == "KDTREE" ) {
                 ndt->setNeighborhoodSearchMethod( pclomp::KDTREE );

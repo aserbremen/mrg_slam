@@ -10,6 +10,7 @@ find_package(pcl_ros REQUIRED)
 find_package(geodesy REQUIRED)
 find_package(nmea_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
@@ -120,13 +121,17 @@ target_link_libraries(scan_matching_odometry_component
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(scan_matching_odometry_component
- rclcpp
- rclcpp_components
- pcl_ros
- tf2
- tf2_ros
- ndt_omp
- fast_gicp
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+  ndt_omp
+  fast_gicp
 )
 # Make the component depend on custom messages in its own package.
 rosidl_target_interfaces(scan_matching_odometry_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
@@ -153,13 +158,16 @@ target_link_libraries(prefiltering_component
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(prefiltering_component
- rclcpp
- rclcpp_components
- pcl_ros
- tf2
- tf2_ros
- ndt_omp
- fast_gicp
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  ndt_omp
+  fast_gicp
 )
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(prefiltering_component "hdl_graph_slam::PrefilteringComponent")

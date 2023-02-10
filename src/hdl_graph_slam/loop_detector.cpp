@@ -25,7 +25,8 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node( _node )
     fitness_score_max_range = node->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
     fitness_score_thresh    = node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
 
-    registration             = select_registration_method( node );
+    // TODO pass a raw rclpp::Node pointer to select_registration_method
+    // registration             = select_registration_method( node );
     last_edge_accum_distance = 0.0;
 }
 

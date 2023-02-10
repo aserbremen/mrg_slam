@@ -25,10 +25,11 @@
 // #include <tf/transform_broadcaster.h>
 // #include <tf/transform_listener.h>
 // #include <tf_conversions/tf_eigen.h>
+// #include <pluginlib/class_list_macros.h>
+
 #include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
-// #include <pluginlib/class_list_macros.h>
 
 #include <hdl_graph_slam/registrations.hpp>
 #include <hdl_graph_slam/ros_utils.hpp>
@@ -44,9 +45,56 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // ScanMatchingOdometryComponent() {}
-    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options ) {}
+    // We need to pass NodeOptions in ROS2 to register a component
+    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options )
+    {
+        RCLCPP_INFO( this->get_logger(), "Initializing scan_matching_odometry_component..." );
+
+        initialize_params();
+
+        if( this->declare_parameter<bool>( "enable_imu_frontend", false ) ) {
+            // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters
+            // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ TODO: verify
+            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
+                std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, false );
+            msf_pose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "/msf_core/pose", rclcpp::QoS( 1 ),
+                                                                                                     fcn_false );
+
+            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_true =
+                std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, true );
+            msf_pose_after_update_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+                "/msf_core/pose_after_update", rclcpp::QoS( 1 ), fcn_true );
+        }
+
+        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
+                                                                               std::bind( &ScanMatchingOdometryComponent::cloud_callback,
+                                                                                          this, std::placeholders::_1 ) );
+
+        read_until_pub = this->create_publisher<std_msgs::msg::Header>( "/scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
+        odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "/scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
+        trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
+        status_pub = this->create_publisher<hdl_graph_slam::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
+        aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/scan_matching_odometry/aligned_points",
+                                                                                    rclcpp::QoS( 32 ) );
+
+        // Initialize the transform broadcaster
+        odom_broadcaster     = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
+        keyframe_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
+
+        // Initialize the transform listener
+        tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
+        tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
+
+        // Optionally print the all parameters declared in this node so far
+        // const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        // print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+    }
+
+
     virtual ~ScanMatchingOdometryComponent() {}
 
+    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
+    /*
     virtual void onInit()
     {
         // NODELET_DEBUG( "initializing scan_matching_odometry_nodelet..." );
@@ -106,6 +154,7 @@ public:
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
     }
+    */
 
 private:
     /**
@@ -168,9 +217,7 @@ private:
         // Declare enable_robot_odometry_init_guess at this point once, TODO delete if declaring it is unnecessary
         this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
 
-        // TODO: ROS2 verify
-        auto node    = shared_from_this();
-        registration = select_registration_method( node );
+        registration = select_registration_method( static_cast<rclcpp::Node*>( this ) );
     }
 
     /**

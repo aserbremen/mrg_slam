@@ -17,11 +17,14 @@ namespace hdl_graph_slam {
 // pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr select_registration_method( ros::NodeHandle& pnh );
 
 /**
- * @brief
+ * @brief select a pcl scan matching algorithm according to rosparams
  * @param node Shared pointer to main node
  * @return pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr
+ * There is no elegant way to pass a node shared ptr from within a rclcpp node class constructor (i.e. scan_matching_odometry_component.cpp)
+ * to select the registration method. Thats why we pass a raw pointer of the base class rclcpp::Node to select_registration_method which
+ * should be safe because the base class's constructor rclcpp::Node should be finalized.
  */
-pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr select_registration_method( rclcpp::Node::SharedPtr node );
+pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr select_registration_method( rclcpp::Node* node_raw_ptr );
 
 }  // namespace hdl_graph_slam
 

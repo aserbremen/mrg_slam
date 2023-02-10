@@ -1,7 +1,20 @@
+# Transform between lidar and base_link
+/lidar2base_publisher:
+  ros__parameters:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
+    base_frame_id: "base_link"
+    lidar_frame_id: "velodyne"
 
 # Prefiltering component parameters
 /prefiltering_component:
   ros__parameters:
+    base_link_frame: "base_link"
+    
     deskewing: false
     
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
@@ -9,25 +22,57 @@
     downsample_resolution: 0.1
     
     # Outlier removal method options [STATISTICAL, RADIUS, NONE]
-    outlier_removal_method: "STATISTICAL" 
+    outlier_removal_method: "RADIUS" 
     # Further parameters when choosing STATISTICAL
-    statistical_mean_k: 20
-    statistical_stddev: 1.0
+    statistical_mean_k: 30
+    statistical_stddev: 1.2
     # Further parameters when choosing RADIUS
-    radius_radius: 0.8
+    radius_radius: 0.5
     radius_min_neighbors: 2
 
+    # Distance filter
     use_distance_filter: true
-    distance_near_thresh: 1.0
+    distance_near_thresh: 0.5
     distance_far_thresh: 100.0
 
-    # TODO set base_link_frame?
-    base_link_frame: ""
-
     scan_period: 0.1
+
+# Scan matching component parameters
+/scan_matching_odometry_component:
+  ros__parameters:
+    points_topic: "/velodyne_points"
+    odom_frame_id: "odom"
+    robot_odom_frame_id: "robot_odom"
+
+    keyframe_delta_trans: 0.25
+    keyframe_delta_angle: 1.0
+    keyframe_delta_time: 10000.0
+
+    transform_thresholding: false
+    enable_robot_odometry_init_guess: false
+    max_acceptable_trans: 1.0
+    max_acceptable_angle: 1.0
+
+    # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
+    downsample_method: "NONE"
+    downsample_resolution: 0.1
+
+    # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
+    registration_method: "NDT"
+    reg_num_threads: 0
+    reg_transformation_epsilon: 0.1
+    reg_maximum_iterations: 64
+    reg_max_correspondence_distance: 2.0
+    reg_max_optimizer_iterations: 20
+    reg_use_reciprocal_correspondences: false
+    reg_correspondence_randomness: 20
+    reg_resolution: 1.0
+    reg_nn_search_method: "DIRECT7"
+
+# TODO map2odom publisher python script
 
 # Parameters shared across all nodes
 /**:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
 
