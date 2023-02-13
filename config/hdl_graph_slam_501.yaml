@@ -40,7 +40,7 @@
 # Scan matching component parameters
 /scan_matching_odometry_component:
   ros__parameters:
-    points_topic: "/velodyne_points"
+    # points_topic: "/velodyne_points"
     odom_frame_id: "odom"
     robot_odom_frame_id: "robot_odom"
 
@@ -68,11 +68,25 @@
     reg_correspondence_randomness: 20
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
+    # remappings are handled in the python respective launch file
+
+# Floor detection component parameters
+/floor_detection_component:
+  ros__parameters:
+    enable_floor_detection: true
+    tilt_deg: 0.0
+    sensor_height: 1.5
+    height_clip_range: 0.5
+    floor_pts_thresh: 256
+    use_normal_filtering: true
+    normal_filter_thresh: 20.0
+    # remappings are handled in the python respective launch file
 
 # TODO map2odom publisher python script
 
-# Parameters shared across all nodes
+# Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
+    points_topic: "/velodyne_points"
     use_sim_time: false
 

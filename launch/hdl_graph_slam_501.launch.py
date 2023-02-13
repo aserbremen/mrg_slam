@@ -23,7 +23,7 @@ def generate_launch_description():
     config_file_path = os.path.join(
         get_package_share_directory("hdl_graph_slam"),
         "config",
-        "params.yaml"
+        "hdl_graph_slam_501.yaml"
     )
 
     with open(config_file_path, "r") as file:
@@ -34,10 +34,11 @@ def generate_launch_description():
         static_transform_params = config_params["/lidar2base_publisher"]["ros__parameters"]
         prefiltering_params = config_params["/prefiltering_component"]["ros__parameters"]
         scan_matching_odometry_params = config_params["/scan_matching_odometry_component"]["ros__parameters"]
+        floor_detection_params = config_params["/floor_detection_component"]["ros__parameters"]
 
     # Create the static transform publisher node
     static_transform_publisher = Node(
-        # name="static_transform_publisher",
+        name="lidar2base_publisher",
         package="tf2_ros",
         executable="static_transform_publisher",
         # arguments has to be a list of strings
@@ -61,29 +62,42 @@ def generate_launch_description():
         parameters=[shared_params]
     )
 
+    # Create the composable nodes
+    prefiltering_node = ComposableNode(
+        package="hdl_graph_slam",
+        plugin="hdl_graph_slam::PrefilteringComponent",
+        name="prefiltering_component",
+        parameters=[prefiltering_params, shared_params],
+        remappings=[("/velodyne_points", shared_params["points_topic"])],  # TODO verify how often remapping is needed
+        extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
+    )
+
+    scan_matching_odometry_node = ComposableNode(
+        package="hdl_graph_slam",
+        plugin="hdl_graph_slam::ScanMatchingOdometryComponent",
+        name="scan_matching_odometry_component",
+        parameters=[scan_matching_odometry_params, shared_params],
+        # remappings=[("/filtered_points", "/prefiltering/filtered_points")],
+        extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
+    )
+
+    floor_detection_node = ComposableNode(
+        package="hdl_graph_slam",
+        plugin="hdl_graph_slam::FloorDetectionComponent",
+        name="floor_detection_component",
+        parameters=[floor_detection_params, shared_params],
+        remappings=[("/filtered_points", "/prefiltering/filtered_points")],
+        extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
+    )
+
+    composable_nodes = [prefiltering_node, scan_matching_odometry_node]
+    if floor_detection_params["enable_floor_detection"]:
+        composable_nodes.append(floor_detection_node)
+
     # https://docs.ros.org/en/foxy/How-To-Guides/Launching-composable-nodes.html
     load_composable_nodes = LoadComposableNodes(
         target_container="hdl_graph_slam_container",
-        composable_node_descriptions=[
-            # Prefuiltering component
-            ComposableNode(
-                package="hdl_graph_slam",
-                plugin="hdl_graph_slam::PrefilteringComponent",
-                name="prefiltering_component",
-                parameters=[prefiltering_params, shared_params],
-                remappings=[("/filtered_points", "/prefiltering/filtered_points")], # TODO verify how often remapping is needed
-                extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
-            ),
-            # Scan matching odometry component
-            ComposableNode(
-                package="hdl_graph_slam",
-                plugin="hdl_graph_slam::ScanMatchingOdometryComponent",
-                name="scan_matching_odometry_component",
-                parameters=[scan_matching_odometry_params, shared_params],
-                remappings=[("/filtered_points", "/prefiltering/filtered_points")],
-                extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
-            ),
-        ]
+        composable_node_descriptions=composable_nodes
     )
 
     return LaunchDescription([static_transform_publisher, container, load_composable_nodes])

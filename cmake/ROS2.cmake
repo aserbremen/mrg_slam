@@ -92,6 +92,8 @@ ament_target_dependencies(floor_detection_component
   pcl_ros
   tf2
   tf2_ros
+  geometry_msgs
+  sensor_msgs
   ndt_omp
   fast_gicp
 )
@@ -216,6 +218,7 @@ target_link_libraries(hdl_graph_slam_component
 ament_target_dependencies(hdl_graph_slam_component
   rclcpp
   rclcpp_components
+  pcl_ros
   builtin_interfaces
   message_filters
   std_msgs
@@ -230,9 +233,6 @@ ament_target_dependencies(hdl_graph_slam_component
 rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")
-
-# TODO map2odom publisher python scripts
-
 # Install the hdl_graph_slam_component (hdl_graph_slam_component.so) in workspace install folder
 # TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
 install(
@@ -241,6 +241,9 @@ install(
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
 )
+ament_export_libraries(hdl_graph_slam_component)
+
+# TODO map2odom publisher python scripts
 
 # Install the config directory to work with parameter yaml files
 install( 
@@ -251,7 +254,6 @@ install(
 # Here we can export all downstream dependencies and include directories
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
-ament_export_libraries(hdl_graph_slam_component)
 # TODO: ament_export_targets
 
 # Finally create a pacakge

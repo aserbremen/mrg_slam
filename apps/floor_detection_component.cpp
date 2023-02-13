@@ -35,9 +35,28 @@ public:
 
     // FloorDetectionComponent() {}
     // For ROS2 components it is necessary to pass rclcpp::NodeOptions
-    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options ) {}
+    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options )
+    {
+        RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
+
+        initialize_params();
+
+        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
+                                                                               std::bind( &FloorDetectionComponent::cloud_callback, this,
+                                                                                          std::placeholders::_1 ) );
+
+        floor_pub = this->create_publisher<hdl_graph_slam::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+
+        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
+        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
+                                                                                    rclcpp::QoS( 32 ) );
+        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
+    }
+
     virtual ~FloorDetectionComponent() {}
 
+    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
+    /*
     virtual void onInit()
     {
         // NODELET_DEBUG( "initializing floor_detection_nodelet..." );
@@ -59,7 +78,12 @@ public:
         // read_until_pub     = nh.advertise<std_msgs::Header>( "/floor_detection/read_until", 32 );
         // floor_filtered_pub = nh.advertise<sensor_msgs::PointCloud2>( "/floor_detection/floor_filtered_points", 32 );
         // floor_points_pub   = nh.advertise<sensor_msgs::PointCloud2>( "/floor_detection/floor_points", 32 );
+        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
+        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
+                                                                                    rclcpp::QoS( 32 ) );
+        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
     }
+    */
 
 private:
     /**
@@ -90,7 +114,7 @@ private:
         height_clip_range    = this->declare_parameter<double>( "height_clip_range", 1.0 );
         floor_pts_thresh     = this->declare_parameter<int>( "floor_pts_thresh", 512 );
         floor_normal_thresh  = this->declare_parameter<double>( "floor_normal_thresh", 10.0 );
-        use_normal_filtering = this->declare_parameter<int>( "use_normal_filtering", true );
+        use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );
         normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );
         points_topic         = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
     }
