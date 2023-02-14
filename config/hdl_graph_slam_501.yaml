@@ -82,6 +82,86 @@
     normal_filter_thresh: 20.0
     # remappings are handled in the python respective launch file
 
+# HDL graph slam component parameters
+/hdl_graph_slam_component:
+  ros__parameters:
+    # Frame settings
+    map_frame_id: "map"
+    odom_frame_id: "odom"
+    # Optimization parameters
+    # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
+    g2o_solver_type: "lm_var_cholmod"
+    g2o_solver_num_iterations: 512
+    # constraint switches
+    enable_gps: false
+    enable_imu_acceleration: false
+    enable_imu_orientation: false
+    # keyframe registration params
+    max_keyframes_per_update: 10
+    keyframe_delta_trans: 1.0
+    keyframe_delta_angle: 2.0
+    # fix first node for optimization stability
+    fix_first_node: true
+    # TODO use a list of doubles for easier handling
+    fix_first_node_stddev: "10 10 10 1 1 1"
+    fix_first_node_adaptive: true
+    # loop closure params
+    distance_thresh: 1.0
+    accum_distance_thresh: 3.0
+    min_edge_interval: 1.0
+    fitness_score_thresh: 0.5
+    # scan matching params
+    registration_method: "FAST_GICP"
+    reg_num_threads: 0
+    reg_transformation_epsilon: 0.1
+    reg_maximum_iterations: 64
+    reg_max_correspondence_distance: 2.0
+    reg_max_optimizer_iterations: 20
+    reg_use_reciprocal_correspondences: false
+    reg_correspondence_randomness: 20
+    reg_resolution: 1.0
+    reg_nn_search_method: "DIRECT7"
+    # edge params
+    # GPS
+    gps_edge_robust_kernel: "NONE"
+    gps_edge_robust_kernel_size: 1.0
+    gps_edge_stddev_xy: 20.0
+    gps_edge_stddev_z: 5.0
+    # IMU orientation
+    imu_orientation_edge_robust_kernel: "NONE"
+    imu_orientation_edge_stddev: 1.0
+    # IMU acceleration (gravity vector)
+    imu_acceleration_edge_robust_kernel: "NONE"
+    imu_acceleration_edge_stddev: 1.0
+    # ground plane
+    floor_edge_robust_kernel: "NONE"
+    floor_edge_stddev: 10.0
+    # scan matching
+    # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
+    odometry_edge_robust_kernel: "NONE"
+    odometry_edge_robust_kernel_size: 1.0
+    loop_closure_edge_robust_kernel: "Huber"
+    loop_closure_edge_robust_kernel_size: 1.0
+    use_const_inf_matrix: false
+    const_stddev_x: 0.5
+    const_stddev_q: 0.1
+    var_gain_a: 20.0
+    min_stddev_x: 0.1
+    max_stddev_x: 5.0
+    min_stddev_q: 0.05
+    max_stddev_q: 0.2
+    # update params
+    graph_update_interval: 1.5
+    map_cloud_update_interval: 3.0
+    map_cloud_resolution: 0.01
+    # TODO use point topics in the python launch file
+    # points_topic: "$(arg points_topic)"
+    # remappings are handled in the python respective launch file
+    # <remap from="/filtered_points" to="/prefiltering/filtered_points"
+    # <remap from="/odom"            to="/scan_matching_odometry/odom" 
+    # <remap from="/floor_coeffs"    to="/floor_detection/floor_coeffs" 
+
+
 # TODO map2odom publisher python script
 
 # Parameters shared across all nodes or general parameters

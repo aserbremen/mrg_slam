@@ -7,11 +7,15 @@ find_package(std_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(pcl_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(geodesy REQUIRED)
 find_package(nmea_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(geographic_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
@@ -62,12 +66,15 @@ set(srv_files
 rosidl_generate_interfaces(${PROJECT_NAME}
     ${msg_files}
     ${srv_files}
-    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs 
+    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs nav_msgs geographic_msgs visualization_msgs
 )
 
 ###########
 ## Build ##
 ###########
+# create ament index resource which references the libraries in the binary dir
+set(node_plugins "")
+
 # Include local hdl_graph_slam headers
 include_directories(include)
 include_directories(
@@ -101,6 +108,7 @@ ament_target_dependencies(floor_detection_component
 rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(floor_detection_component "hdl_graph_slam::FloorDetectionComponent")
+set(node_plugins "{node_plugins}hdl_graph_slam::FloorDetectionComponent;$<TARGET_FILE:floor_detection_component>\n")
 
 # Install the floor_detection_component (libfloor_detection_component.so) in workspace install folder
 install(
@@ -108,6 +116,7 @@ install(
   EXPORT floor_detection_component
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 ######################################
@@ -139,6 +148,7 @@ ament_target_dependencies(scan_matching_odometry_component
 rosidl_target_interfaces(scan_matching_odometry_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(scan_matching_odometry_component "hdl_graph_slam::ScanMatchingOdometryComponent")
+set(node_plugins "{node_plugins}hdl_graph_slam::ScanMatchingOdometryComponent;$<TARGET_FILE:scan_matching_odometry_component>\n")
 
 # Install the scan_matching_odometry_component (scan_matching_odometry_component.so) in workspace install folder
 install(
@@ -146,6 +156,7 @@ install(
   EXPORT scan_matching_odometry_component
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 ############################
@@ -173,6 +184,7 @@ ament_target_dependencies(prefiltering_component
 )
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(prefiltering_component "hdl_graph_slam::PrefilteringComponent")
+set(node_plugins "{node_plugins}hdl_graph_slam::PrefilteringComponent;$<TARGET_FILE:prefiltering_component>\n")
 
 # Install the prefiltering_component (prefiltering_component.so) in workspace install folder
 install(
@@ -180,6 +192,7 @@ install(
   EXPORT prefiltering_component
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 ##############################
@@ -219,12 +232,17 @@ ament_target_dependencies(hdl_graph_slam_component
   rclcpp
   rclcpp_components
   pcl_ros
-  builtin_interfaces
+  tf2
+  tf2_ros
   message_filters
+  builtin_interfaces
   std_msgs
   nmea_msgs
   sensor_msgs
   geometry_msgs
+  nav_msgs
+  geographic_msgs
+  visualization_msgs
   fast_gicp
   ndt_omp
 )
@@ -233,6 +251,7 @@ ament_target_dependencies(hdl_graph_slam_component
 rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")
+set(node_plugins "{node_plugins}hdl_graph_slam::HdlGraphSlamComponent;$<TARGET_FILE:hdl_graph_slam_component>\n")
 # Install the hdl_graph_slam_component (hdl_graph_slam_component.so) in workspace install folder
 # TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
 install(
@@ -240,8 +259,9 @@ install(
   EXPORT hdl_graph_slam_component
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
 )
-ament_export_libraries(hdl_graph_slam_component)
+# ament_export_libraries(hdl_graph_slam_component)
 
 # TODO map2odom publisher python scripts
 
@@ -249,6 +269,54 @@ ament_export_libraries(hdl_graph_slam_component)
 install( 
   DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
+)
+
+#######################################
+## HDL Graph Slam manual composition ##
+#######################################
+add_executable(hdl_graph_slam_manual_composition
+  apps/hdl_graph_slam_manual_composition.cpp
+)
+target_link_libraries(hdl_graph_slam_manual_composition
+  prefiltering_component
+  scan_matching_odometry_component
+  floor_detection_component
+  # hdl_graph_slam_component
+  ${PCL_LIBRARIES}
+)
+ament_target_dependencies(hdl_graph_slam_manual_composition
+  rclcpp
+)
+install(TARGETS hdl_graph_slam_manual_composition
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+#########################################
+## HDL Graph Slam linktime composition ##
+#########################################
+add_executable(hdl_graph_slam_linktime_composition
+  apps/hdl_graph_slam_linktime_composition.cpp
+)
+set(libs
+  prefiltering_component
+  scan_matching_odometry_component
+  floor_detection_component
+  hdl_graph_slam_component
+)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(libs
+    "-Wl,--no-as-needed"
+    ${libs}
+    "-Wl,--as-needed")
+endif()
+target_link_libraries(hdl_graph_slam_linktime_composition ${libs})
+ament_target_dependencies(hdl_graph_slam_linktime_composition
+  class_loader
+  rclcpp
+  rclcpp_components
+)
+install(TARGETS hdl_graph_slam_linktime_composition
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # Here we can export all downstream dependencies and include directories
