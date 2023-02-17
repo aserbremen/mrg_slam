@@ -9,6 +9,8 @@ find_package(rclpy REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_eigen REQUIRED)
 find_package(geodesy REQUIRED)
 find_package(nmea_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -66,7 +68,7 @@ set(srv_files
 rosidl_generate_interfaces(${PROJECT_NAME}
     ${msg_files}
     ${srv_files}
-    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs nav_msgs geographic_msgs visualization_msgs
+    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs nav_msgs geographic_msgs visualization_msgs tf2_geometry_msgs
 )
 
 ###########
@@ -234,6 +236,9 @@ ament_target_dependencies(hdl_graph_slam_component
   pcl_ros
   tf2
   tf2_ros
+  tf2_geometry_msgs
+  tf2_eigen
+  geodesy
   message_filters
   builtin_interfaces
   std_msgs
@@ -281,41 +286,12 @@ target_link_libraries(hdl_graph_slam_manual_composition
   prefiltering_component
   scan_matching_odometry_component
   floor_detection_component
-  # hdl_graph_slam_component
-  ${PCL_LIBRARIES}
+  hdl_graph_slam_component
 )
 ament_target_dependencies(hdl_graph_slam_manual_composition
   rclcpp
 )
 install(TARGETS hdl_graph_slam_manual_composition
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-#########################################
-## HDL Graph Slam linktime composition ##
-#########################################
-add_executable(hdl_graph_slam_linktime_composition
-  apps/hdl_graph_slam_linktime_composition.cpp
-)
-set(libs
-  prefiltering_component
-  scan_matching_odometry_component
-  floor_detection_component
-  hdl_graph_slam_component
-)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  set(libs
-    "-Wl,--no-as-needed"
-    ${libs}
-    "-Wl,--as-needed")
-endif()
-target_link_libraries(hdl_graph_slam_linktime_composition ${libs})
-ament_target_dependencies(hdl_graph_slam_linktime_composition
-  class_loader
-  rclcpp
-  rclcpp_components
-)
-install(TARGETS hdl_graph_slam_linktime_composition
   DESTINATION lib/${PROJECT_NAME}
 )
 

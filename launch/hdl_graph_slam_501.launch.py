@@ -35,7 +35,7 @@ def generate_launch_description():
         prefiltering_params = config_params["/prefiltering_component"]["ros__parameters"]
         scan_matching_odometry_params = config_params["/scan_matching_odometry_component"]["ros__parameters"]
         floor_detection_params = config_params["/floor_detection_component"]["ros__parameters"]
-        hdl_grapp_slam_params = config_params["/hdl_graph_slam_component"]["ros__parameters"]
+        hdl_graph_slam_params = config_params["/hdl_graph_slam_component"]["ros__parameters"]
 
     # Create the static transform publisher node
     static_transform_publisher = Node(
@@ -95,7 +95,7 @@ def generate_launch_description():
         package="hdl_graph_slam",
         plugin="hdl_graph_slam::HdlGraphSlamComponent",
         name="hdl_graph_slam_component",
-        parameters=[hdl_grapp_slam_params, shared_params],
+        parameters=[hdl_graph_slam_params, shared_params],
         remappings=[
             ("/filtered_points", "/prefiltering/filtered_points"),
             ("odom", "/scan_matching_odometry/odom"),

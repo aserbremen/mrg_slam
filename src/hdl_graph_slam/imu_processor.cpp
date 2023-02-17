@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <g2o/types/slam3d/edge_se3.h>
+#include <tf2/exceptions.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <Eigen/Dense>
 #include <g2o/edge_se3_priorquat.hpp>
@@ -127,8 +129,8 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         try {
             // tf2_buffer->transform(const T &in, T &out, const std::string &target_frame, tf2::Duration timeout =
             // tf2::durationFromSec((0.0))) TODO: maybe add timeout? Verify this
-            tf2_buffer->transform( acc_imu, acc_base, base_frame_id );
-            tf2_buffer->transform( quat_imu, quat_base, base_frame_id );
+            tf2_buffer->transform<geometry_msgs::msg::Vector3Stamped>( acc_imu, acc_base, base_frame_id );
+            tf2_buffer->transform<geometry_msgs::msg::QuaternionStamped>( quat_imu, quat_base, base_frame_id );
         } catch( const tf2::TransformException& e ) {
             RCLCPP_INFO( node->get_logger(), "Could not transform from %s to %s: %s", acc_imu.header.frame_id.c_str(),
                          base_frame_id.c_str(), e.what() );

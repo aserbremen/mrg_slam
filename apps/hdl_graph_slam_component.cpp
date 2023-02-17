@@ -85,6 +85,7 @@ public:
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
+        // TODO maybe set initialization flag for callbacks after node is initialized
         one_shot_initalization_timer = this->create_wall_timer( std::chrono::milliseconds( 100 ),
                                                                 std::bind( &HdlGraphSlamComponent::onInit, this ) );
     }
@@ -129,32 +130,22 @@ public:
         // loop_detector.reset( new LoopDetector( private_nh ) );
         // map_cloud_generator.reset( new MapCloudGenerator() );
         // inf_calclator.reset( new InformationMatrixCalculator( private_nh ) );
-        RCLCPP_INFO( this->get_logger(), "1" );
 
         keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
-        RCLCPP_INFO( this->get_logger(), "2" );
         loop_detector.reset( new LoopDetector( node_ros ) );
-        RCLCPP_INFO( this->get_logger(), "3" );
         map_cloud_generator.reset( new MapCloudGenerator() );
-        RCLCPP_INFO( this->get_logger(), "4" );
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
-        RCLCPP_INFO( this->get_logger(), "5" );
 
         // points_topic = private_nh.param<std::string>( "points_topic", "/velodyne_points" );
         points_topic = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-        RCLCPP_INFO( this->get_logger(), "6" );
 
         // own_name = private_nh.param<std::string>( "own_name", "atlas" );
         own_name = this->declare_parameter<std::string>( "own_name", "atlas" );
-        RCLCPP_INFO( this->get_logger(), "7" );
         robot_names.push_back( own_name );
-        RCLCPP_INFO( this->get_logger(), "8" );
         // robot_names   = private_nh.param<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
         robot_names = this->declare_parameter<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
-        RCLCPP_INFO( this->get_logger(), "9" );
         // gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( own_name, robot_names ) );
         gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( node_ros, own_name, robot_names ) );
-        RCLCPP_INFO( this->get_logger(), "10" );
 
         // subscribers
         // odom_sub.reset( new message_filters::Subscriber<nav_msgs::Odometry>( mt_nh, "/odom", 256 ) );
@@ -163,16 +154,12 @@ public:
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
         odom_sub.subscribe( node_ros, "/odom", qos );
-        RCLCPP_INFO( this->get_logger(), "11" );
         qos.depth = 32;
         cloud_sub.subscribe( node_ros, "/filtered_points", qos );
-        RCLCPP_INFO( this->get_logger(), "12" );
         // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
         // TODO: verify synced callbacks
-        RCLCPP_INFO( this->get_logger(), "13" );
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
-        RCLCPP_INFO( this->get_logger(), "14" );
         // graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamComponent::graph_callback, this );
         // odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamComponent::odom_broadcast_callback, this
         // );
@@ -180,11 +167,9 @@ public:
                                                                                         rclcpp::QoS( 16 ),
                                                                                         std::bind( &HdlGraphSlamComponent::graph_callback,
                                                                                                    this, std::placeholders::_1 ) );
-        RCLCPP_INFO( this->get_logger(), "15" );
-        odom_broadcast_sub = this->create_subscription<hdl_graph_slam::msg::PoseWithName>(
+        odom_broadcast_sub  = this->create_subscription<hdl_graph_slam::msg::PoseWithName>(
             "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 16 ),
             std::bind( &HdlGraphSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
-        RCLCPP_INFO( this->get_logger(), "16" );
 
         // init_pose_topic = private_nh.param<std::string>( "init_pose_topic", "NONE" );
         init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
@@ -193,7 +178,6 @@ public:
                                                                                 std::bind( &HdlGraphSlamComponent::init_pose_callback, this,
                                                                                            std::placeholders::_1 ) );
         }
-        RCLCPP_INFO( this->get_logger(), "17" );
 
         // publishers
         // odom2map_pub        = mt_nh.advertise<geometry_msgs::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
@@ -204,7 +188,6 @@ public:
         // others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
         odom2map_pub = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
         // Create a latching publisher for the map using transient local durability, that provides the latest map to "late" subscribers
-        RCLCPP_INFO( this->get_logger(), "18" );
         auto latching_qos = rclcpp::QoS( 1 );
         latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
         // rmw_qos_profile_t latching_rmw_qos_profile;
@@ -219,18 +202,12 @@ public:
         // [component_container-2]   what():  intraprocess communication allowed only with volatile durability
         map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", latching_qos );
 
-        RCLCPP_INFO( this->get_logger(), "19" );
-        read_until_pub = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
-        RCLCPP_INFO( this->get_logger(), "20" );
+        read_until_pub      = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
         graph_broadcast_pub = this->create_publisher<hdl_graph_slam::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast", rclcpp::QoS( 16 ) );
-        RCLCPP_INFO( this->get_logger(), "21" );
-        odom_broadcast_pub = this->create_publisher<hdl_graph_slam::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
+        odom_broadcast_pub  = this->create_publisher<hdl_graph_slam::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
                                                                                         rclcpp::QoS( 16 ) );
-        RCLCPP_INFO( this->get_logger(), "22" );
-        RCLCPP_INFO( this->get_logger(), "23" );
-        others_poses_pub = this->create_publisher<hdl_graph_slam::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
+        others_poses_pub    = this->create_publisher<hdl_graph_slam::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
                                                                                            rclcpp::QoS( 16 ) );
-        RCLCPP_INFO( this->get_logger(), "24" );
 
         // dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamComponent::dump_service, this );
         // save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamComponent::save_map_service, this );
@@ -248,7 +225,6 @@ public:
                             std::shared_ptr<hdl_graph_slam::srv::DumpGraph::Response>      res )>
             dump_service_callback = std::bind( &HdlGraphSlamComponent::dump_service, this, std::placeholders::_1, std::placeholders::_2 );
         dump_service_server       = this->create_service<hdl_graph_slam::srv::DumpGraph>( "/hdl_graph_slam/dump", dump_service_callback );
-        RCLCPP_INFO( this->get_logger(), "25" );
         // Save map service
         std::function<void( const std::shared_ptr<hdl_graph_slam::srv::SaveMap::Request> req,
                             std::shared_ptr<hdl_graph_slam::srv::SaveMap::Response>      res )>
@@ -256,33 +232,26 @@ public:
                                                    std::placeholders::_2 );
         save_map_service_server       = this->create_service<hdl_graph_slam::srv::SaveMap>( "/hdl_graph_slam/save_map",
                                                                                       save_map_service_callback );
-        RCLCPP_INFO( this->get_logger(), "26" );
         // Get map service
         std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetMap::Request> req,
                             std::shared_ptr<hdl_graph_slam::srv::GetMap::Response>      res )>
             get_map_service_callback = std::bind( &HdlGraphSlamComponent::get_map_service, this, std::placeholders::_1,
                                                   std::placeholders::_2 );
-        RCLCPP_INFO( this->get_logger(), "27" );
         get_map_service_server = this->create_service<hdl_graph_slam::srv::GetMap>( "/hdl_graph_slam/get_map", get_map_service_callback );
         // Get graph estimate service
-        RCLCPP_INFO( this->get_logger(), "28" );
         std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Request> req,
                             std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Response>      res )>
             get_graph_estimate_service_callback = std::bind( &HdlGraphSlamComponent::get_graph_estimate_service, this,
                                                              std::placeholders::_1, std::placeholders::_2 );
-        RCLCPP_INFO( this->get_logger(), "29" );
-        get_graph_estimate_service_server = this->create_service<hdl_graph_slam::srv::GetGraphEstimate>(
+        get_graph_estimate_service_server       = this->create_service<hdl_graph_slam::srv::GetGraphEstimate>(
             "/hdl_graph_slam/get_graph_estimate", get_graph_estimate_service_callback );
-        RCLCPP_INFO( this->get_logger(), "30" );
         // Publish graph service
         std::function<void( const std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Request> req,
                             std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Response>      res )>
             publish_graph_service_callback = std::bind( &HdlGraphSlamComponent::publish_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
-        RCLCPP_INFO( this->get_logger(), "31" );
-        publish_graph_service_server = this->create_service<hdl_graph_slam::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
+        publish_graph_service_server       = this->create_service<hdl_graph_slam::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
                                                                                                 publish_graph_service_callback );
-        RCLCPP_INFO( this->get_logger(), "32" );
 
         for( const auto &robot_name : robot_names ) {
             if( robot_name != own_name ) {
@@ -291,7 +260,6 @@ public:
                 request_graph_service_clients[robot_name] = this->create_client<hdl_graph_slam::srv::PublishGraph>(
                     "/" + robot_name + "/hdl_graph_slam/publish_graph" );
                 others_accum_dist[robot_name] = std::make_pair<double, double>( 0, -1 );
-                RCLCPP_INFO( this->get_logger(), "33" );
             }
         }
 
@@ -301,7 +269,6 @@ public:
         // double map_cloud_update_interval   = private_nh.param<double>( "map_cloud_update_interval", 10.0 );
         double graph_update_interval     = this->declare_parameter<double>( "graph_update_interval", 3.0 );
         double map_cloud_update_interval = this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-        RCLCPP_INFO( this->get_logger(), "34" );
         // TODO verify period timer period
         // optimization_timer                 = mt_nh.createWallTimer( ros::WallDuration( graph_update_interval ),
         //                                                             &HdlGraphSlamNodelet::optimization_timer_callback, this );
@@ -309,23 +276,17 @@ public:
         //                                                             &HdlGraphSlamNodelet::map_points_publish_timer_callback, this );
         optimization_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( graph_update_interval, 0 ),
                                                    std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ) );
-        RCLCPP_INFO( this->get_logger(), "35" );
-        map_publish_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
-                                                  std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
-        RCLCPP_INFO( this->get_logger(), "36" );
+        map_publish_timer  = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
+                                                   std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
 
         // gps_processor.onInit( nh, mt_nh, private_nh );
         // imu_processor.onInit( nh, mt_nh, private_nh );
         // floor_coeffs_processor.onInit( nh, mt_nh, private_nh );
         // markers_pub.onInit( nh, mt_nh, private_nh );
         gps_processor.onInit( node_ros );
-        RCLCPP_INFO( this->get_logger(), "37" );
         imu_processor.onInit( node_ros );
-        RCLCPP_INFO( this->get_logger(), "38" );
         floor_coeffs_processor.onInit( node_ros );
-        RCLCPP_INFO( this->get_logger(), "39" );
         markers_pub.onInit( node_ros );
-        RCLCPP_INFO( this->get_logger(), "40" );
     }
 
 private:
@@ -738,7 +699,7 @@ private:
 
             Eigen::Isometry3d relpose;
             // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
-            tf2::fromMsg( edge_ros.relative_pose, relpose );
+            // tf2::fromMsg( edge_ros.relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros.information.data() );
             auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
             auto edge       = new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP );
@@ -782,7 +743,7 @@ private:
             auto &kf = others_prev_robot_keyframes[latest_keyframe.first];
             kf.first = keyframe_gids[*latest_keyframe.second.first];  // pointer to keyframe
             // tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
-            tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
+            // tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
         }
 
         graph_queue.clear();
@@ -796,7 +757,7 @@ private:
         auto             &pose     = odom_pose.second;
         Eigen::Isometry3d new_pose = odom2map * odom;
         // tf::poseEigenToMsg( new_pose, pose );
-        tf2::fromMsg( new_pose, pose );
+        tf2::fromMsg( pose, new_pose );
     }
 
 
