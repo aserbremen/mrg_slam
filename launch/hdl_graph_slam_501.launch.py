@@ -31,11 +31,11 @@ def generate_launch_description():
         # Print all parameters from the yaml file for convenience when launching the nodes
         print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params["/**"]["ros__parameters"]
-        static_transform_params = config_params["/lidar2base_publisher"]["ros__parameters"]
-        prefiltering_params = config_params["/prefiltering_component"]["ros__parameters"]
-        scan_matching_odometry_params = config_params["/scan_matching_odometry_component"]["ros__parameters"]
-        floor_detection_params = config_params["/floor_detection_component"]["ros__parameters"]
-        hdl_graph_slam_params = config_params["/hdl_graph_slam_component"]["ros__parameters"]
+        static_transform_params = config_params["lidar2base_publisher"]["ros__parameters"]
+        prefiltering_params = config_params["prefiltering_component"]["ros__parameters"]
+        scan_matching_odometry_params = config_params["scan_matching_odometry_component"]["ros__parameters"]
+        floor_detection_params = config_params["floor_detection_component"]["ros__parameters"]
+        hdl_graph_slam_params = config_params["hdl_graph_slam_component"]["ros__parameters"]
 
     # Create the static transform publisher node
     static_transform_publisher = Node(

@@ -1,5 +1,5 @@
 # Transform between lidar and base_link
-/lidar2base_publisher:
+lidar2base_publisher:
   ros__parameters:
     x: 0.0
     y: 0.0
@@ -11,7 +11,7 @@
     lidar_frame_id: "velodyne"
 
 # Prefiltering component parameters
-/prefiltering_component:
+prefiltering_component:
   ros__parameters:
     base_link_frame: "base_link"
     
@@ -38,7 +38,7 @@
     scan_period: 0.1
 
 # Scan matching component parameters
-/scan_matching_odometry_component:
+scan_matching_odometry_component:
   ros__parameters:
     # points_topic: "/velodyne_points"
     odom_frame_id: "odom"
@@ -71,7 +71,7 @@
     # remappings are handled in the python respective launch file
 
 # Floor detection component parameters
-/floor_detection_component:
+floor_detection_component:
   ros__parameters:
     enable_floor_detection: true
     tilt_deg: 0.0
@@ -83,7 +83,7 @@
     # remappings are handled in the python respective launch file
 
 # HDL graph slam component parameters
-/hdl_graph_slam_component:
+hdl_graph_slam_component:
   ros__parameters:
     # Frame settings
     map_frame_id: "map"
