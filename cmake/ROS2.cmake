@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.5)
 # Find necessary packages
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components)
+find_package(rcutils REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(tf2 REQUIRED)
@@ -23,7 +25,6 @@ find_package(message_filters REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
-find_package(rclcpp_components) # To define apps as "nodelets" aka ROS2 components
 
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
@@ -75,6 +76,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ## Build ##
 ###########
 # create ament index resource which references the libraries in the binary dir
+# TODO what is this actually for?
 set(node_plugins "")
 
 # Include local hdl_graph_slam headers
@@ -279,21 +281,25 @@ install(
 #######################################
 ## HDL Graph Slam manual composition ##
 #######################################
-add_executable(hdl_graph_slam_manual_composition
-  apps/hdl_graph_slam_manual_composition.cpp
-)
-target_link_libraries(hdl_graph_slam_manual_composition
-  prefiltering_component
-  scan_matching_odometry_component
-  floor_detection_component
-  hdl_graph_slam_component
-)
-ament_target_dependencies(hdl_graph_slam_manual_composition
-  rclcpp
-)
-install(TARGETS hdl_graph_slam_manual_composition
-  DESTINATION lib/${PROJECT_NAME}
-)
+option(BUILD_MANUAL_COMPOSITION "Build manual composition of components" OFF)
+# only build if debugging hdl_graph_slam is needed, saving compile time
+if (BUILD_MANUAL_COMPOSITION)
+  add_executable(hdl_graph_slam_manual_composition
+    apps/hdl_graph_slam_manual_composition.cpp
+  )
+  target_link_libraries(hdl_graph_slam_manual_composition
+    prefiltering_component
+    scan_matching_odometry_component
+    floor_detection_component
+    hdl_graph_slam_component
+  )
+  ament_target_dependencies(hdl_graph_slam_manual_composition
+    rclcpp
+  )
+  install(TARGETS hdl_graph_slam_manual_composition
+    DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
 
 # Here we can export all downstream dependencies and include directories
 ament_export_dependencies(rosidl_default_runtime)
