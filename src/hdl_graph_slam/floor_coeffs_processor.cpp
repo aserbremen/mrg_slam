@@ -34,7 +34,7 @@ FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
  * @param floor_coeffs_msg
  */
 void
-FloorCoeffsProcessor::floor_coeffs_callback( const hdl_graph_slam::msg::FloorCoeffs::SharedPtr floor_coeffs_msg )
+FloorCoeffsProcessor::floor_coeffs_callback( hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg )
 {
     if( floor_coeffs_msg->coeffs.empty() ) {
         return;
@@ -55,8 +55,8 @@ bool
 //                              const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
 //                              const ros::Time                                                 &latest_keyframe_stamp )
 FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
-                             const std::unordered_map<rclcpp::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-                             const rclcpp::Time                                                 &latest_keyframe_stamp )
+                             const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
+                             const builtin_interfaces::msg::Time                                                 &latest_keyframe_stamp )
 {
     std::lock_guard<std::mutex> lock( floor_coeffs_queue_mutex );
 
@@ -115,7 +115,7 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
     //                                     } );
     auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), rclcpp::Time( latest_keyframe_stamp ),
                                         [=]( const rclcpp::Time &stamp, const hdl_graph_slam::msg::FloorCoeffs::ConstPtr &coeffs ) {
-                                            return stamp < coeffs->header.stamp;
+                                            return stamp < rclcpp::Time( coeffs->header.stamp );
                                         } );
     floor_coeffs_queue.erase( floor_coeffs_queue.begin(), remove_loc );
 

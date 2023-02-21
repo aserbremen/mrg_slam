@@ -129,12 +129,9 @@ void
 GpsProcessor::gps_callback( geographic_msgs::msg::GeoPointStamped::SharedPtr gps_msg )
 {
     std::lock_guard<std::mutex> lock( gps_queue_mutex );
-    // In ROS2 foxy it is not possible to add builtin_interfaces::msg::Duration onto builtin_interfaces::msg::Time, so we do it manually
-    gps_msg->header.stamp.sec += (int32_t)gps_time_offset;
-    gps_msg->header.stamp.nanosec += (uint32_t)( ( gps_time_offset - (int)gps_time_offset ) * 1e9 );
-    // TODO discuss which version is better
-    // gps_msg->header.stamp = rclcpp::Time( gps_msg->header.stamp )
-    //                         + rclcpp::Duration( static_cast<rcl_duration_value_t>( gps_time_offset * 1e9 ) );
+    // TODO check if this works
+    gps_msg->header.stamp =
+        ( rclcpp::Time( gps_msg->header.stamp ) + rclcpp::Duration( gps_time_offset, 0 ) ).operator builtin_interfaces::msg::Time();
     gps_queue.push_back( gps_msg );
 }
 

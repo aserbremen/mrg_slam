@@ -11,8 +11,6 @@
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <hdl_graph_slam/imu_processor.hpp>
 
-using std::placeholders::_1;
-
 namespace hdl_graph_slam {
 
 // void
@@ -44,7 +42,7 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
     // imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
 
     imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
-                                                                std::bind( &ImuProcessor::imu_callback, this, _1 ) );
+                                                                std::bind( &ImuProcessor::imu_callback, this, std::placeholders::_1 ) );
 }
 
 
@@ -57,11 +55,8 @@ ImuProcessor::imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg )
 
     std::lock_guard<std::mutex> lock( imu_queue_mutex );
     // TODO: probably correct, needs verification
-    imu_msg->header.stamp.sec += (int32_t)imu_time_offset;
-    imu_msg->header.stamp.nanosec += (uint32_t)( ( imu_time_offset - (int)imu_time_offset ) * 1e9 );
-    // TODO discuss which version is better
-    // imu_msg->header.stamp = rclcpp::Time( imu_msg->header.stamp )
-    //                         + rclcpp::Duration( static_cast<rcl_duration_value_t>( imu_time_offset * 1e9 ) );
+    imu_msg->header.stamp =
+        ( rclcpp::Time( imu_msg->header.stamp ) + rclcpp::Duration( imu_time_offset, 0 ) ).operator builtin_interfaces::msg::Time();
     imu_queue.push_back( imu_msg );
 }
 
@@ -112,7 +107,7 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         geometry_msgs::msg::QuaternionStamped quat_base;
 
         quat_imu.header.frame_id = acc_imu.header.frame_id = ( *closest_imu )->header.frame_id;
-        quat_imu.header.stamp = acc_imu.header.stamp = rclcpp::Time( 0 );
+        quat_imu.header.stamp = acc_imu.header.stamp = builtin_interfaces::msg::Time();
         acc_imu.vector                               = ( *closest_imu )->linear_acceleration;
         quat_imu.quaternion                          = ( *closest_imu )->orientation;
 

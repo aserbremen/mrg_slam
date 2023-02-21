@@ -3,6 +3,7 @@
 #include <pcl_conversions/pcl_conversions.h>  //
 
 #include <hdl_graph_slam/msg/floor_coeffs.hpp>
+#include <hdl_graph_slam/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 // #include <hdl_graph_slam/FloorCoeffs.h>
@@ -51,6 +52,10 @@ public:
         floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
                                                                                     rclcpp::QoS( 32 ) );
         floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
+
+        // Optionally print the all parameters declared in this node so far
+        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
     }
 
     virtual ~FloorDetectionComponent() {}
@@ -185,8 +190,7 @@ private:
         // for offline estimation, not sure why a ptr is created in ROS1
         std_msgs::msg::Header read_until;
         read_until.frame_id = points_topic;
-        read_until.stamp    = rclcpp::Time( cloud_msg->header.stamp )
-                           + rclcpp::Duration( static_cast<rcl_time_point_value_t> RCL_S_TO_NS( 1 ) );
+        read_until.stamp = ( rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 ) ).operator builtin_interfaces::msg::Time();
         read_until_pub->publish( read_until );
 
         read_until.frame_id = "/filtered_points";

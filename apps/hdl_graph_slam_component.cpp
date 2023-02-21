@@ -72,11 +72,17 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// TODO add visbility control? https://gcc.gnu.org/wiki/Visibility
+// #include "hdl_graph_slam/visibility_control.h"
+
+// TODO go over all callbacks and decide whether to pass const msg::SharedPtr or ConstSharedPtr
 
 namespace hdl_graph_slam {
 // class HdlGraphSlamNodelet : public nodelet::Nodelet {
 class HdlGraphSlamComponent : public rclcpp::Node {
 public:
+    // TODO add visibility control? https://gcc.gnu.org/wiki/Visibility
+    // COMPOSITION_PUBLIC
     typedef pcl::PointXYZI                                                                                          PointT;
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
@@ -125,7 +131,7 @@ public:
         anchor_node = nullptr;
         anchor_edge = nullptr;
         // graph_slam.reset( new GraphSLAM( private_nh.param<std::string>( "g2o_solver_type", "lm_var" ) ) );
-        graph_slam.reset( new GraphSLAM( this->declare_parameter<std::string>( "g2o_solver_type", "lm_var" ) ) );
+        graph_slam.reset( new GraphSLAM( this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" ) ) );
         // keyframe_updater.reset( new KeyframeUpdater( private_nh ) );
         // loop_detector.reset( new LoopDetector( private_nh ) );
         // map_cloud_generator.reset( new MapCloudGenerator() );
@@ -287,6 +293,10 @@ public:
         imu_processor.onInit( node_ros );
         floor_coeffs_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
+
+        // Optionally print the all parameters declared in this node so far
+        const auto &list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
     }
 
 private:
@@ -314,7 +324,8 @@ private:
         if( !update_required ) {
             if( keyframe_queue.empty() ) {
                 std_msgs::msg::Header read_until;
-                read_until.stamp    = rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 );
+                // read_until.stamp    =  stamp + ros::Duration( 10, 0 ); // ROS1
+                read_until.stamp    = ( rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
                 read_until.frame_id = points_topic;
                 // read_until_pub.publish( read_until );
                 read_until_pub->publish( read_until );
@@ -475,7 +486,9 @@ private:
             Eigen::Isometry3d odom = odom2map * keyframe->odom;
             keyframe->node         = graph_slam->add_se3_node( odom );
             keyframe->set_gid( *gid_generator );
-            keyframe_gids[keyframe->gid]   = keyframe;
+            keyframe_gids[keyframe->gid] = keyframe;
+            // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used, it seems like it should be
+            // builtin_interfaces::msg::Time
             keyframe_hash[keyframe->stamp] = keyframe;
 
             // first keyframe?
@@ -568,7 +581,8 @@ private:
         // std_msgs::Header read_until;
         std_msgs::msg::Header read_until;
         // read_until.stamp    = keyframe_queue[num_processed]->stamp + ros::Duration( 10, 0 );
-        read_until.stamp    = rclcpp::Time( keyframe_queue[num_processed]->stamp ) + rclcpp::Duration( 10, 0 );
+        read_until.stamp =
+            ( rclcpp::Time( keyframe_queue[num_processed]->stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
         read_until.frame_id = points_topic;
         // read_until_pub.publish( read_until );
         read_until_pub->publish( read_until );
@@ -1015,7 +1029,7 @@ private:
             // pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_msg->header.stamp );
             rclcpp::Time graph_estimate_stamp;
             pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_stamp );
-            graph_estimate_msg->header.stamp = graph_estimate_stamp;
+            graph_estimate_msg->header.stamp = graph_estimate_stamp.operator builtin_interfaces::msg::Time();
 
             graph_estimate_msg->edges.resize( edges_snapshot_tmp.size() );
             graph_estimate_msg->keyframes.resize( keyframes_snapshot_tmp.size() );
@@ -1074,6 +1088,8 @@ private:
     // TODO verify that ros::Walltimerevent does not need to be replaced
     void optimization_timer_callback()
     {
+        RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in optimizationtimer callback" );
+
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
         // add keyframes and floor coeffs in the queues to the pose graph
@@ -1082,7 +1098,7 @@ private:
         if( !keyframe_updated ) {
             std_msgs::msg::Header read_until;
             // read_until.stamp    = ros::Time::now() + ros::Duration( 30, 0 );
-            read_until.stamp    = this->now() + rclcpp::Duration( 30, 0 );
+            read_until.stamp    = ( this->now() + rclcpp::Duration( 30, 0 ) ).operator builtin_interfaces::msg::Time();
             read_until.frame_id = points_topic;
             // read_until_pub->publish( read_until );
             read_until_pub->publish( read_until );
@@ -1500,11 +1516,12 @@ private:
     g2o::EdgeSE3              *anchor_edge;
     std::vector<KeyFrame::Ptr> keyframes;
     // std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
-    std::unordered_map<rclcpp::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
-    std::vector<Edge::Ptr>                                       edges;
-    std::unordered_map<GlobalId, KeyFrame::Ptr>                  keyframe_gids;
-    std::unordered_set<GlobalId>                                 edge_gids;
-    std::unordered_set<GlobalId>                                 edge_ignore_gids;
+    // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used
+    std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
+    std::vector<Edge::Ptr>                                                        edges;
+    std::unordered_map<GlobalId, KeyFrame::Ptr>                                   keyframe_gids;
+    std::unordered_set<GlobalId>                                                  edge_gids;
+    std::unordered_set<GlobalId>                                                  edge_ignore_gids;
 
     std::shared_ptr<GraphSLAM>       graph_slam;
     std::unique_ptr<LoopDetector>    loop_detector;

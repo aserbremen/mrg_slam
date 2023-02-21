@@ -7,7 +7,11 @@
 #include "prefiltering_component.cpp"
 #include "scan_matching_odometry_component.cpp"
 
-// This file is needed to debug the hdl_graph_slam composition of nodes
+// This executable is primarily used for debugging and development purposes. Compile using:
+// colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_MANUAL_COMPOSITION=ON
+// In terminal: ros2 run --prefix 'gdbserver localhost:3000' hdl_graph_slam manual_composition
+// Debug using the launch.json file in the .vscode folder
+// Parameter loading via yaml is unclear. If certain paramaters need to be set, specify the default values in the respective component
 
 
 int

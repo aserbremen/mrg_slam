@@ -27,10 +27,12 @@ GlobalIdGenerator::GlobalIdGenerator( rclcpp::Node::SharedPtr _node, const std::
     // get start gid from time to prevent id clashes if one robot should be restartet, convert to builtin_interfaces::msg::Time to get acces
     // to sec and nanosec members
     // auto time = ros::Time::now();  // ROS1
-    auto time = builtin_interfaces::msg::Time( _node->now() );
+    auto time = _node->now().operator builtin_interfaces::msg::Time();
 
     // take all 32 bit from sec and use the remaining 24bit (64bit - 32bit - 8bit for robot id) for the upper 24bit of nsec
     // start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nsec ) >> ( 32 - 24 );
+    // TODO verify with Joachim if the gid is still correctly generated in ROS2
+    // ROS1 ros::Time::Time( uint32_t _sec, uint32_t _nsec), ROS2 builtin_interfaces::msg::Time::Time( int32_t sec, uint32_t nanosec)
     start_gid = ( (GlobalId)time.sec ) << 24 | ( (GlobalId)time.nanosec ) >> ( 32 - 24 );
 }
 

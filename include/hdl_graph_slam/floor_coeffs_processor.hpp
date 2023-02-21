@@ -26,13 +26,13 @@ public:
     void onInit( rclcpp::Node::SharedPtr _node );
 
     // void floor_coeffs_callback( const hdl_graph_slam::FloorCoeffsConstPtr &floor_coeffs_msg );
-    void floor_coeffs_callback( const hdl_graph_slam::msg::FloorCoeffs::SharedPtr floor_coeffs_msg );
+    void floor_coeffs_callback( hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg );
 
     // bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
     //             const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash, const ros::Time &latest_keyframe_stamp );
     bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
-                const std::unordered_map<rclcpp::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-                const rclcpp::Time                                                 &latest_keyframe_stamp );
+                const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
+                const builtin_interfaces::msg::Time                                                 &latest_keyframe_stamp );
 
     const g2o::VertexPlane *floor_plane_node() const { return floor_plane_node_ptr; }
 
@@ -43,9 +43,9 @@ private:
 
     rclcpp::Subscription<hdl_graph_slam::msg::FloorCoeffs>::SharedPtr floor_sub;
 
-    double                                                 floor_edge_stddev;
-    std::mutex                                             floor_coeffs_queue_mutex;
-    std::deque<hdl_graph_slam::msg::FloorCoeffs::ConstPtr> floor_coeffs_queue;
+    double                                                       floor_edge_stddev;
+    std::mutex                                                   floor_coeffs_queue_mutex;
+    std::deque<hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue;
 
     g2o::VertexPlane *floor_plane_node_ptr;
 };

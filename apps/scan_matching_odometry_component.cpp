@@ -86,8 +86,8 @@ public:
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
 
         // Optionally print the all parameters declared in this node so far
-        // const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
-        // print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
+        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
     }
 
 
@@ -271,7 +271,7 @@ private:
         // TODO: ROS2 we use Header msgs instead of Header::Ptr, verify
         std_msgs::msg::Header read_until;
         read_until.frame_id = points_topic;
-        read_until.stamp    = rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 );
+        read_until.stamp = ( rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 ) ).operator builtin_interfaces::msg::Time();
         read_until_pub->publish( read_until );
 
         read_until.frame_id = "/filtered_points";
@@ -488,8 +488,8 @@ private:
 
         // publish the transform
         // nav_msgs::Odometry odom;
-        nav_msgs::msg::Odometry odom;
-        odom.header.stamp    = stamp;
+        nav_msgs::msg::Odometry   odom;
+        odom.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
         odom.header.frame_id = odom_frame_id;
 
         odom.pose.pose.position.x  = pose( 0, 3 );
@@ -522,7 +522,7 @@ private:
 
         hdl_graph_slam::msg::ScanMatchingStatus status;
         status.header.frame_id = frame_id;
-        status.header.stamp    = stamp;
+        status.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
         status.has_converged   = registration->hasConverged();
         status.matching_error  = registration->getFitnessScore();
 
