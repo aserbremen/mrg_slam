@@ -10,7 +10,7 @@
 // This executable is primarily used for debugging and development purposes. Compile using:
 // colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_MANUAL_COMPOSITION=ON
 // In terminal: ros2 run --prefix 'gdbserver localhost:3000' hdl_graph_slam manual_composition
-// Debug using the launch.json file in the .vscode folder
+// Debug using the launch.json file in the .vscode folder (see https://gist.github.com/JADC362/a4425c2d05cdaadaaa71b697b674425f)
 // Parameter loading via yaml is unclear. If certain paramaters need to be set, specify the default values in the respective component
 // For full functionality you should run the map2odom_publish node before debugging this composition:
 // ros2 run hdl_graph_slam map2odom_publisher_ros2.py
