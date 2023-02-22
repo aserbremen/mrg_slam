@@ -12,7 +12,8 @@
 // In terminal: ros2 run --prefix 'gdbserver localhost:3000' hdl_graph_slam manual_composition
 // Debug using the launch.json file in the .vscode folder
 // Parameter loading via yaml is unclear. If certain paramaters need to be set, specify the default values in the respective component
-
+// For full functionality you should run the map2odom_publish node before debugging this composition:
+// ros2 run hdl_graph_slam map2odom_publisher_ros2.py
 
 int
 main( int argc, char const *argv[] )

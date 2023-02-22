@@ -7,7 +7,6 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components)
 find_package(rcutils REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(rclpy REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -25,6 +24,9 @@ find_package(message_filters REQUIRED)
 # find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
+# ROS2 python depencencies
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
 
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
@@ -270,8 +272,6 @@ install(
 )
 # ament_export_libraries(hdl_graph_slam_component)
 
-# TODO map2odom publisher python scripts
-
 # Install the config directory to work with parameter yaml files
 install( 
   DIRECTORY config
@@ -305,6 +305,15 @@ endif()
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
 # TODO: ament_export_targets
+
+# Install python nodes
+ament_python_install_package(../src/hdl_graph_slam)
+
+# Install launch executables
+install(PROGRAMS
+  src/hdl_graph_slam/map2odom_publisher_ros2.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Finally create a pacakge
 ament_package()

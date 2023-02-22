@@ -60,6 +60,9 @@
   <!-- <depend condition="$ROS_VERSION == 2">libg2o</depend> -->
   <exec_depend condition="$ROS_VERSION == 2">rosidl_default_runtime</exec_depend>
   <member_of_group condition="$ROS_VERSION == 2">rosidl_interface_packages</member_of_group>
+  <!-- ROS2 python dependencies -->
+  <buildtool_depend condition="$ROS_VERSION == 2">ament_cmake_python</buildtool_depend>
+  <depend condition="$ROS_VERSION == 2">rclpy</depend>
 
   <exec_depend condition="$ROS_PYTHON_VERSION == 2">python-scipy</exec_depend>
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-scipy</exec_depend>
