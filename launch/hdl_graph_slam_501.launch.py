@@ -54,6 +54,15 @@ def generate_launch_description():
         output="screen"
     )
 
+    # Create the map2odom publisher node
+    map2odom_publisher_ros2 = Node(
+        name="map2odom_publisher_ros2",
+        package="hdl_graph_slam",
+        executable="map2odom_publisher_ros2.py",
+        output="both",
+        parameters=[shared_params]
+    )
+
     # Create the container node
     container = Node(
         name="hdl_graph_slam_container",
@@ -115,4 +124,4 @@ def generate_launch_description():
         composable_node_descriptions=composable_nodes
     )
 
-    return LaunchDescription([static_transform_publisher, container, load_composable_nodes])
+    return LaunchDescription([static_transform_publisher, map2odom_publisher_ros2, container, load_composable_nodes])
