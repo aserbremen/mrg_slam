@@ -8,7 +8,6 @@ namespace hdl_graph_slam {
 // LoopDetector::LoopDetector( ros::NodeHandle& pnh )
 LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node( _node )
 {
-    // TODO: ROS2 parameter handling, verify
     // distance_thresh                = pnh.param<double>( "distance_thresh", 5.0 );
     // distance_thresh_squared        = distance_thresh * distance_thresh;
     // accum_distance_thresh          = pnh.param<double>( "accum_distance_thresh", 8.0 );

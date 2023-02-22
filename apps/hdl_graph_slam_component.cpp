@@ -91,7 +91,6 @@ public:
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
-        // TODO maybe set initialization flag for callbacks after node is initialized
         one_shot_initalization_timer = this->create_wall_timer( std::chrono::milliseconds( 100 ),
                                                                 std::bind( &HdlGraphSlamComponent::onInit, this ) );
     }
@@ -110,8 +109,6 @@ public:
         // nh         = getNodeHandle();
         // mt_nh      = getMTNodeHandle();
         // private_nh = getPrivateNodeHandle();
-
-        // TODO ROS2 parameter handling
 
         // init parameters
         // map_frame_id              = private_nh.param<std::string>( "map_frame_id", "map" );
@@ -193,9 +190,8 @@ public:
         // odom_broadcast_pub  = mt_nh.advertise<hdl_graph_slam::PoseWithName>( "/hdl_graph_slam/odom_broadcast", 16 );
         // others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
         odom2map_pub = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
-        // Create a latching publisher for the map using transient local durability, that provides the latest map to "late" subscribers
-        auto latching_qos = rclcpp::QoS( 1 );
-        latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
+
+
         // rmw_qos_profile_t latching_rmw_qos_profile;
         // latching_rmw_qos_profile.depth      = 1;
         // latching_rmw_qos_profile.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
@@ -203,9 +199,14 @@ public:
         //     "/hdl_graph_slam/map_points",
         //     rclcpp::QoS( rclcpp::QoSInitialization( latching_rmw_qos_profile.history, latching_rmw_qos_profile.depth ),
         //                  latching_rmw_qos_profile ) );
-        // TODO efficient intraprocess communication is only allowed with volatile durability
+        // TODO intraprocess communication is only allowed with volatile durability when defining the latching_rmw_qos_profile as above
         // [component_container-2] terminate called after throwing an instance of 'std::invalid_argument'
-        // [component_container-2]   what():  intraprocess communication allowed only with volatile durability
+        // [component_container-2] what():  intraprocess communication allowed only with volatile durability
+
+        // Create a latching publisher for the map using transient local durability, that provides the latest map to "late" subscribers
+        // test this, otherwise implement timer to publish map periodically
+        auto latching_qos = rclcpp::QoS( 1 );
+        latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
         map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", latching_qos );
 
         read_until_pub      = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
@@ -275,7 +276,7 @@ public:
         // double map_cloud_update_interval   = private_nh.param<double>( "map_cloud_update_interval", 10.0 );
         double graph_update_interval     = this->declare_parameter<double>( "graph_update_interval", 3.0 );
         double map_cloud_update_interval = this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-        // TODO verify period timer period
+
         // optimization_timer                 = mt_nh.createWallTimer( ros::WallDuration( graph_update_interval ),
         //                                                             &HdlGraphSlamNodelet::optimization_timer_callback, this );
         // map_publish_timer                  = mt_nh.createWallTimer( ros::WallDuration( map_cloud_update_interval ),
@@ -498,13 +499,9 @@ private:
 
                 // fix the first node
                 // if( private_nh.param<bool>( "fix_first_node", false ) ) {
-                bool fix_first_node;
                 // TODO: use member variable instead?
-                if( this->has_parameter( "fix_first_node" ) ) {
-                    fix_first_node = this->get_parameter( "fix_first_node" ).as_bool();
-                } else {
-                    fix_first_node = this->declare_parameter<bool>( "fix_first_node", false );
-                }
+                bool fix_first_node = this->has_parameter( "fix_first_node" ) ? this->get_parameter( "fix_first_node" ).as_bool()
+                                                                              : this->declare_parameter<bool>( "fix_first_node", false );
                 if( fix_first_node ) {
                     Eigen::MatrixXd information = Eigen::MatrixXd::Identity( 6, 6 );
                     // std::stringstream sststd( private_nh.param<std::string>( "fix_first_node_stddev", "1 1 1 1 1 1" ) );
@@ -934,7 +931,6 @@ private:
      * @param event
      */
     // void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
-    // TODO does the ros::WallTimerEvent needs to be used in ROS2?
     void map_points_publish_timer_callback()
     {
         RCLCPP_INFO( this->get_logger(), "INSIDE map points timer callback, TAKE ME OUT" );
@@ -1085,7 +1081,6 @@ private:
      * @param event
      */
     // void optimization_timer_callback( const ros::WallTimerEvent &event )
-    // TODO verify that ros::Walltimerevent does not need to be replaced
     void optimization_timer_callback()
     {
         RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in optimizationtimer callback" );
@@ -1439,7 +1434,6 @@ private:
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
-    // TODO find a way to replace ros::ServiceClient
     // std::unordered_map<std::string, ros::ServiceClient> request_graph_service_clients;
     // ros::ServiceServer                                  dump_service_server;
     // ros::ServiceServer                                  save_map_service_server;

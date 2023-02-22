@@ -104,8 +104,6 @@ public:
 private:
     void initialize_params()
     {
-        // TODO ROS2 parameter handling
-
         // std::string downsample_method     = private_nh.param<std::string>( "downsample_method", "VOXELGRID" );
         // double      downsample_resolution = private_nh.param<double>( "downsample_resolution", 0.1 );
         std::string downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );

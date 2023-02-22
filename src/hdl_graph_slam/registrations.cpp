@@ -27,7 +27,6 @@ select_registration_method( rclcpp::Node* node_raw_ptr )
     using PointT = pcl::PointXYZI;
 
     // select a registration method (ICP, GICP, NDT)
-    // TODO: ROS2 parameter handling, declare all variables only once, as this is also called by the loop closure class
     // std::string registration_method = pnh.param<std::string>( "registration_method", "NDT_OMP" );
     std::string registration_method = node_raw_ptr->declare_parameter<std::string>( "registration_method", "NDT_OMP" );
     if( registration_method == "FAST_GICP" ) {
@@ -38,7 +37,6 @@ select_registration_method( rclcpp::Node* node_raw_ptr )
         // gicp->setMaximumIterations( pnh.param<int>( "reg_maximum_iterations", 64 ) );
         // gicp->setMaxCorrespondenceDistance( pnh.param<double>( "reg_max_correspondence_distance", 2.5 ) );
         // gicp->setCorrespondenceRandomness( pnh.param<int>( "reg_correspondence_randomness", 20 ) );
-        // TODO: ROS2 parameter handling, is declaring the parameter sufficient?, verify
         gicp->setNumThreads( node_raw_ptr->declare_parameter<int>( "reg_num_threads", 0 ) );
         gicp->setTransformationEpsilon( node_raw_ptr->declare_parameter<double>( "reg_transformation_epsilon", 0.01 ) );
         gicp->setMaximumIterations( node_raw_ptr->declare_parameter<int>( "reg_maximum_iterations", 64 ) );

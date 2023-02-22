@@ -30,9 +30,10 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     markers_marginals_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers_covariance",
                                                                                           rclcpp::QoS( 16 ) );
 
-    // TODO: ROS2 parameter handling
     // map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
     // own_name     = private_nh.param<std::string>( "own_name", "atlas" );
+    map_frame_id = node->declare_parameter<std::string>( "map_frame_id", "map" );
+    own_name     = node->declare_parameter<std::string>( "own_name", "atlas" );
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
     color_blue.r = 31.0 / 255.0;
@@ -113,9 +114,10 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         __NUM_MARKERS__,
     };
     // auto                            stamp   = ros::Time::now();
-    auto                                 stamp   = node->now();
-    RobotId                              own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::msg::MarkerArray markers;
+    // Directly declare builtin_interfaces::msg::Time
+    builtin_interfaces::msg::Time stamp                       = node->now().operator builtin_interfaces::msg::Time();
+    RobotId                                           own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray              markers;
     markers.markers.resize( __NUM_MARKERS__ );
 
     // node markers
@@ -414,10 +416,11 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
 {
     // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
 
-    // auto                            stamp   = ros::Time::now(); TODO: verify this
-    auto                                 stamp   = node->now();
-    RobotId                              own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::msg::MarkerArray markers;
+    // auto                            stamp   = ros::Time::now();
+    // Directly declare builtin_interfaces::msg::Time
+    builtin_interfaces::msg::Time stamp                       = node->now().operator builtin_interfaces::msg::Time();
+    RobotId                                           own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray              markers;
 
     markers.markers.resize( keyframes.size() );
 

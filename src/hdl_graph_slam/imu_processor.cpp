@@ -34,12 +34,16 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
     tf2_buffer   = std::make_unique<tf2_ros::Buffer>( node->get_clock() );
     tf2_listener = std::make_shared<tf2_ros::TransformListener>( *tf2_buffer );
 
-    // TODO: ROS2 parameter handling
     // imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
     // enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
     // enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
     // imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
     // imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
+    imu_time_offset              = node->declare_parameter<double>( "imu_time_offset", 0.0 );
+    enable_imu_orientation       = node->declare_parameter<bool>( "enable_imu_orientation", false );
+    enable_imu_acceleration      = node->declare_parameter<bool>( "enable_imu_acceleration", false );
+    imu_orientation_edge_stddev  = node->declare_parameter<double>( "imu_orientation_edge_stddev", 0.1 );
+    imu_acceleration_edge_stddev = node->declare_parameter<double>( "imu_acceleration_edge_stddev", 3.0 );
 
     imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
                                                                 std::bind( &ImuProcessor::imu_callback, this, std::placeholders::_1 ) );
@@ -54,7 +58,6 @@ ImuProcessor::imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg )
     }
 
     std::lock_guard<std::mutex> lock( imu_queue_mutex );
-    // TODO: probably correct, needs verification
     imu_msg->header.stamp =
         ( rclcpp::Time( imu_msg->header.stamp ) + rclcpp::Duration( imu_time_offset, 0 ) ).operator builtin_interfaces::msg::Time();
     imu_queue.push_back( imu_msg );
@@ -111,7 +114,6 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         acc_imu.vector                               = ( *closest_imu )->linear_acceleration;
         quat_imu.quaternion                          = ( *closest_imu )->orientation;
 
-        // TODO: The commented code needs to be migrated to ROS2 and verified
         // try {
         //     transformVector( string target_frame, stamped_in, stamped_out );
         //     tf_listener->transformVector( base_frame_id, acc_imu, acc_base );
@@ -143,22 +145,41 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
         if( enable_imu_orientation ) {
             Eigen::MatrixXd info = Eigen::MatrixXd::Identity( 3, 3 ) / imu_orientation_edge_stddev;
             auto            edge = graph_slam->add_se3_prior_quat_edge( keyframe->node, *keyframe->orientation, info );
-            // TODO: ROS2 parameter handling
             // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_orientation_edge_robust_kernel", "NONE" ),
             //                                private_nh->param<double>( "imu_orientation_edge_robust_kernel_size", 1.0 ) );
+            // TODO: Use member variables if imu_orientation_edge_robust_kernel and imu_orientation_edge_robust_kernel_size do not change
+            // during runtime?
+            std::string imu_orientation_edge_robust_kernel =
+                node->has_parameter( "imu_orientation_edge_robust_kernel" )
+                    ? node->get_parameter( "imu_orientation_edge_robust_kernel" ).as_string()
+                    : node->declare_parameter<std::string>( "imu_orientation_edge_robust_kernel", "NONE" );
+            double imu_orientation_edge_robust_kernel_size =
+                node->has_parameter( "imu_orientation_edge_robust_kernel_size" )
+                    ? node->get_parameter( "imu_orientation_edge_robust_kernel_size" ).as_double()
+                    : node->declare_parameter<double>( "imu_orientation_edge_robust_kernel_size", 1.0 );
+            graph_slam->add_robust_kernel( edge, imu_orientation_edge_robust_kernel, imu_orientation_edge_robust_kernel_size );
         }
 
         if( enable_imu_acceleration ) {
             Eigen::MatrixXd info = Eigen::MatrixXd::Identity( 3, 3 ) / imu_acceleration_edge_stddev;
             auto edge = graph_slam->add_se3_prior_vec_edge( keyframe->node, -Eigen::Vector3d::UnitZ(), *keyframe->acceleration, info );
-            // TODO: ROS2 parameter handling
             // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" ),
             //                                private_nh->param<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 ) );
+            // TODO: Use member variables if imu_acceleration_edge_robust_kernel, and imu_acceleration_edge_robust_kernel_size does not
+            // change during runtime?
+            std::string imu_acceleration_edge_robust_kernel =
+                node->has_parameter( "imu_acceleration_edge_robust_kernel" )
+                    ? node->get_parameter( "imu_acceleration_edge_robust_kernel" ).as_string()
+                    : node->declare_parameter<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" );
+            double imu_acceleration_edge_robust_kernel_size =
+                node->has_parameter( "imu_acceleration_edge_robust_kernel_size" )
+                    ? node->get_parameter( "imu_acceleration_edge_robust_kernel_size" ).as_double()
+                    : node->declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
+            graph_slam->add_robust_kernel( edge, imu_acceleration_edge_robust_kernel, imu_acceleration_edge_robust_kernel_size );
         }
         updated = true;
     }
 
-    // TODO: verify this lambda expression
     auto remove_loc = std::upper_bound( imu_queue.begin(), imu_queue.end(), rclcpp::Time( keyframes.back()->stamp ),
                                         [=]( const rclcpp::Time& stamp, const sensor_msgs::msg::Imu::ConstPtr imu ) {
                                             return stamp < rclcpp::Time( imu->header.stamp );

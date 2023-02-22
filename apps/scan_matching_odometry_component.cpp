@@ -162,8 +162,6 @@ private:
      */
     void initialize_params()
     {
-        // TODO: ROS2 parameter handling
-
         // auto& pnh           = private_nh; // No more node handles in ROS2
         // points_topic        = pnh.param<std::string>( "points_topic", "/velodyne_points" );
         // odom_frame_id       = pnh.param<std::string>( "odom_frame_id", "odom" );

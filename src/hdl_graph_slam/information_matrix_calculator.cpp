@@ -27,6 +27,9 @@ InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPt
     // use_const_inf_matrix = nh.param<bool>( "use_const_inf_matrix", false );
     // const_stddev_x       = nh.param<double>( "const_stddev_x", 0.5 );
     // const_stddev_q       = nh.param<double>( "const_stddev_q", 0.1 );
+    use_const_inf_matrix = node->declare_parameter<bool>( "use_const_inf_matrix", false );
+    const_stddev_x       = node->declare_parameter<double>( "const_stddev_x", 0.5 );
+    const_stddev_q       = node->declare_parameter<double>( "const_stddev_q", 0.1 );
 
     // var_gain_a           = nh.param<double>( "var_gain_a", 20.0 );
     // min_stddev_x         = nh.param<double>( "min_stddev_x", 0.1 );
@@ -34,6 +37,12 @@ InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPt
     // min_stddev_q         = nh.param<double>( "min_stddev_q", 0.05 );
     // max_stddev_q         = nh.param<double>( "max_stddev_q", 0.2 );
     // fitness_score_thresh = nh.param<double>( "fitness_score_thresh", 0.5 );
+    var_gain_a           = node->declare_parameter<double>( "var_gain_a", 20.0 );
+    min_stddev_x         = node->declare_parameter<double>( "min_stddev_x", 0.1 );
+    max_stddev_x         = node->declare_parameter<double>( "max_stddev_x", 5.0 );
+    min_stddev_q         = node->declare_parameter<double>( "min_stddev_q", 0.05 );
+    max_stddev_q         = node->declare_parameter<double>( "max_stddev_q", 0.2 );
+    fitness_score_thresh = node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
 }
 
 
