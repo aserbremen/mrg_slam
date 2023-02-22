@@ -115,7 +115,9 @@ public:
         // odom_frame_id             = private_nh.param<std::string>( "odom_frame_id", "odom" );
         // map_cloud_resolution      = private_nh.param<double>( "map_cloud_resolution", 0.05 );
         // map_cloud_count_threshold = private_nh.param<int>( "map_cloud_count_threshold", 2 );
-        map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
+        // Declare only once across all nodes
+        map_frame_id              = this->has_parameter( "map_frame_id" ) ? this->get_parameter( "map_frame_id" ).as_string()
+                                                                          : this->declare_parameter<std::string>( "map_frame_id", "map" );
         odom_frame_id             = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
         map_cloud_resolution      = this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
         map_cloud_count_threshold = this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
@@ -143,7 +145,9 @@ public:
         points_topic = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
 
         // own_name = private_nh.param<std::string>( "own_name", "atlas" );
-        own_name = this->declare_parameter<std::string>( "own_name", "atlas" );
+        // Declare only once across nodes
+        own_name = this->has_parameter( "own_name" ) ? this->get_parameter( "own_name" ).as_string()
+                                                     : this->declare_parameter<std::string>( "own_name", "atlas" );
         robot_names.push_back( own_name );
         // robot_names   = private_nh.param<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
         robot_names = this->declare_parameter<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
@@ -191,23 +195,14 @@ public:
         // others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
         odom2map_pub = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
 
-
-        // rmw_qos_profile_t latching_rmw_qos_profile;
-        // latching_rmw_qos_profile.depth      = 1;
-        // latching_rmw_qos_profile.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
-        // map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-        //     "/hdl_graph_slam/map_points",
-        //     rclcpp::QoS( rclcpp::QoSInitialization( latching_rmw_qos_profile.history, latching_rmw_qos_profile.depth ),
-        //                  latching_rmw_qos_profile ) );
-        // TODO intraprocess communication is only allowed with volatile durability when defining the latching_rmw_qos_profile as above
+        // auto latching_qos = rclcpp::QoS( 1 );
+        // latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
+        // TODO intraprocess communication is only allowed with volatile durability, does not crash in manual composition?
         // [component_container-2] terminate called after throwing an instance of 'std::invalid_argument'
         // [component_container-2] what():  intraprocess communication allowed only with volatile durability
-
         // Create a latching publisher for the map using transient local durability, that provides the latest map to "late" subscribers
-        // test this, otherwise implement timer to publish map periodically
-        auto latching_qos = rclcpp::QoS( 1 );
-        latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
-        map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", latching_qos );
+        // TODO implement solution for late subscribers, service call?
+        map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
 
         read_until_pub      = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
         graph_broadcast_pub = this->create_publisher<hdl_graph_slam::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast", rclcpp::QoS( 16 ) );

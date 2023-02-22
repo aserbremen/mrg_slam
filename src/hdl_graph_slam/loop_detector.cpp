@@ -22,7 +22,9 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node( _node )
     distance_from_last_edge_thresh = node->declare_parameter<double>( "min_edge_interval", 5.0 );
 
     fitness_score_max_range = node->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
-    fitness_score_thresh    = node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+    // Parameter also used in loop detector, make sure to declare it once
+    fitness_score_thresh = node->has_parameter( "fitness_score_thresh" ) ? node->get_parameter( "fitness_score_thresh" ).as_double()
+                                                                         : node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
 
     // TODO pass a raw rclpp::Node pointer to select_registration_method
     registration             = select_registration_method( node.get() );

@@ -37,12 +37,14 @@ InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPt
     // min_stddev_q         = nh.param<double>( "min_stddev_q", 0.05 );
     // max_stddev_q         = nh.param<double>( "max_stddev_q", 0.2 );
     // fitness_score_thresh = nh.param<double>( "fitness_score_thresh", 0.5 );
-    var_gain_a           = node->declare_parameter<double>( "var_gain_a", 20.0 );
-    min_stddev_x         = node->declare_parameter<double>( "min_stddev_x", 0.1 );
-    max_stddev_x         = node->declare_parameter<double>( "max_stddev_x", 5.0 );
-    min_stddev_q         = node->declare_parameter<double>( "min_stddev_q", 0.05 );
-    max_stddev_q         = node->declare_parameter<double>( "max_stddev_q", 0.2 );
-    fitness_score_thresh = node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+    var_gain_a   = node->declare_parameter<double>( "var_gain_a", 20.0 );
+    min_stddev_x = node->declare_parameter<double>( "min_stddev_x", 0.1 );
+    max_stddev_x = node->declare_parameter<double>( "max_stddev_x", 5.0 );
+    min_stddev_q = node->declare_parameter<double>( "min_stddev_q", 0.05 );
+    max_stddev_q = node->declare_parameter<double>( "max_stddev_q", 0.2 );
+    // Parameter also used in loop detector, make sure to declare it once
+    fitness_score_thresh = node->has_parameter( "fitness_score_thresh" ) ? node->get_parameter( "fitness_score_thresh" ).as_double()
+                                                                         : node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
 }
 
 
