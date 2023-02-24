@@ -588,6 +588,8 @@ private:
             return;
         }
 
+        return; // XXX
+
         hdl_graph_slam::PublishGraph srv;
         if( request_graph_service_clients[other_name].call( srv ) ) {
             ROS_INFO_STREAM( "Successfully requested graph from " << other_name );

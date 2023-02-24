@@ -15,10 +15,18 @@ class GraphMsgTransfer():
         self.last_bag_received = None
         self.cur_bag_received = None
         self.bag_counter = 0
-        self.robot_name = 'atlas'
+        self.own_name = rospy.get_param('~own_name')
+        if self.own_name == "atlas":
+            self.remote_name = "bestla"
+        else:
+            self.remote_name = "atlas"
+        print("Own name: %s, remote name: %s" % (self.own_name, self.remote_name))
         self.received_file_size = -1
 
-    def graph_ros_callback(self, graph_ros_msg: GraphRos):
+    def graph_ros_callback(self, graph_ros_msg):
+        if graph_ros_msg.robot_name != self.own_name:
+            return
+
         bag_name_record = '/tmp/graph_record_%05d.bag' % self.bag_counter
         bag_name_receive = '/tmp/graph_receive_%05d.bag' % self.bag_counter
         self.bag_counter += 1
@@ -28,8 +36,9 @@ class GraphMsgTransfer():
             bag.write('/hdl_graph_slam/graph_broadcast', graph_ros_msg)
         finally:
             bag.close()
-            os.system('rsync %s %s:%s' % (bag_name_record, self.robot_name, bag_name_receive))
-            print("Transfered graph bag file to other rover: %s -> " % (bag_name_record. bag_name_receive))
+            os.system('rsync %s %s:%s' % (bag_name_record, self.remote_name, bag_name_receive))
+            print("Transfered graph bag file to other rover: %s -> %s" % (bag_name_record, bag_name_receive))
+        os.remove(bag_name_record)
 
     def graph_receive_timer(self, event):
         # Check received bag file size is not changing
@@ -59,9 +68,9 @@ class GraphMsgTransfer():
 
 
 if __name__ == "__main__":
+    rospy.init_node("graph_msg_transfer")
     node = GraphMsgTransfer()
-
     rate = rospy.Rate(10.0)
     while not rospy.is_shutdown():
-        node.spin()
+        rospy.spin()
         rate.sleep()
