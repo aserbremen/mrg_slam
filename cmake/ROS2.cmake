@@ -312,6 +312,7 @@ ament_python_install_package(../src/hdl_graph_slam)
 # Install launch executables
 install(PROGRAMS
   src/hdl_graph_slam/map2odom_publisher_ros2.py
+  src/hdl_graph_slam/clock_publisher_ros2.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
