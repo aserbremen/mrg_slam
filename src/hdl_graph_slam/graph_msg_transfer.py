@@ -12,7 +12,7 @@ class GraphMsgTransfer():
         self.publisher = rospy.Publisher('/hdl_graph_slam/graph_broadcast', GraphRos, queue_size=1)
         self.timer = rospy.Timer(rospy.Duration(1.0), self.graph_receive_timer)
         self.bag_counter = 0
-        self.robot_name = 'atlas'
+        self.remote_name = rospy.get_param('remote_name')
         self.received_file_size = -1
 
     def graph_ros_callback(self, graph_ros_msg: GraphRos):
@@ -25,7 +25,7 @@ class GraphMsgTransfer():
             bag.write('/hdl_graph_slam/graph_broadcast', graph_ros_msg)
         finally:
             bag.close()
-            os.system('rsync %s %s:%s' % (bag_name_record, self.robot_name, bag_name_receive))
+            os.system('rsync %s %s:%s' % (bag_name_record, self.remote_name, bag_name_receive))
 
     def graph_receive_timer(self, event):
         # Check received bag file size is not changing
