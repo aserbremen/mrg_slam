@@ -588,7 +588,7 @@ private:
             return;
         }
 
-        return; // XXX
+        // return; // XXX
 
         hdl_graph_slam::PublishGraph srv;
         if( request_graph_service_clients[other_name].call( srv ) ) {
