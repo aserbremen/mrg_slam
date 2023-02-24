@@ -50,6 +50,8 @@ class GraphMsgTransfer():
             file_list.sort()
             if file_list[-1] != self.last_bag_received:
                 self.cur_bag_received = file_list[-1]
+            else:
+                return
         bag_stats = os.stat(self.cur_bag_received)
         size = bag_stats.st_size
         if size > 0 and size == self.received_file_size:
