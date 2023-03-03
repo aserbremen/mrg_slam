@@ -2,6 +2,7 @@
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/exceptions.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
@@ -365,7 +366,7 @@ private:
             // According to https://answers.ros.org/question/312648/could-not-find-waitfortransform-function-in-tf2-package-of-ros2/ the
             // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout, TODO, verify
             if( tf_buffer->canTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
-                                         rclcpp::Duration( 0 ) ) ) {
+                                         rclcpp::Duration( 0, 0 ) ) ) {
                 try {
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );
@@ -378,7 +379,7 @@ private:
                                  robot_odom_frame_id.c_str(), ex.what() );
                 }
             } else if( tf_buffer->canTransform( cloud->header.frame_id, rclcpp::Time( 0 ), cloud->header.frame_id, prev_time,
-                                                robot_odom_frame_id, rclcpp::Duration( 0 ) ) ) {
+                                                robot_odom_frame_id, rclcpp::Duration( 0, 0 ) ) ) {
                 try {
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, rclcpp::Time( 0 ), cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );

@@ -76,6 +76,7 @@ private:
     };
 
 public:
+    // TODO use std::shared_ptr instead with pcl 1.12 and ros2 humble?
     using Ptr      = boost::shared_ptr<ApproximateMeanVoxelGrid<PointT> >;
     using ConstPtr = boost::shared_ptr<const ApproximateMeanVoxelGrid<PointT> >;
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_eigen/tf2_eigen.hpp>
 
 #include <chrono>
 #include <functional>
@@ -166,7 +166,8 @@ public:
         // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
         // TODO: verify synced callbacks
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
-        sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
+        // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
+        sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
         // graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamComponent::graph_callback, this );
         // odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamComponent::odom_broadcast_callback, this
         // );
@@ -669,6 +670,7 @@ private:
             // ROS_INFO_STREAM( "Adding keyframe: " << keyframe_ros.gid );
             RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe: " << keyframe_ros.gid );
 
+            // TODO use std::shared_ptr instead for ros2 humble and pcl 1.12 (Ubuntu 22.04)
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
             // ros::Time stamp(keyframe_ros.stamp);
