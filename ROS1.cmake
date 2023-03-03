@@ -125,9 +125,9 @@ add_dependencies(hdl_graph_slam_nodelet ${PROJECT_NAME}_gencpp)
 
 catkin_install_python(
   PROGRAMS
-    src/${PROJECT_NAME}/bag_player.py
-    src/${PROJECT_NAME}/ford2bag.py
-    src/${PROJECT_NAME}/map2odom_publisher.py
+    scripts/bag_player.py
+    scripts/ford2bag.py
+    scripts/map2odom_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
