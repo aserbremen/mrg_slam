@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_eigen/tf2_eigen.hpp>
 
 #include <chrono>
 #include <functional>
@@ -16,6 +15,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <tf2_eigen/tf2_eigen.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
 // #include <ros/ros.h>
@@ -675,7 +675,6 @@ private:
             pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
             // ros::Time stamp(keyframe_ros.stamp);
             // sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>( keyframe_ros.cloud );
-            // TODO use unique ptr for efficient intraprocess communication instead?
             sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
             KeyFrame::Ptr keyframe( new KeyFrame( keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros ) );
 
@@ -868,6 +867,7 @@ private:
         auto result_future = client->async_send_request( request );
         if( rclcpp::spin_until_future_complete( shared_from_this(), result_future ) != rclcpp::FutureReturnCode::SUCCESS ) {
             RCLCPP_ERROR_STREAM( this->get_logger(), "Failed to request graph from " << other_name );
+            client->remove_pending_request( result_future );
         } else {
             RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << other_name );
             last_accum_dist = accum_dist;
