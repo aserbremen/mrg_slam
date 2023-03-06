@@ -6,8 +6,7 @@ from rclpy.node import Node
 import rclpy.logging
 from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import Imu
-from builtin_interfaces.msg import Time
-
+from rosgraph_msgs.msg import Clock
 
 class ClockPublisherRos2(Node):
     # Use this node to publish the clock from the hdl_graph_slam_400 rosbag (containing imu messages) to the /clock topic.
@@ -26,15 +25,14 @@ class ClockPublisherRos2(Node):
         self.imu_subscription  # prevent unused variable warning
 
         self.clock_publisher = self.create_publisher(
-            msg_type=Time,
+            msg_type=Clock,
             topic="/clock",
             qos_profile=10
         )
 
     def imu_callback(self, imu_msg: Imu):
-        clock_msg = Time()
-        clock_msg.sec = imu_msg.header.stamp.sec
-        clock_msg.nanosec = imu_msg.header.stamp.nanosec
+        clock_msg = Clock()
+        clock_msg.clock = imu_msg.header.stamp
         self.clock_publisher.publish(clock_msg)
 
 

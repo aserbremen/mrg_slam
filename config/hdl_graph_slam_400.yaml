@@ -2,7 +2,7 @@
 /**:
   ros__parameters:
     points_topic: "/velodyne_points"
-    use_sim_time: false
+    use_sim_time: true
 
 # Transform between lidar and base_link
 lidar2base_publisher:
@@ -17,7 +17,7 @@ lidar2base_publisher:
     lidar_frame_id: "velodyne"
 
 # In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
-ros2bag_clock_publisher:
+clock_publisher_ros2:
   ros__parameters:
     imu_topic: "/gpsimu_driver/imu_data"
 

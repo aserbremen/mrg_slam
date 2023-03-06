@@ -23,7 +23,7 @@ def generate_launch_description():
         print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params["/**"]["ros__parameters"]
         static_transform_params = config_params["lidar2base_publisher"]["ros__parameters"]
-        ros2bag_clock_publisher_params = config_params["ros2bag_clock_publisher"]["ros__parameters"]
+        clock_publisher_ros2_params = config_params["clock_publisher_ros2"]["ros__parameters"]
         prefiltering_params = config_params["prefiltering_component"]["ros__parameters"]
         scan_matching_odometry_params = config_params["scan_matching_odometry_component"]["ros__parameters"]
         floor_detection_params = config_params["floor_detection_component"]["ros__parameters"]
@@ -48,11 +48,11 @@ def generate_launch_description():
     )
 
     # In case we play a rosbag, we need to publish the clock from the rosbag to the /clock topic
-    ros2bag_clock_publisher = Node(
-        name="ros2bag_clock_publisher",
+    clock_publisher_ros2 = Node(
+        name="clock_publisher_ros2",
         package="hdl_graph_slam",
-        executable="ros2bag_clock_publisher.py",
-        parameters=[ros2bag_clock_publisher_params, shared_params],
+        executable="clock_publisher_ros2.py",
+        parameters=[clock_publisher_ros2_params, shared_params],
         output="screen"
     )
 
@@ -129,7 +129,7 @@ def generate_launch_description():
     # Finally launch all nodes
     return LaunchDescription([
         static_transform_publisher,
-        ros2bag_clock_publisher,
+        clock_publisher_ros2,
         map2odom_publisher_ros2,
         container,
         load_composable_nodes
