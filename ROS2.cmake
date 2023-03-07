@@ -273,9 +273,10 @@ install(
 )
 # ament_export_libraries(hdl_graph_slam_component)
 
-# Install the config directory to work with parameter yaml files
-install( 
-  DIRECTORY config
+# Install necessary directories to install folder
+install(DIRECTORY 
+  config
+  rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
