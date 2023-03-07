@@ -3,19 +3,10 @@ import yaml
 
 from ament_index_python import get_package_share_directory
 
-import launch
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.actions import IncludeLaunchDescription
-from launch.actions import GroupAction
-from launch.substitutions import LaunchConfiguration
-from launch.substitutions import TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
-from launch_ros.actions import PushRosNamespace
-from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
@@ -32,6 +23,7 @@ def generate_launch_description():
         print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params["/**"]["ros__parameters"]
         static_transform_params = config_params["lidar2base_publisher"]["ros__parameters"]
+        clock_publisher_ros2_params = config_params["clock_publisher_ros2"]["ros__parameters"]
         prefiltering_params = config_params["prefiltering_component"]["ros__parameters"]
         scan_matching_odometry_params = config_params["scan_matching_odometry_component"]["ros__parameters"]
         floor_detection_params = config_params["floor_detection_component"]["ros__parameters"]
@@ -51,8 +43,31 @@ def generate_launch_description():
                    str(static_transform_params["yaw"]),
                    str(static_transform_params["base_frame_id"]),
                    str(static_transform_params["lidar_frame_id"])],
-        output="screen"
+        parameters=[shared_params],
+        output="both"
     )
+
+    # Start rviz2 from this launch file if set to true
+    if shared_params["start_rviz2"]:
+        print(os.path.join(get_package_share_directory("hdl_graph_slam"), "rviz", "hdl_graph_slam_ros2.rviz")),
+        rviz2 = Node(
+            name="rviz2",
+            package="rviz2",
+            executable="rviz2",
+            arguments=["-d", os.path.join(get_package_share_directory("hdl_graph_slam"), "rviz", "hdl_graph_slam_ros2.rviz")],
+            parameters=[shared_params],
+            output="both"
+        )
+
+    # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
+    if os.path.expandvars("$ROS_DISTRO") != "humble":
+        clock_publisher_ros2 = Node(
+            name="clock_publisher_ros2",
+            package="hdl_graph_slam",
+            executable="clock_publisher_ros2.py",
+            parameters=[clock_publisher_ros2_params, shared_params],
+            output="both"
+        )
 
     # Create the map2odom publisher node
     map2odom_publisher_ros2 = Node(
@@ -78,7 +93,8 @@ def generate_launch_description():
         plugin="hdl_graph_slam::PrefilteringComponent",
         name="prefiltering_component",
         parameters=[prefiltering_params, shared_params],
-        remappings=[("/velodyne_points", shared_params["points_topic"])],  # TODO verify how often remapping is needed
+        # TODO verify how often remapping is needed
+        remappings=[("/velodyne_points", shared_params["points_topic"])],
         extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
     )
 
@@ -107,8 +123,8 @@ def generate_launch_description():
         parameters=[hdl_graph_slam_params, shared_params],
         remappings=[
             ("/filtered_points", "/prefiltering/filtered_points"),
-            ("odom", "/scan_matching_odometry/odom"),
-            ("floor_coeffs", "/floor_detection/floor_coeffs")
+            ("/odom", "/scan_matching_odometry/odom"),
+            ("/floor_coeffs", "/floor_detection/floor_coeffs")
         ],
         extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
     )
@@ -124,4 +140,16 @@ def generate_launch_description():
         composable_node_descriptions=composable_nodes
     )
 
-    return LaunchDescription([static_transform_publisher, map2odom_publisher_ros2, container, load_composable_nodes])
+    # Create a list of the nodes to be launched
+    launch_description_list = [static_transform_publisher]
+    if [shared_params["start_rviz2"]]:
+        launch_description_list.append(rviz2)
+    # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
+    if os.path.expandvars("$ROS_DISTRO") != "humble":
+        launch_description_list.append(clock_publisher_ros2)
+    launch_description_list.append(map2odom_publisher_ros2)
+    launch_description_list.append(container)
+    launch_description_list.append(load_composable_nodes)
+
+    # Finally launch all nodes
+    return LaunchDescription(launch_description_list)

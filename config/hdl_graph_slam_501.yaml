@@ -1,3 +1,10 @@
+# Parameters shared across all nodes or general parameters
+/**:
+  ros__parameters:
+    points_topic: "/velodyne_points"
+    use_sim_time: true
+    start_rviz2: true
+
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
@@ -9,6 +16,11 @@ lidar2base_publisher:
     yaw: 0.0
     base_frame_id: "base_link"
     lidar_frame_id: "velodyne"
+
+# In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
+clock_publisher_ros2:
+  ros__parameters:
+    imu_topic: "/gpsimu_driver/imu_data"
 
 # Prefiltering component parameters
 prefiltering_component:
@@ -36,6 +48,7 @@ prefiltering_component:
     distance_far_thresh: 100.0
 
     scan_period: 0.1
+    # remappings are handle in the respective python launch file
 
 # Scan matching component parameters
 scan_matching_odometry_component:
@@ -68,7 +81,7 @@ scan_matching_odometry_component:
     reg_correspondence_randomness: 20
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
-    # remappings are handled in the python respective launch file
+    # remappings are handled in the respective python launch file
 
 # Floor detection component parameters
 floor_detection_component:
@@ -80,7 +93,7 @@ floor_detection_component:
     floor_pts_thresh: 256
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    # remappings are handled in the python respective launch file
+    # remappings are handled in the respective python launch file
 
 # HDL graph slam component parameters
 hdl_graph_slam_component:
@@ -161,12 +174,4 @@ hdl_graph_slam_component:
     # <remap from="/odom"            to="/scan_matching_odometry/odom" 
     # <remap from="/floor_coeffs"    to="/floor_detection/floor_coeffs" 
 
-
-# TODO map2odom publisher python script
-
-# Parameters shared across all nodes or general parameters
-/**:
-  ros__parameters:
-    points_topic: "/velodyne_points"
-    use_sim_time: false
 

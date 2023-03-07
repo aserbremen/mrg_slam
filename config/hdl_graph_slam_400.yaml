@@ -3,6 +3,7 @@
   ros__parameters:
     points_topic: "/velodyne_points"
     use_sim_time: true
+    start_rviz2: true
 
 # Transform between lidar and base_link
 lidar2base_publisher:
