@@ -48,7 +48,6 @@
   <depend condition="$ROS_VERSION == 2">pcl_ros</depend>
   <depend condition="$ROS_VERSION == 2">rclcpp</depend>
   <depend condition="$ROS_VERSION == 2">rospy</depend>
-  <depend condition="$ROS_VERSION == 2">nodelet</depend>
   <depend condition="$ROS_VERSION == 2">geodesy</depend>
   <depend condition="$ROS_VERSION == 2">std_msgs</depend>
   <depend condition="$ROS_VERSION == 2">nmea_msgs</depend>
