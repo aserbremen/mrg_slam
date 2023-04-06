@@ -273,13 +273,6 @@ install(
 )
 # ament_export_libraries(hdl_graph_slam_component)
 
-# Install necessary directories to install folder
-install(DIRECTORY 
-  config
-  rviz
-  DESTINATION share/${PROJECT_NAME}
-)
-
 #######################################
 ## HDL Graph Slam manual composition ##
 #######################################
@@ -307,6 +300,25 @@ endif()
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
 # TODO: ament_export_targets
+
+# Install necessary directories to install folder
+install(DIRECTORY 
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install ROS2 launch files
+install(PROGRAMS
+  launch/hdl_graph_slam_400.launch.py
+  launch/hdl_graph_slam_501.launch.py
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+# Install ROS2 rviz configs
+install(FILES
+  rviz/hdl_graph_slam_ros2.rviz
+  DESTINATION share/${PROJECT_NAME}/rviz
+)
 
 # Install python nodes
 ament_python_install_package(scripts)
