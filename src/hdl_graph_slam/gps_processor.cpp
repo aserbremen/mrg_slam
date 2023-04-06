@@ -34,25 +34,29 @@ namespace hdl_graph_slam {
 void
 GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
-    // TODO check if this works
     node = _node;
 
     nmea_parser.reset( new NmeaSentenceParser() );
 
-    // TODO: ROS2 parameter handling
     // gps_time_offset    = private_nh->param<double>( "gps_time_offset", 0.0 );
     // gps_edge_stddev_xy = private_nh->param<double>( "gps_edge_stddev_xy", 10000.0 );
     // gps_edge_stddev_z  = private_nh->param<double>( "gps_edge_stddev_z", 10.0 );
+    gps_time_offset    = node->declare_parameter<double>( "gps_time_offset", 0.0 );
+    gps_edge_stddev_xy = node->declare_parameter<double>( "gps_edge_stddev_xy", 10000.0 );
+    gps_edge_stddev_z  = node->declare_parameter<double>( "gps_edge_stddev_z", 10.0 );
 
-    // TODO: ROS2 parameter handling and check subscriptions
     // if( private_nh->param<bool>( "enable_gps", true ) ) {
-    nmea_sub   = node->create_subscription<nmea_msgs::msg::Sentence>( "/gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
-                                                                    std::bind( &GpsProcessor::nmea_callback, this, _1 ) );
-    navsat_sub = node->create_subscription<sensor_msgs::msg::NavSatFix>( "/gps/navsat", rclcpp::QoS( 1024 ),
-                                                                         std::bind( &GpsProcessor::navsat_callback, this, _1 ) );
-    gps_sub    = node->create_subscription<geographic_msgs::msg::GeoPointStamped>( "/gps/geopoint", rclcpp::QoS( 1024 ),
-                                                                                std::bind( &GpsProcessor::gps_callback, this, _1 ) );
-    // }
+    if( node->declare_parameter<bool>( "enable_gps", true ) ) {
+        nmea_sub   = node->create_subscription<nmea_msgs::msg::Sentence>( "/gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
+                                                                        std::bind( &GpsProcessor::nmea_callback, this, _1 ) );
+        navsat_sub = node->create_subscription<sensor_msgs::msg::NavSatFix>( "/gps/navsat", rclcpp::QoS( 1024 ),
+                                                                             std::bind( &GpsProcessor::navsat_callback, this, _1 ) );
+        gps_sub    = node->create_subscription<geographic_msgs::msg::GeoPointStamped>( "/gps/geopoint", rclcpp::QoS( 1024 ),
+                                                                                    std::bind( &GpsProcessor::gps_callback, this, _1 ) );
+    }
+
+    gps_edge_robust_kernel      = node->declare_parameter<std::string>( "gps_edge_robust_kernel", "NONE" );
+    gps_edge_robust_kernel_size = node->declare_parameter<double>( "gps_edge_robust_kernel_size", 1.0 );
 }
 
 
@@ -202,9 +206,9 @@ GpsProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             information_matrix( 2, 2 ) /= gps_edge_stddev_z;
             edge = graph_slam->add_se3_prior_xyz_edge( keyframe->node, xyz, information_matrix );
         }
-        // TODO: ROS2 parameter handling
         // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "gps_edge_robust_kernel", "NONE" ),
         //                                private_nh->param<double>( "gps_edge_robust_kernel_size", 1.0 ) );
+        graph_slam->add_robust_kernel( edge, gps_edge_robust_kernel, gps_edge_robust_kernel_size );
 
         updated = true;
     }

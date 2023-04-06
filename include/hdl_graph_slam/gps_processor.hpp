@@ -49,6 +49,8 @@ private:
     double                                                 gps_time_offset;
     double                                                 gps_edge_stddev_xy;
     double                                                 gps_edge_stddev_z;
+    std::string                                            gps_edge_robust_kernel;
+    double                                                 gps_edge_robust_kernel_size;
     boost::optional<Eigen::Vector3d>                       zero_utm_vec;
     std::mutex                                             gps_queue_mutex;
     std::deque<geographic_msgs::msg::GeoPointStamped::Ptr> gps_queue;
