@@ -160,7 +160,7 @@ public:
         // TODO further specify qos profile
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
-        odom_sub.subscribe( node_ros, "/odom", qos );
+        odom_sub.subscribe( node_ros, "/scan_matching_odometry/odom", qos );
         qos.depth = 32;
         cloud_sub.subscribe( node_ros, "/filtered_points", qos );
         // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
@@ -305,8 +305,6 @@ private:
     // void cloud_callback( const nav_msgs::OdometryConstPtr &odom_msg, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg )
     void cloud_callback( nav_msgs::msg::Odometry::ConstSharedPtr odom_msg, sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
-        RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in synced callback odom ts %.9f, cloud ts %.9f",
-                     rclcpp::Time( odom_msg->header.stamp ).seconds(), rclcpp::Time( cloud_msg->header.stamp ).seconds() );
         // const ros::Time  &stamp = cloud_msg->header.stamp;
         const builtin_interfaces::msg::Time &stamp = cloud_msg->header.stamp;
         Eigen::Isometry3d                    odom  = odom2isometry( odom_msg );
@@ -445,10 +443,8 @@ private:
                 std::stringstream sstp;
                 if( this->has_parameter( "init_pose" ) ) {
                     sstp << this->get_parameter( "init_pose" ).as_string();
-                    RCLCPP_INFO( this->get_logger(), "TAKE me out, init pose %s", sstp.str().c_str() );
                 } else {
                     sstp << this->declare_parameter<std::string>( "init_pose", "0 0 0 0 0 0" );
-                    RCLCPP_INFO( this->get_logger(), "TAKE me out, init pose %s", sstp.str().c_str() );
                 }
                 Eigen::Matrix<double, 6, 1> p;
                 for( int i = 0; i < 6; i++ ) {
@@ -504,10 +500,8 @@ private:
                     std::stringstream sststd;
                     if( this->has_parameter( "fix_first_node_stddev" ) ) {
                         sststd << this->get_parameter( "fix_first_node_stddev" ).as_string();
-                        RCLCPP_INFO( this->get_logger(), "TAKE me out, fix_first_node_stddev %s", sststd.str().c_str() );
                     } else {
                         sststd << this->declare_parameter<std::string>( "fix_first_node_stddev", "0 0 0 0 0 0" );
-                        RCLCPP_INFO( this->get_logger(), "TAKE me out, fix_first_node_stddev %s", sststd.str().c_str() );
                     }
                     for( int i = 0; i < 6; i++ ) {
                         double stddev = 1.0;
@@ -750,7 +744,7 @@ private:
             auto &kf = others_prev_robot_keyframes[latest_keyframe.first];
             kf.first = keyframe_gids[*latest_keyframe.second.first];  // pointer to keyframe
             // tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
-            // tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
+            tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
         }
 
         graph_queue.clear();
@@ -930,7 +924,6 @@ private:
     // void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
     void map_points_publish_timer_callback()
     {
-        RCLCPP_INFO( this->get_logger(), "INSIDE map points timer callback, TAKE ME OUT" );
         // if( !map_points_pub.getNumSubscribers() ) {
         if( !map_points_pub->get_subscription_count() ) {
             return;
@@ -1080,8 +1073,6 @@ private:
     // void optimization_timer_callback( const ros::WallTimerEvent &event )
     void optimization_timer_callback()
     {
-        RCLCPP_INFO( this->get_logger(), "TAKE ME OUT. in optimizationtimer callback" );
-
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
         // add keyframes and floor coeffs in the queues to the pose graph

@@ -181,7 +181,6 @@ private:
         pcl::fromROSMsg( *src_cloud_ros, *src_cloud );
         // src_cloud_ros is already a shared ptr with msg type
         // pcl::PointCloud<PointT>::ConstPtr src_cloud = src_cloud_r.makeShared();
-        // TODO: verify if statement
         if( src_cloud->empty() ) {
             return;
         }

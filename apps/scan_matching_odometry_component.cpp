@@ -252,7 +252,6 @@ private:
             return;
         }
 
-
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
         pcl::fromROSMsg( *cloud_msg, *cloud );
 
