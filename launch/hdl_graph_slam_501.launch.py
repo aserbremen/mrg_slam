@@ -49,7 +49,6 @@ def generate_launch_description():
 
     # Start rviz2 from this launch file if set to true
     if shared_params["start_rviz2"]:
-        print(os.path.join(get_package_share_directory("hdl_graph_slam"), "rviz", "hdl_graph_slam_ros2.rviz")),
         rviz2 = Node(
             name="rviz2",
             package="rviz2",
@@ -103,7 +102,7 @@ def generate_launch_description():
         plugin="hdl_graph_slam::ScanMatchingOdometryComponent",
         name="scan_matching_odometry_component",
         parameters=[scan_matching_odometry_params, shared_params],
-        # remappings=[("/filtered_points", "/prefiltering/filtered_points")],
+        remappings=[("/filtered_points", "/prefiltering/filtered_points")],
         extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
     )
 
