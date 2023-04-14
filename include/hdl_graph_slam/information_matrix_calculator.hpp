@@ -19,11 +19,10 @@ public:
     InformationMatrixCalculator( rclcpp::Node::SharedPtr _node );
     ~InformationMatrixCalculator();
 
-    // TODO: ROS2 migrations is this function ever called?
+    // this function is not called in ROS2
     template<typename ParamServer>
     void load( ParamServer& params )
     {
-        // TODO: ROS2 parameter handling
         // use_const_inf_matrix = params.template param<bool>( "use_const_inf_matrix", false );
         // const_stddev_x       = params.template param<double>( "const_stddev_x", 0.5 );
         // const_stddev_q       = params.template param<double>( "const_stddev_q", 0.1 );

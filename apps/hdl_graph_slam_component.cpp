@@ -96,7 +96,7 @@ public:
     }
     virtual ~HdlGraphSlamComponent() {}
 
-    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
+    // Initialize the component
     virtual void onInit()
     {
         RCLCPP_INFO( this->get_logger(), "Initializing hdl_graph_slam nodelet..." );
@@ -164,7 +164,6 @@ public:
         qos.depth = 32;
         cloud_sub.subscribe( node_ros, "/filtered_points", qos );
         // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
-        // TODO: verify synced callbacks
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
         sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
@@ -220,7 +219,7 @@ public:
         // publish_graph_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph",
         //                                                             &HdlGraphSlamComponent::publish_graph_service, this );
         // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when the callback is a class
-        // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ TODO: verify
+        // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
         // If these service callbacks dont work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Dumb service
@@ -331,7 +330,6 @@ private:
         } else {
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( *cloud_msg, *cloud );
-            // TODO: use unique_ptr for efficient intraprocess communication?
             sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg_filtered = cloud_msg;
 
             // get poses of other robots and remove corresponding points
@@ -664,7 +662,6 @@ private:
             // ROS_INFO_STREAM( "Adding keyframe: " << keyframe_ros.gid );
             RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe: " << keyframe_ros.gid );
 
-            // TODO use std::shared_ptr instead for ros2 humble and pcl 1.12 (Ubuntu 22.04)
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
             // ros::Time stamp(keyframe_ros.stamp);
@@ -909,7 +906,6 @@ private:
 
         if( !cloud_msg ) {
             // cloud_msg = sensor_msgs::PointCloud2Ptr( new sensor_msgs::PointCloud2() );
-            // TODO use unique_ptr for efficient intraprocess communication?
             cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
         }
         pcl::toROSMsg( *cloud, *cloud_msg );
@@ -950,6 +946,7 @@ private:
      * @return
      */
     // bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
+    // TODO test this service
     void get_map_service( hdl_graph_slam::srv::GetMap::Request::ConstSharedPtr req, hdl_graph_slam::srv::GetMap::Response::SharedPtr res )
     {
         std::lock_guard<std::mutex> lock( cloud_msg_mutex );
@@ -957,7 +954,7 @@ private:
         update_cloud_msg();
 
         if( !cloud_msg ) {
-            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // ROS2 services are of type void and dont return a bool.
             // return false;
             return;
         }
@@ -973,7 +970,7 @@ private:
             res->updated = false;
         }
 
-        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // ROS2 services are of type void and dont return a bool.
         // return true;
     }
 
@@ -991,7 +988,7 @@ private:
 
         if( graph_estimate_msg_update_required ) {
             if( keyframes_snapshot.empty() || edges_snapshot.empty() ) {
-                // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+                // ROS2 services are of type void and dont return a bool.
                 // return false;
                 return;
             }
@@ -1044,7 +1041,7 @@ private:
         }
 
         if( !graph_estimate_msg ) {
-            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // ROS2 services are of type void and dont return a bool.
             // return false;
             return;
         }
@@ -1062,7 +1059,7 @@ private:
             res->updated = false;
         }
 
-        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // ROS2 services are of type void and dont return a bool.
         // return true;
     }
 
@@ -1234,7 +1231,7 @@ private:
         std::cout << "all data dumped to:" << directory << std::endl;
 
         graph_slam->save( directory + "/graph.g2o" );
-        for( int i = 0; i < keyframes.size(); i++ ) {
+        for( int i = 0; i < (int)keyframes.size(); i++ ) {
             std::stringstream sst;
             sst << boost::format( "%s/%06d" ) % directory % i;
 
@@ -1255,7 +1252,7 @@ private:
 
         // res.success = true;
         res->success = true;
-        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // ROS2 services are of type void and dont return a bool.
         // return true;
     }
 
@@ -1280,7 +1277,7 @@ private:
         if( !cloud ) {
             // res.success = false;
             res->success = false;
-            // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+            // ROS2 services are of type void and dont return a bool.
             // return true;
             return;
         }
@@ -1307,7 +1304,7 @@ private:
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
 
-        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // ROS2 services are of type void and dont return a bool.
         // return true;
     }
 
@@ -1319,7 +1316,7 @@ private:
      * @return
      */
     // bool publish_graph_service( hdl_graph_slam::PublishGraphRequest &req, hdl_graph_slam::PublishGraphResponse &res )
-    // TODO ROS2 verify it seems
+    // TODO ROS2 test this
     void publish_graph_service( hdl_graph_slam::srv::PublishGraph::Request::ConstSharedPtr req,
                                 hdl_graph_slam::srv::PublishGraph::Response::SharedPtr     res )
     {
@@ -1329,7 +1326,7 @@ private:
             std::lock_guard<std::mutex> lock( main_thread_mutex );
 
             if( keyframes.empty() ) {
-                // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+                // ROS2 services are of type void and dont return a bool.
                 // return false;
             }
 
@@ -1368,7 +1365,7 @@ private:
         // graph_broadcast_pub.publish( msg );
         graph_broadcast_pub->publish( msg );
 
-        // TODO ROS2 services are of type void and dont return a bool. Add success flag to necessary responses?
+        // ROS2 services are of type void and dont return a bool.
         // return true;
     }
 
@@ -1447,7 +1444,7 @@ private:
     // latest point cloud map
     std::mutex       cloud_msg_mutex;
     std::atomic_bool cloud_msg_update_required;
-    // sensor_msgs::PointCloud2Ptr cloud_msg; // TODO unique ptr for efficient intraprocess communication?
+    // sensor_msgs::PointCloud2Ptr cloud_msg;
     sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg;
 
     // latest graph estimate

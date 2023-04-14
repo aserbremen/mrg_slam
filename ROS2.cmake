@@ -21,7 +21,6 @@ find_package(geographic_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
-# find_package(eigen_conversions REQUIRED) # TODO: deal with it later, not sure if available in ROS2
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
 # ROS2 python depencencies
@@ -263,7 +262,6 @@ rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesu
 rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")
 set(node_plugins "{node_plugins}hdl_graph_slam::HdlGraphSlamComponent;$<TARGET_FILE:hdl_graph_slam_component>\n")
 # Install the hdl_graph_slam_component (hdl_graph_slam_component.so) in workspace install folder
-# TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
 install(
   TARGETS hdl_graph_slam_component
   EXPORT hdl_graph_slam_component
@@ -271,7 +269,6 @@ install(
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
 )
-# ament_export_libraries(hdl_graph_slam_component)
 
 #######################################
 ## HDL Graph Slam manual composition ##
@@ -297,9 +294,13 @@ if (BUILD_MANUAL_COMPOSITION)
 endif()
 
 # Here we can export all downstream dependencies and include directories
+# TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
+# TODO export package for downstream packages to use see: https://discourse.ros.org/t/ament-best-practice-for-sharing-libraries/3602/2
+# also see: https://answers.ros.org/question/331277/ament_cmake-confused-about-ament_export_dependencies-and-ament_export_interfaces/
+# ament_export_libraries(${PROJECT_NAME})
+# ament_export_interfaces(${PROJECT_NAME})
 ament_export_dependencies(rosidl_default_runtime)
 ament_export_include_directories(include)
-# TODO: ament_export_targets
 
 # Install necessary directories to install folder
 install(DIRECTORY 

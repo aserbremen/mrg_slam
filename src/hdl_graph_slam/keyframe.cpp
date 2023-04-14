@@ -12,7 +12,7 @@
 namespace hdl_graph_slam {
 
 KeyFrame::KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
-                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstPtr& cloud_msg ) :
+                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
     stamp( stamp ),
     odom( odom ),
     accum_distance( accum_distance ),
@@ -213,8 +213,8 @@ KeyFrame::edge_exists( const KeyFrame& other ) const
     // check if both nodes are connected by an edge already
     for( const auto& node_edge : from_node->edges() ) {
         if( node_edge->vertices().size() == 2 ) {
-            if( node_edge->vertex( 0 ) == from_node && node_edge->vertex( 1 ) == to_node
-                || node_edge->vertex( 0 ) == to_node && node_edge->vertex( 1 ) == from_node ) {
+            if( ( node_edge->vertex( 0 ) == from_node && node_edge->vertex( 1 ) == to_node )
+                || ( node_edge->vertex( 0 ) == to_node && node_edge->vertex( 1 ) == from_node ) ) {
                 exist = true;
                 break;
             }
@@ -240,8 +240,8 @@ KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_
     id( key->id() ),
     gid( key->gid ),
     pose( key->node->estimate() ),
-    exclude_from_map( key->exclude_from_map ),
-    cloud( key->cloud )
+    cloud( key->cloud ),
+    exclude_from_map( key->exclude_from_map )
 {
     if( marginals ) {
         covariance = key->covariance( marginals );

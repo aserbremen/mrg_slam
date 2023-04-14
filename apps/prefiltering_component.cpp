@@ -164,7 +164,7 @@ private:
         distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
         distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
 
-        // TODO set base_link_frame externally since it is not set in this node?
+        // Set within config yaml files
         base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "" );
     }
 
@@ -172,7 +172,6 @@ private:
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
 
     // void cloud_callback( const pcl::PointCloud<PointT>& src_cloud_r )
-    // TODO ROS2 pass unique_ptr for efficient intra process communication?
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros )
     {
         // Convert to pcl pointcloud from ros PointCloud2
@@ -206,6 +205,7 @@ private:
             } catch( const tf2::TransformException& ex ) {
                 RCLCPP_WARN( this->get_logger(), "Could not transform source frame %s to target frame %s: %s",
                              src_cloud->header.frame_id.c_str(), base_link_frame.c_str(), ex.what() );
+                RCLCPP_WARN( this->get_logger(), "Returning early in cloud_callback from prefiltering component" );
                 // TODO return here?
                 return;
             }
@@ -217,12 +217,10 @@ private:
             src_cloud                    = transformed;
         }
 
-        // TODO, verify
         pcl::PointCloud<PointT>::ConstPtr filtered = distance_filter( src_cloud );
         filtered                                   = downsample( filtered );
         filtered                                   = outlier_removal( filtered );
         sensor_msgs::msg::PointCloud2 filtered_ros;
-        // TODO optimize out this conversion?
         pcl::toROSMsg( *filtered, filtered_ros );
 
         // points_pub.publish( *filtered );
@@ -296,14 +294,13 @@ private:
             colored->height   = cloud->height;
             colored->resize( cloud->size() );
 
-            for( int i = 0; i < cloud->size(); i++ ) {
+            for( int i = 0; i < (int)cloud->size(); i++ ) {
                 double t                          = static_cast<double>( i ) / cloud->size();
                 colored->at( i ).getVector4fMap() = cloud->at( i ).getVector4fMap();
                 colored->at( i ).r                = 255 * t;
                 colored->at( i ).g                = 128;
                 colored->at( i ).b                = 255 * ( 1 - t );
             }
-            // TODO optimize out this conversion?
             sensor_msgs::msg::PointCloud2 colored_ros;
             pcl::toROSMsg( *colored, colored_ros );
             // colored_pub.publish( *colored );
@@ -338,10 +335,10 @@ private:
         // TODO potentially add class member for scan period if it doesnt change during runtime
         double scan_period = this->has_parameter( "scan_period" ) ? this->get_parameter( "scan_period" ).as_double()
                                                                   : this->declare_parameter<double>( "scan_period", 0.1 );
-        for( int i = 0; i < cloud->size(); i++ ) {
+        for( int i = 0; i < (int)cloud->size(); i++ ) {
             const auto& pt = cloud->at( i );
 
-            // TODO: transform IMU data into the LIDAR frame
+            // TODO (from original repo): transform IMU data into the LIDAR frame
             double             delta_t = scan_period * static_cast<double>( i ) / cloud->size();
             Eigen::Quaternionf delta_q( 1, delta_t / 2.0 * ang_v[0], delta_t / 2.0 * ang_v[1], delta_t / 2.0 * ang_v[2] );
             Eigen::Vector3f    pt_ = delta_q.inverse() * pt.getVector3fMap();
@@ -364,8 +361,6 @@ private:
 
     // ros::Subscriber points_sub;
     // ros::Publisher  points_pub;
-    // TODO: define pointcloud2 as unique ptr for efficient intra process communication?
-    // https://docs.ros.org/en/foxy/Tutorials/Demos/Intra-Process-Communication.html
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    points_pub;
 

@@ -81,7 +81,7 @@ public:
 
     GPRMC parse( const std::string& sentence ) const
     {
-        int checksum_loc = sentence.find( '*' );
+        size_t checksum_loc = sentence.find( '*' );
         if( checksum_loc == std::string::npos ) {
             return GPRMC();
         }
@@ -90,7 +90,7 @@ public:
 
         std::string substr = sentence.substr( 1, checksum_loc - 1 );
         int         sum    = std::accumulate( substr.begin(), substr.end(), static_cast<unsigned char>( 0 ),
-                                   [=]( unsigned char n, unsigned char c ) { return n ^ c; } );
+                                              [=]( unsigned char n, unsigned char c ) { return n ^ c; } );
 
         if( checksum != ( sum & 0xf ) ) {
             std::cerr << "checksum doesn't match!!" << std::endl;

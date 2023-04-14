@@ -48,7 +48,7 @@ private:
     bool                                        enable_imu_acceleration;
     double                                      imu_acceleration_edge_stddev;
     std::mutex                                  imu_queue_mutex;
-    std::deque<sensor_msgs::msg::Imu::ConstPtr> imu_queue;
+    std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_queue;
 };
 
 }  // namespace hdl_graph_slam

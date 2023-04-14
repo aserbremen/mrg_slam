@@ -219,7 +219,8 @@ GpsProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
     //                                     } );
     // TODO: check this lambda function
     auto remove_loc = std::upper_bound( gps_queue.begin(), gps_queue.end(), rclcpp::Time( keyframes.back()->stamp ),
-                                        [=]( const rclcpp::Time& stamp, const geographic_msgs::msg::GeoPointStamped::ConstPtr& geopoint ) {
+                                        [=]( const rclcpp::Time&                                          stamp,
+                                             const geographic_msgs::msg::GeoPointStamped::ConstSharedPtr& geopoint ) {
                                             return stamp < rclcpp::Time( geopoint->header.stamp );
                                         } );
     gps_queue.erase( gps_queue.begin(), remove_loc );

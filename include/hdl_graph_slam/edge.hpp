@@ -7,7 +7,7 @@
 #include <hdl_graph_slam/global_id.hpp>
 // ROS2 migration
 // ASTODO: Check whether ROS is needed at all in this class
-#include <rclcpp/rclcpp.hpp>
+// #include <rclcpp/rclcpp.hpp>
 
 
 namespace g2o {

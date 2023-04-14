@@ -2,7 +2,6 @@
 
 #include <g2o/types/slam3d/edge_se3.h>
 #include <tf2/exceptions.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <Eigen/Dense>
 #include <g2o/edge_se3_priorquat.hpp>
@@ -10,6 +9,7 @@
 #include <geometry_msgs/msg/quaternion_stamped.hpp>
 #include <geometry_msgs/msg/vector3_stamped.hpp>
 #include <hdl_graph_slam/imu_processor.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace hdl_graph_slam {
 
@@ -101,8 +101,8 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             continue;
         }
 
-        const auto& imu_ori = ( *closest_imu )->orientation;
-        const auto& imu_acc = ( *closest_imu )->linear_acceleration;
+        // const auto& imu_ori = ( *closest_imu )->orientation;
+        // const auto& imu_acc = ( *closest_imu )->linear_acceleration;
 
         geometry_msgs::msg::Vector3Stamped    acc_imu;
         geometry_msgs::msg::Vector3Stamped    acc_base;
@@ -181,7 +181,7 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
     }
 
     auto remove_loc = std::upper_bound( imu_queue.begin(), imu_queue.end(), rclcpp::Time( keyframes.back()->stamp ),
-                                        [=]( const rclcpp::Time& stamp, const sensor_msgs::msg::Imu::ConstPtr imu ) {
+                                        [=]( const rclcpp::Time& stamp, const sensor_msgs::msg::Imu::ConstSharedPtr imu ) {
                                             return stamp < rclcpp::Time( imu->header.stamp );
                                         } );
     imu_queue.erase( imu_queue.begin(), remove_loc );

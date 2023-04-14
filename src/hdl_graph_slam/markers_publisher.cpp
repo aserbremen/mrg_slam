@@ -147,7 +147,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     traj_marker.points.resize( keyframes.size() );
     traj_marker.colors.resize( keyframes.size() );
-    for( int i = 0; i < keyframes.size(); i++ ) {
+    for( int i = 0; i < (int)keyframes.size(); i++ ) {
         Eigen::Vector3d pos     = keyframes[i]->node->estimate().translation();
         traj_marker.points[i].x = pos.x();
         traj_marker.points[i].y = pos.y();

@@ -34,7 +34,7 @@ public:
     using ConstPtr = std::shared_ptr<const KeyFrame>;
 
     KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
-              const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstPtr& cloud_msg = nullptr );
+              const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
     virtual ~KeyFrame();
 
@@ -51,15 +51,15 @@ public:
     bool edge_exists( const KeyFrame& other ) const;
 
 public:
-    builtin_interfaces::msg::Time           stamp;             // timestamp
-    Eigen::Isometry3d                       odom;              // odometry (estimated by scan_matching_odometry)
-    double                                  accum_distance;    // accumulated distance from the first node (by scan_matching_odometry)
-    GlobalId                                gid;               // global id
-    bool                                    exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
-    pcl::PointCloud<PointT>::ConstPtr       cloud;             // point cloud
-    sensor_msgs::msg::PointCloud2::ConstPtr cloud_msg;         // point cloud ROS msg
-    boost::optional<Eigen::Vector4d>        floor_coeffs;      // detected floor's coefficients
-    boost::optional<Eigen::Vector3d>        utm_coord;         // UTM coord obtained by GPS
+    builtin_interfaces::msg::Time     stamp;                     // timestamp
+    Eigen::Isometry3d                 odom;                      // odometry (estimated by scan_matching_odometry)
+    double                            accum_distance;            // accumulated distance from the first node (by scan_matching_odometry)
+    GlobalId                          gid;                       // global id
+    bool                              exclude_from_map;          // whether the corresponding point cloud should be excluded from the map
+    pcl::PointCloud<PointT>::ConstPtr cloud;                     // point cloud
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg;     // point cloud ROS msg
+    boost::optional<Eigen::Vector4d>              floor_coeffs;  // detected floor's coefficients
+    boost::optional<Eigen::Vector3d>              utm_coord;     // UTM coord obtained by GPS
 
     boost::optional<Eigen::Vector3d>    acceleration;  //
     boost::optional<Eigen::Quaterniond> orientation;   //

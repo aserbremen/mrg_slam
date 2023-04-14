@@ -228,12 +228,11 @@ private:
             filtered->header = cloud->header;
             sensor_msgs::msg::PointCloud2 filtered_ros;
             pcl::toROSMsg( *filtered, filtered_ros );
-            // TODO: verify
             floor_filtered_pub->publish( filtered_ros );
         }
 
         // too few points for RANSAC
-        if( filtered->size() < floor_pts_thresh ) {
+        if( (int)filtered->size() < floor_pts_thresh ) {
             return boost::none;
         }
 
@@ -247,7 +246,7 @@ private:
         ransac.getInliers( inliers->indices );
 
         // too few inliers
-        if( inliers->indices.size() < floor_pts_thresh ) {
+        if( (int)inliers->indices.size() < floor_pts_thresh ) {
             return boost::none;
         }
 
@@ -333,7 +332,7 @@ private:
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT> );
         filtered->reserve( cloud->size() );
 
-        for( int i = 0; i < cloud->size(); i++ ) {
+        for( int i = 0; i < (int)cloud->size(); i++ ) {
             float dot = normals->at( i ).getNormalVector3fMap().normalized().dot( Eigen::Vector3f::UnitZ() );
             if( std::abs( dot ) > std::cos( normal_filter_thresh * M_PI / 180.0 ) ) {
                 filtered->push_back( cloud->at( i ) );

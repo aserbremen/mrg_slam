@@ -26,7 +26,6 @@ class GpsProcessor {
 public:
     GpsProcessor() : node( nullptr ) {}
 
-    // TODO check if one node in ROS2 is sufficient to replace three node handles below
     // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr _node );
 
@@ -46,14 +45,14 @@ private:
 
     std::unique_ptr<NmeaSentenceParser> nmea_parser;
 
-    double                                                 gps_time_offset;
-    double                                                 gps_edge_stddev_xy;
-    double                                                 gps_edge_stddev_z;
-    std::string                                            gps_edge_robust_kernel;
-    double                                                 gps_edge_robust_kernel_size;
-    boost::optional<Eigen::Vector3d>                       zero_utm_vec;
-    std::mutex                                             gps_queue_mutex;
-    std::deque<geographic_msgs::msg::GeoPointStamped::Ptr> gps_queue;
+    double                                                       gps_time_offset;
+    double                                                       gps_edge_stddev_xy;
+    double                                                       gps_edge_stddev_z;
+    std::string                                                  gps_edge_robust_kernel;
+    double                                                       gps_edge_robust_kernel_size;
+    boost::optional<Eigen::Vector3d>                             zero_utm_vec;
+    std::mutex                                                   gps_queue_mutex;
+    std::deque<geographic_msgs::msg::GeoPointStamped::SharedPtr> gps_queue;
 };
 
 }  // namespace hdl_graph_slam

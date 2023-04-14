@@ -55,7 +55,7 @@ public:
 
         if( this->declare_parameter<bool>( "enable_imu_frontend", false ) ) {
             // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters
-            // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ TODO: verify
+            // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, false );
             msf_pose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "/msf_core/pose", rclcpp::QoS( 1 ),
@@ -244,7 +244,6 @@ private:
     //     read_until->frame_id = "/filtered_points";
     //     read_until_pub.publish( read_until );
     // }
-    // TODO: maybe speed up by using unique_ptr callback https://docs.ros.org/en/foxy/Tutorials/Demos/Intra-Process-Communication.html
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
         // if( !ros::ok() ) {
@@ -347,8 +346,6 @@ private:
                 std::cerr << "msf data is too old" << std::endl;
             }
             // } else if( private_nh.param<bool>( "enable_robot_odometry_init_guess", false ) && !prev_time.isZero() ) {
-            // ROS2: enable_robot_odometry_init_guess is declared once in the constructor so that it is only evaluated here, maybe declaring
-            // it in the constructor is unnecessary, depending on launch script or parameter yaml
         } else if( this->get_parameter( "enable_robot_odometry_init_guess" ).as_bool() && !( prev_time.nanoseconds() == 0 ) ) {
             // tf::StampedTransform transform;
             geometry_msgs::msg::TransformStamped transform;
@@ -370,8 +367,7 @@ private:
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );
                 } catch( const tf2::TransformException& ex ) {
-                    // Lets info a quite verbose message
-                    RCLCPP_INFO( this->get_logger(),
+                    RCLCPP_WARN( this->get_logger(),
                                  "Could not look up transform with target frame %s, target time %9.f, source frame %s, source time %.9f, "
                                  "fixed frame %s: %s",
                                  cloud->header.frame_id.c_str(), stamp.seconds(), cloud->header.frame_id.c_str(), prev_time.seconds(),
@@ -383,8 +379,7 @@ private:
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, rclcpp::Time( 0 ), cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );
                 } catch( const tf2::TransformException& ex ) {
-                    // Lets info a quite verbose message
-                    RCLCPP_INFO( this->get_logger(),
+                    RCLCPP_WARN( this->get_logger(),
                                  "Could not look up transform with target frame %s, target time %9.f, source frame %s, source time %.9f, "
                                  "fixed frame %s: %s",
                                  cloud->header.frame_id.c_str(), stamp.seconds(), cloud->header.frame_id.c_str(), prev_time.seconds(),
@@ -456,7 +451,6 @@ private:
             pcl::transformPointCloud( *cloud, *aligned, odom );
             aligned->header.frame_id = odom_frame_id;
             sensor_msgs::msg::PointCloud2 aligned_ros2;
-            // TODO: ROS2 optimize out this operation somehow?
             pcl::toROSMsg( *aligned, aligned_ros2 );
             // aligned_points_pub.publish( *aligned );
             aligned_points_pub->publish( aligned_ros2 );
@@ -481,7 +475,6 @@ private:
 
         // broadcast the transform over tf
         // odom_broadcaster.sendTransform( odom_trans );
-        // TODO: verify
         odom_broadcaster->sendTransform( odom_trans );
 
         // publish the transform
@@ -501,6 +494,7 @@ private:
         odom.twist.twist.angular.z = 0.0;
 
         // odom_pub.publish( odom );
+        // TODO transform odometry into correct frame for displaying it correctly in rviz?
         odom_pub->publish( odom );
     }
 
@@ -529,7 +523,7 @@ private:
         int                num_inliers = 0;
         std::vector<int>   k_indices;
         std::vector<float> k_sq_dists;
-        for( int i = 0; i < aligned->size(); i++ ) {
+        for( int i = 0; i < (int)aligned->size(); i++ ) {
             const auto& pt = aligned->at( i );
             registration->getSearchMethodTarget()->nearestKSearch( pt, 1, k_indices, k_sq_dists );
             if( k_sq_dists[0] < max_correspondence_dist * max_correspondence_dist ) {

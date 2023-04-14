@@ -50,7 +50,7 @@ namespace hdl_graph_slam {
 
 //     return odom_trans;
 // }
-static geometry_msgs::msg::TransformStamped
+inline geometry_msgs::msg::TransformStamped
 matrix2transform( const rclcpp::Time& stamp, const Eigen::Matrix4f& pose, const std::string& frame_id, const std::string& child_frame_id )
 {
     Eigen::Quaternionf quat( pose.block<3, 3>( 0, 0 ) );
@@ -83,7 +83,7 @@ matrix2transform( const rclcpp::Time& stamp, const Eigen::Matrix4f& pose, const 
 //     mat.linear() = Eigen::Quaterniond( pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z
 //     ).toRotationMatrix(); return mat;
 // }
-static Eigen::Isometry3d
+inline Eigen::Isometry3d
 pose2isometry( const geometry_msgs::msg::Pose& pose )
 {
     Eigen::Isometry3d mat = Eigen::Isometry3d::Identity();
@@ -103,7 +103,7 @@ pose2isometry( const geometry_msgs::msg::Pose& pose )
 //                        .toRotationMatrix();
 //     return mat;
 // }
-static Eigen::Isometry3d
+inline Eigen::Isometry3d
 tf2isometry( const geometry_msgs::msg::TransformStamped& trans )
 {
     Eigen::Isometry3d mat = Eigen::Isometry3d::Identity();
@@ -131,7 +131,7 @@ tf2isometry( const geometry_msgs::msg::TransformStamped& trans )
 
 //     return pose;
 // }
-static geometry_msgs::msg::Pose
+inline geometry_msgs::msg::Pose
 isometry2pose( const Eigen::Isometry3d& mat )
 {
     Eigen::Quaterniond quat( mat.linear() );
@@ -166,8 +166,8 @@ isometry2pose( const Eigen::Isometry3d& mat )
 //     isometry.translation()     = Eigen::Vector3d( position.x, position.y, position.z );
 //     return isometry;
 // }
-static Eigen::Isometry3d
-odom2isometry( const nav_msgs::msg::Odometry::ConstPtr& odom_msg )
+inline Eigen::Isometry3d
+odom2isometry( const nav_msgs::msg::Odometry::ConstSharedPtr& odom_msg )
 {
     const auto& orientation = odom_msg->pose.pose.orientation;
     const auto& position    = odom_msg->pose.pose.position;

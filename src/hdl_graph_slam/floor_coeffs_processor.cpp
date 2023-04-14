@@ -114,7 +114,7 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
     //                                         return stamp < coeffs->header.stamp;
     //                                     } );
     auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), rclcpp::Time( latest_keyframe_stamp ),
-                                        [=]( const rclcpp::Time &stamp, const hdl_graph_slam::msg::FloorCoeffs::ConstPtr &coeffs ) {
+                                        [=]( const rclcpp::Time &stamp, const hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr &coeffs ) {
                                             return stamp < rclcpp::Time( coeffs->header.stamp );
                                         } );
     floor_coeffs_queue.erase( floor_coeffs_queue.begin(), remove_loc );
