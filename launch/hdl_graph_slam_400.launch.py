@@ -92,7 +92,6 @@ def generate_launch_description():
         plugin="hdl_graph_slam::PrefilteringComponent",
         name="prefiltering_component",
         parameters=[prefiltering_params, shared_params],
-        # TODO verify how often remapping is needed
         remappings=[("/velodyne_points", shared_params["points_topic"])],
         extra_arguments=[{"use_intra_process_comms": True}]  # TODO verify
     )

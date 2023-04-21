@@ -2,7 +2,7 @@
 /**:
   ros__parameters:
     points_topic: "/velodyne_points"
-    use_sim_time: false # true for rosbags, false for gazebo
+    use_sim_time: true # true for rosbags, false for gazebo
     start_rviz2: true
 
 # Transform between lidar and base_link
@@ -14,7 +14,7 @@ lidar2base_publisher:
     roll: 0.0
     pitch: 0.0
     yaw: 0.0
-    base_frame_id: "atlas/base_link/front_laser" # default "base_link"
+    base_frame_id: "base_link" # default "base_link"
     lidar_frame_id: "velodyne"
 
 # In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
@@ -25,7 +25,7 @@ clock_publisher_ros2:
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
-    base_link_frame: "atlas/base_link/front_laser" # default "base_link"
+    base_link_frame: "base_link" # default "base_link"
     
     deskewing: false
     
