@@ -11,15 +11,6 @@ Panels:
         - /atlas/hdl_graph_slam/markers1/Namespaces1
         - /atlas/hdl_graph_slam/markers_covariance1/Topic1
         - /atlas/hdl_graph_slam/markers_covariance1/Namespaces1
-        - /TF1
-        - /TF1/Status1
-        - /TF1/Frames1/atlas/base_link/front_laser1
-        - /TF1/Frames1/atlas/velodyne1
-        - /TF1/Frames1/map1
-        - /TF1/Frames1/odom1
-        - /TF1/Frames1/keyframe1
-        - /TF1/Tree1/map1
-        - /TF1/Tree1/map1/atlas/base_link/front_laser1
       Splitter Ratio: 0.6698113083839417
     Tree Height: 915
   - Class: rviz_common/Selection
@@ -68,7 +59,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 115
@@ -89,7 +80,7 @@ Visualization Manager:
         Value: /atlas/velodyne_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -102,7 +93,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 123.66666412353516
@@ -123,7 +114,7 @@ Visualization Manager:
         Value: /atlas/prefiltering/filtered_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -136,7 +127,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: ""
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -157,7 +148,7 @@ Visualization Manager:
         Value: /atlas/prefiltering/colored_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Angle Tolerance: 0.10000000149011612
       Class: rviz_default_plugins/Odometry
       Covariance:
@@ -175,7 +166,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Keep: 100
       Name: atlas/scan_matching_odometry/odom
       Position Tolerance: 0.10000000149011612
@@ -196,7 +187,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /atlas/scan_matching_odometry/odom
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -209,10 +200,10 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 114
+      Max Intensity: 0
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: atlas/scan_matching_odometry/aligned_points
@@ -230,7 +221,7 @@ Visualization Manager:
         Value: /atlas/scan_matching_odometry/aligned_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -243,7 +234,7 @@ Visualization Manager:
       Color: 115; 210; 22
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 90.5
@@ -264,7 +255,7 @@ Visualization Manager:
         Value: /atlas/floor_detection/floor_filtered_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -277,7 +268,7 @@ Visualization Manager:
       Color: 129; 61; 156
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 103
@@ -298,7 +289,7 @@ Visualization Manager:
         Value: /atlas/floor_detection/floor_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
@@ -337,7 +328,11 @@ Visualization Manager:
       Enabled: true
       Name: atlas/hdl_graph_slam/markers
       Namespaces:
-        {}
+        last_nodes: true
+        loop_close_radius: false
+        main_edges: true
+        misc_edges: true
+        nodes: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -346,7 +341,7 @@ Visualization Manager:
         Value: /atlas/hdl_graph_slam/markers
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: atlas/hdl_graph_slam/markers_covariance
       Namespaces:
         {}
@@ -356,7 +351,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /atlas/hdl_graph_slam/markers_covariance
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 15
@@ -379,11 +374,12 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          atlas/base_link/front_laser:
-            atlas/velodyne:
-              {}
           odom:
-            {}
+            atlas/base_link/front_laser:
+              atlas/velodyne:
+                {}
+            keyframe:
+              {}
       Update Interval: 0
       Value: true
   Enabled: true
@@ -432,7 +428,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 20.705881118774414
+      Distance: 22.203109741210938
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -447,10 +443,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9753981828689575
+      Pitch: 0.6203985214233398
       Target Frame: map
       Value: Orbit (rviz)
-      Yaw: 0.535392165184021
+      Yaw: 2.4703922271728516
     Saved: ~
 Window Geometry:
   Displays:
@@ -466,5 +462,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1815
-  X: 404
-  Y: 132
+  X: 269
+  Y: 115
