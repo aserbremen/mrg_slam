@@ -1,10 +1,11 @@
+# Parameters reused in this yaml file
+define: &lidar_odom_frame_id "odom"
+
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
     model_namespace: "atlas"
     points_topic: "/velodyne_points"
-    lidar_odom_frame_id: "odom"
-    robot_odom_frame_id: "robot_odom"
     imu_topic: "/imu/data"
     use_sim_time: false # true for rosbags, false for gazebo
     start_rviz2: true
@@ -53,13 +54,11 @@ prefiltering_component:
 
     scan_period: 0.1
     # remappings are handled in the python respective launch file
-    # remap from /velodyne_points to points_topic
 
 # Scan matching component parameters
 scan_matching_odometry_component:
   ros__parameters:
-    # points_topic: "/velodyne_points"
-    odom_frame_id: "odom"
+    odom_frame_id: *lidar_odom_frame_id
     robot_odom_frame_id: "robot_odom"
 
     keyframe_delta_trans: 1.0
@@ -87,7 +86,6 @@ scan_matching_odometry_component:
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
     # remappings are handled in the python respective launch file
-    # remap from "/filtered_points" to "/prefiltering/filtered_points"
 
 # Floor detection component parameters
 floor_detection_component:
@@ -100,7 +98,6 @@ floor_detection_component:
     use_normal_filtering: true
     normal_filter_thresh: 20.0
     # remappings are handled in the python respective launch file
-    # remap from "/filtered_points" to "/prefiltering/filtered_points"
 
 # HDL graph slam component parameters
 hdl_graph_slam_component:
@@ -116,7 +113,7 @@ hdl_graph_slam_component:
     init_pose_topic: "NONE"
     # Frame settings
     map_frame_id: "map"
-    odom_frame_id: "odom"
+    odom_frame_id: *lidar_odom_frame_id
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
@@ -183,10 +180,4 @@ hdl_graph_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.05
-    # TODO use point topics in the python launch file
     # remappings are handled in the python respective launch file
-    # remap from "/filtered_points" to "/prefiltering/filtered_points"
-    # remap from "/odom"            to "/scan_matching_odometry/odom"
-    # remap from "/floor_coeffs"    to "/floor_detection/floor_coeffs"
-
-

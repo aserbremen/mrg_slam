@@ -9,12 +9,37 @@ from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
+# Parameter type mapping to infer the correct data type from the cli string
+param_mapping = {
+    'model_namespace': str,
+    'use_sim_time': bool,
+    'enable_floor_detection': bool,
+    'enable_gps': bool,
+    'enable_imu_acceleration': bool,
+    'enable_imu_orientation': bool,
+    'tf_link_values': str,
+    'points_topic': str,
+    'map_frame_id': str,
+    'lidar_odom_frame_id': str,
+    'robot_odom_frame_id': str,
+    'enable_robot_odometry_init_guess': bool,
+    'imu_topic': str,
+    'x': float,
+    'y': float,
+    'z': float,
+    'roll': float,
+    'pitch': float,
+    'yaw': float,
+    'init_pose_topic': str
+}
+
 
 # Overwrite the parameters from the yaml file with the ones from the cli if the cli string is not empty
 def overwrite_yaml_params_from_cli(yaml_params, cli_params):
     for key, value in cli_params.items():
         if value != '':
-            yaml_params[key] = value
+            # Since all parameters from cli in ROS2 are strings, we need to infer the correct data type
+            yaml_params[key] = param_mapping[key](value)
     return yaml_params
 
 
@@ -49,8 +74,8 @@ def launch_setup(context, *args, **kwargs):
     model_namespace = shared_params['model_namespace'] if context.launch_configurations[
         'model_namespace'] == '' else context.launch_configurations['model_namespace']
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
-    hdl_graph_slam_params = overwrite_yaml_params_from_cli(hdl_graph_slam_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
+    hdl_graph_slam_params = overwrite_yaml_params_from_cli(hdl_graph_slam_params, context.launch_configurations)
 
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(static_transform_params, 'static_transform_params')
@@ -130,6 +155,7 @@ def launch_setup(context, *args, **kwargs):
         name=model_namespace + '_prefiltering_component',
         parameters=[prefiltering_params, shared_params],
         remappings=[
+            ('/imu/data', shared_params['imu_topic']),
             ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
             ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
             ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points'),
@@ -154,21 +180,22 @@ def launch_setup(context, *args, **kwargs):
         extra_arguments=[{'use_intra_process_comms': True}]
     )
 
-    floor_detection_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::FloorDetectionComponent',
-        name=model_namespace + '_floor_detection_component',
-        parameters=[floor_detection_params, shared_params],
-        remappings=[
-            ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-            ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-            ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
-            ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
-            ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')
-        ],
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    if floor_detection_params['enable_floor_detection']:
+        floor_detection_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::FloorDetectionComponent',
+            name=model_namespace + '_floor_detection_component',
+            parameters=[floor_detection_params, shared_params],
+            remappings=[
+                ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+                ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+                ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
+                ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
+                ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
     hdl_graph_slam_params['own_name'] = model_namespace
     hdl_graph_slam_node = ComposableNode(
@@ -177,6 +204,7 @@ def launch_setup(context, *args, **kwargs):
         name=model_namespace + '_hdl_graph_slam_component',
         parameters=[hdl_graph_slam_params, shared_params],
         remappings=[
+            ('/imu/data', shared_params['imu_topic']),
             ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
             ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
             ('floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
@@ -224,6 +252,7 @@ def generate_launch_description():
     return LaunchDescription([
         # Declare launch arguments that overwrite yaml parameters when set
         DeclareLaunchArgument(name='model_namespace', default_value=''),
+        DeclareLaunchArgument(name='use_sim_time', default_value=''),
         DeclareLaunchArgument(name='enable_floor_detection', default_value=''),
         DeclareLaunchArgument(name='enable_gps', default_value=''),
         DeclareLaunchArgument(name='enable_imu_acceleration', default_value=''),
@@ -232,10 +261,9 @@ def generate_launch_description():
         DeclareLaunchArgument(name='points_topic', default_value=''),
         DeclareLaunchArgument(name='map_frame_id', default_value=''),
         DeclareLaunchArgument(name='lidar_odom_frame_id', default_value=''),
-        DeclareLaunchArgument(name='imu_topic', default_value=''),
-        DeclareLaunchArgument(name='enable_robot_odometry_init_guess', default_value=''),
         DeclareLaunchArgument(name='robot_odom_frame_id', default_value=''),
-        # Initial position of the robot
+        DeclareLaunchArgument(name='enable_robot_odometry_init_guess', default_value=''),
+        DeclareLaunchArgument(name='imu_topic', default_value=''),
         DeclareLaunchArgument(name='x', default_value=''),
         DeclareLaunchArgument(name='y', default_value=''),
         DeclareLaunchArgument(name='z', default_value=''),
