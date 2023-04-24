@@ -319,6 +319,7 @@ install(PROGRAMS
 # Install ROS2 rviz configs
 install(FILES
   rviz/hdl_graph_slam_ros2.rviz
+  rviz/hdl_multi_robot_graph_slam_ros2.rviz
   DESTINATION share/${PROJECT_NAME}/rviz
 )
 
