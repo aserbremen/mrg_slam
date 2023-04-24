@@ -158,11 +158,18 @@ public:
         // odom_sub.reset( new message_filters::Subscriber<nav_msgs::Odometry>( mt_nh, "/odom", 256 ) );
         // cloud_sub.reset( new message_filters::Subscriber<sensor_msgs::PointCloud2>( mt_nh, "/filtered_points", 32 ) );
         // TODO further specify qos profile
+        std::string model_namespace = this->declare_parameter<std::string>( "model_namespace", "" );
+        std::string odom_sub_topic  = this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
+        std::string cloud_sub_topic = this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
+        if( !model_namespace.empty() ) {
+            odom_sub_topic  = "/" + model_namespace + "/scan_matching_odometry" + odom_sub_topic;
+            cloud_sub_topic = "/" + model_namespace + "/prefiltering" + cloud_sub_topic;
+        }
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
-        odom_sub.subscribe( node_ros, "/scan_matching_odometry/odom", qos );
+        odom_sub.subscribe( node_ros, odom_sub_topic, qos );
         qos.depth = 32;
-        cloud_sub.subscribe( node_ros, "/filtered_points", qos );
+        cloud_sub.subscribe( node_ros, cloud_sub_topic, qos );
         // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
@@ -359,12 +366,9 @@ private:
                 }
 
                 // float robot_radius_sqr = private_nh.param<float>( "robot_remove_points_radius", 2 );
-                float robot_radius_sqr;
-                if( this->has_parameter( "robot_remove_points_radius" ) ) {
-                    robot_radius_sqr = static_cast<float>( this->get_parameter( "robot_remove_points_radius" ).as_double() );
-                } else {
-                    robot_radius_sqr = static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2 ) );
-                }
+                float robot_radius_sqr = this->has_parameter( "robot_remove_points_radius" )
+                                             ? static_cast<float>( this->get_parameter( "robot_remove_points_radius" ).as_double() )
+                                             : static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2.0 ) );
                 robot_radius_sqr *= robot_radius_sqr;
 
                 // get points to be removed
@@ -438,12 +442,9 @@ private:
             } else {
                 // std::stringstream           sstp( private_nh.param<std::string>( "init_pose", "0 0 0 0 0 0" ) );
                 // TODO declare init_pose fix_first_node_stddev as double arrays?
-                std::stringstream sstp;
-                if( this->has_parameter( "init_pose" ) ) {
-                    sstp << this->get_parameter( "init_pose" ).as_string();
-                } else {
-                    sstp << this->declare_parameter<std::string>( "init_pose", "0 0 0 0 0 0" );
-                }
+                std::stringstream           sstp = this->has_parameter( "init_pose" )
+                                                       ? std::stringstream( this->get_parameter( "init_pose" ).as_string() )
+                                                       : std::stringstream( this->declare_parameter<std::string>( "init_pose", "0 0 0 0 0 0" ) );
                 Eigen::Matrix<double, 6, 1> p;
                 for( int i = 0; i < 6; i++ ) {
                     sstp >> p[i];
@@ -511,12 +512,9 @@ private:
                     anchor_node->setFixed( true );
                     // KeyFrame::Ptr anchor_kf( new KeyFrame( ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
                     KeyFrame::Ptr anchor_kf( new KeyFrame( rclcpp::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
-                    bool          fix_first_node_adaptive;
-                    if( this->has_parameter( "fix_first_node_adaptive" ) ) {
-                        fix_first_node_adaptive = this->get_parameter( "fix_first_node_adaptive" ).as_bool();
-                    } else {
-                        fix_first_node_adaptive = this->declare_parameter<bool>( "fix_first_node_adaptive", true );
-                    }
+                    bool          fix_first_node_adaptive = this->has_parameter( "fix_first_node_adaptive" )
+                                                                ? this->get_parameter( "fix_first_node_adaptive" ).as_bool()
+                                                                : this->declare_parameter<bool>( "fix_first_node_adaptive", true );
                     // if( !private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
                     if( !fix_first_node_adaptive ) {
                         anchor_kf->gid = 0;  // if anchor node is not adaptive (i.e. stays at the origin), its GID needs to be 0 for all
@@ -547,18 +545,12 @@ private:
             edge_gids.insert( edge->gid );
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
             //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
-            std::string odometry_edge_robust_kernel;
-            if( this->has_parameter( "odometry_edge_robust_kernel" ) ) {
-                odometry_edge_robust_kernel = this->get_parameter( "odometry_edge_robust_kernel" ).as_string();
-            } else {
-                this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
-            }
-            double odometry_edge_robust_kernel_size;
-            if( this->has_parameter( "odometry_edge_robust_kernel_size" ) ) {
-                odometry_edge_robust_kernel_size = this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
-            } else {
-                odometry_edge_robust_kernel_size = this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
-            }
+            std::string odometry_edge_robust_kernel      = this->has_parameter( "odometry_edge_robust_kernel" )
+                                                               ? this->get_parameter( "odometry_edge_robust_kernel" ).as_string()
+                                                               : this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
+            double      odometry_edge_robust_kernel_size = this->has_parameter( "odometry_edge_robust_kernel_size" )
+                                                               ? this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double()
+                                                               : this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
             graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
             prev_robot_keyframe = keyframe;
         }
@@ -1107,7 +1099,7 @@ private:
             std::string loop_closure_edge_robust_kernel      = this->has_parameter( "loop_closure_edge_robust_kernel" )
                                                                    ? this->get_parameter( "loop_closure_edge_robust_kernel" ).as_string()
                                                                    : this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel",
-                                                                                                      "NONDE" );
+                                                                                                      "NONE" );
             double      loop_closure_edge_robust_kernel_size = this->has_parameter( "loop_closure_edge_robust_kernel_size" )
                                                                    ? this->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double()
                                                                    : this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size",
