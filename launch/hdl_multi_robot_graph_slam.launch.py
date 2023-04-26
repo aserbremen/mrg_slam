@@ -13,6 +13,7 @@ from launch_ros.descriptions import ComposableNode
 param_mapping = {
     'model_namespace': str,
     'use_sim_time': bool,
+    'start_rviz2': bool,
     'enable_floor_detection': bool,
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
@@ -20,7 +21,7 @@ param_mapping = {
     'tf_link_values': str,
     'points_topic': str,
     'map_frame_id': str,
-    'lidar_odom_frame_id': str,
+    'odom_frame_id': str,
     'robot_odom_frame_id': str,
     'enable_robot_odometry_init_guess': bool,
     'imu_topic': str,
@@ -37,9 +38,14 @@ param_mapping = {
 # Overwrite the parameters from the yaml file with the ones from the cli if the cli string is not empty
 def overwrite_yaml_params_from_cli(yaml_params, cli_params):
     for key, value in cli_params.items():
-        if value != '':
+        if key in yaml_params and value != '':
             # Since all parameters from cli in ROS2 are strings, we need to infer the correct data type
             yaml_params[key] = param_mapping[key](value)
+            # Overwrite the boolean values since they are not correctly parsed, non empty strings are always True
+            if value == 'true' or value == 'True':
+                yaml_params[key] = True
+            elif value == 'false' or value == 'False':
+                yaml_params[key] = False
     return yaml_params
 
 
@@ -74,6 +80,9 @@ def launch_setup(context, *args, **kwargs):
     model_namespace = shared_params['model_namespace'] if context.launch_configurations[
         'model_namespace'] == '' else context.launch_configurations['model_namespace']
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
+    static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
+    prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
+    scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
     hdl_graph_slam_params = overwrite_yaml_params_from_cli(hdl_graph_slam_params, context.launch_configurations)
 
@@ -133,7 +142,7 @@ def launch_setup(context, *args, **kwargs):
         executable='map2odom_publisher_ros2.py',
         name=model_namespace + '_map2odom_publisher_ros2',
         output='both',
-        parameters=[shared_params],
+        parameters=[hdl_graph_slam_params, shared_params],
         remappings=[('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
     )
 
@@ -235,7 +244,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     launch_description_list = [static_transform_publisher]
-    if [shared_params['start_rviz2']]:
+    if shared_params['start_rviz2']:
         launch_description_list.append(rviz2)
     # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
     if os.path.expandvars('$ROS_DISTRO') != 'humble':
@@ -253,6 +262,7 @@ def generate_launch_description():
         # Declare launch arguments that overwrite yaml parameters when set
         DeclareLaunchArgument(name='model_namespace', default_value=''),
         DeclareLaunchArgument(name='use_sim_time', default_value=''),
+        DeclareLaunchArgument(name='start_rviz2', default_value=''),
         DeclareLaunchArgument(name='enable_floor_detection', default_value=''),
         DeclareLaunchArgument(name='enable_gps', default_value=''),
         DeclareLaunchArgument(name='enable_imu_acceleration', default_value=''),
@@ -260,10 +270,11 @@ def generate_launch_description():
         DeclareLaunchArgument(name='tf_link_values', default_value=''),
         DeclareLaunchArgument(name='points_topic', default_value=''),
         DeclareLaunchArgument(name='map_frame_id', default_value=''),
-        DeclareLaunchArgument(name='lidar_odom_frame_id', default_value=''),
+        DeclareLaunchArgument(name='odom_frame_id', default_value=''),
         DeclareLaunchArgument(name='robot_odom_frame_id', default_value=''),
         DeclareLaunchArgument(name='enable_robot_odometry_init_guess', default_value=''),
         DeclareLaunchArgument(name='imu_topic', default_value=''),
+        # init pose arguments
         DeclareLaunchArgument(name='x', default_value=''),
         DeclareLaunchArgument(name='y', default_value=''),
         DeclareLaunchArgument(name='z', default_value=''),
