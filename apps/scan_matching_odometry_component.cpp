@@ -428,7 +428,9 @@ private:
         prev_time  = stamp;
         prev_trans = trans;
 
-        auto keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, "keyframe" );
+        // broadcast keyframe with namespace aware topic name
+        std::string keyframe_str   = this->get_effective_namespace() == "/" ? "keyframe" : this->get_effective_namespace() + "/keyframe";
+        auto        keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
         // keyframe_broadcaster.sendTransform( keyframe_trans );
         keyframe_broadcaster->sendTransform( keyframe_trans );
 
