@@ -18,6 +18,10 @@ class Map2OdomPublisher(Node):
         # create a timer for simplicity instead of creating a ROS2 spin inside its own thread, see
         # https://answers.ros.org/question/358343/rate-and-sleep-function-in-rclpy-library-for-ros2/
         self.timer = self.create_timer(0.1, self.timer_callback)  # 10Hz
+        self.declare_parameter('map_frame_id', 'map')
+        self.declare_parameter('odom_frame_id', 'odom')
+        self.map_frame_id = self.get_parameter('map_frame_id').get_parameter_value().string_value
+        self.odom_frame_id = self.get_parameter('odom_frame_id').get_parameter_value().string_value
 
     def odom_callback(self, odom_msg: TransformStamped):
         self.odom_msg = odom_msg
@@ -26,8 +30,8 @@ class Map2OdomPublisher(Node):
         if not hasattr(self, 'odom_msg'):
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
-            t.header.frame_id = 'map'
-            t.child_frame_id = 'odom'
+            t.header.frame_id = self.map_frame_id
+            t.child_frame_id = self.odom_frame_id
             t.transform.translation = Vector3(x=0.0, y=0.0, z=0.0)
             t.transform.rotation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
             self.tf_broadcaster.sendTransform(t)
