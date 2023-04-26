@@ -77,14 +77,13 @@ def launch_setup(context, *args, **kwargs):
         hdl_graph_slam_params = config_params['hdl_graph_slam_component']['ros__parameters']
 
     # Overwrite the parameters from the yaml file with the ones from the cli
-    model_namespace = shared_params['model_namespace'] if context.launch_configurations[
-        'model_namespace'] == '' else context.launch_configurations['model_namespace']
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
     static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
     hdl_graph_slam_params = overwrite_yaml_params_from_cli(hdl_graph_slam_params, context.launch_configurations)
+    model_namespace = shared_params['model_namespace']
 
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(static_transform_params, 'static_transform_params')
@@ -98,7 +97,9 @@ def launch_setup(context, *args, **kwargs):
     frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
     child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
     static_transform_publisher = Node(
-        name=model_namespace + '_lidar2base_publisher',
+        # name=model_namespace + '_lidar2base_publisher',
+        name='lidar2base_publisher',
+        namespace=model_namespace,
         package='tf2_ros',
         executable='static_transform_publisher',
         # arguments has to be a list of strings
@@ -140,18 +141,21 @@ def launch_setup(context, *args, **kwargs):
     map2odom_publisher_ros2 = Node(
         package='hdl_graph_slam',
         executable='map2odom_publisher_ros2.py',
-        name=model_namespace + '_map2odom_publisher_ros2',
+        name='map2odom_publisher_ros2',
+        namespace=model_namespace,
         output='both',
         parameters=[hdl_graph_slam_params, shared_params],
         remappings=[('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
     )
 
     # Create the container node
-    container_name = model_namespace + '_hdl_graph_slam_container'
+    # container_name = model_namespace + '_hdl_graph_slam_container'
+    container_name = model_namespace + '/hdl_graph_slam_container'  # used in composable nodes
     container = Node(
         package='rclcpp_components',
         executable='component_container',
-        name=container_name,
+        name="hdl_graph_slam_container",
+        namespace=model_namespace,
         output='both',
         parameters=[shared_params]
     )
@@ -161,7 +165,8 @@ def launch_setup(context, *args, **kwargs):
     prefiltering_node = ComposableNode(
         package='hdl_graph_slam',
         plugin='hdl_graph_slam::PrefilteringComponent',
-        name=model_namespace + '_prefiltering_component',
+        name='prefiltering_component',
+        namespace=model_namespace,
         parameters=[prefiltering_params, shared_params],
         remappings=[
             ('/imu/data', shared_params['imu_topic']),
@@ -175,7 +180,8 @@ def launch_setup(context, *args, **kwargs):
     scan_matching_odometry_node = ComposableNode(
         package='hdl_graph_slam',
         plugin='hdl_graph_slam::ScanMatchingOdometryComponent',
-        name=model_namespace + '_scan_matching_odometry_component',
+        name='scan_matching_odometry_component',
+        namespace=model_namespace,
         parameters=[scan_matching_odometry_params, shared_params],
         remappings=[
             ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
@@ -189,11 +195,13 @@ def launch_setup(context, *args, **kwargs):
         extra_arguments=[{'use_intra_process_comms': True}]
     )
 
+    # TODO somehwere simple "/floor_coeffs" topic is either subscribed or published to even with namespace and remappings, but not sure where
     if floor_detection_params['enable_floor_detection']:
         floor_detection_node = ComposableNode(
             package='hdl_graph_slam',
             plugin='hdl_graph_slam::FloorDetectionComponent',
-            name=model_namespace + '_floor_detection_component',
+            name='floor_detection_component',
+            namespace=model_namespace,
             parameters=[floor_detection_params, shared_params],
             remappings=[
                 ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
@@ -210,7 +218,8 @@ def launch_setup(context, *args, **kwargs):
     hdl_graph_slam_node = ComposableNode(
         package='hdl_graph_slam',
         plugin='hdl_graph_slam::HdlGraphSlamComponent',
-        name=model_namespace + '_hdl_graph_slam_component',
+        name='hdl_graph_slam_component',
+        namespace=model_namespace,
         parameters=[hdl_graph_slam_params, shared_params],
         remappings=[
             ('/imu/data', shared_params['imu_topic']),
