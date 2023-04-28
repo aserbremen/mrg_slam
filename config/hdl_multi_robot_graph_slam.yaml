@@ -13,12 +13,12 @@ define: &lidar_odom_frame_id "odom"
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
-    x: 0.0
-    y: 0.0
-    z: 0.0
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
+    lidar2base_x: 0.0
+    lidar2base_y: 0.0
+    lidar2base_z: 0.0
+    lidar2base_roll: 0.0
+    lidar2base_pitch: 0.0
+    lidar2base_yaw: 0.0
     base_frame_id: "base_link/front_laser" # default "base_link"
     lidar_frame_id: "velodyne"
 
@@ -90,7 +90,7 @@ scan_matching_odometry_component:
 # Floor detection component parameters
 floor_detection_component:
   ros__parameters:
-    enable_floor_detection: true
+    enable_floor_detection: false
     tilt_deg: 0.0
     sensor_height: 2.0
     height_clip_range: 1.0
@@ -103,6 +103,7 @@ floor_detection_component:
 hdl_graph_slam_component:
   ros__parameters:
     own_name: "atlas"
+    /properties/scenario/rovers/names: ["atlas", "bestla"]
     # Initial pose
     x: 0.0
     y: 0.0
@@ -110,6 +111,8 @@ hdl_graph_slam_component:
     roll: 0.0
     pitch: 0.0
     yaw: 0.0
+    # init_pose array is overwritten by above values
+    init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     init_pose_topic: "NONE"
     # Frame settings
     map_frame_id: "map"

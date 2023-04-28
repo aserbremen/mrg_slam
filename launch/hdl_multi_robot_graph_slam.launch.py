@@ -103,12 +103,12 @@ def launch_setup(context, *args, **kwargs):
         package='tf2_ros',
         executable='static_transform_publisher',
         # arguments has to be a list of strings
-        arguments=[str(static_transform_params['x']),
-                   str(static_transform_params['y']),
-                   str(static_transform_params['z']),
-                   str(static_transform_params['roll']),
-                   str(static_transform_params['pitch']),
-                   str(static_transform_params['yaw']),
+        arguments=[str(static_transform_params['lidar2base_x']),
+                   str(static_transform_params['lidar2base_y']),
+                   str(static_transform_params['lidar2base_z']),
+                   str(static_transform_params['lidar2base_roll']),
+                   str(static_transform_params['lidar2base_pitch']),
+                   str(static_transform_params['lidar2base_yaw']),
                    frame_id,
                    child_frame_id],
         parameters=[shared_params],
@@ -215,6 +215,13 @@ def launch_setup(context, *args, **kwargs):
         )
 
     hdl_graph_slam_params['own_name'] = model_namespace
+    # Overwrite init_pose array with the actual values
+    hdl_graph_slam_params['init_pose'][0] = hdl_graph_slam_params['x']
+    hdl_graph_slam_params['init_pose'][1] = hdl_graph_slam_params['y']
+    hdl_graph_slam_params['init_pose'][2] = hdl_graph_slam_params['z']
+    hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
+    hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
+    hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
     hdl_graph_slam_node = ComposableNode(
         package='hdl_graph_slam',
         plugin='hdl_graph_slam::HdlGraphSlamComponent',
