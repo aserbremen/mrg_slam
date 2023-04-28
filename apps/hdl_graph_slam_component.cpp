@@ -165,6 +165,8 @@ public:
             odom_sub_topic  = "/" + model_namespace + "/scan_matching_odometry" + odom_sub_topic;
             cloud_sub_topic = "/" + model_namespace + "/prefiltering" + cloud_sub_topic;
         }
+        RCLCPP_INFO( this->get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
+        RCLCPP_INFO( this->get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
         odom_sub.subscribe( node_ros, odom_sub_topic, qos );
@@ -200,17 +202,8 @@ public:
         // graph_broadcast_pub = mt_nh.advertise<hdl_graph_slam::GraphRos>( "/hdl_graph_slam/graph_broadcast", 16 );
         // odom_broadcast_pub  = mt_nh.advertise<hdl_graph_slam::PoseWithName>( "/hdl_graph_slam/odom_broadcast", 16 );
         // others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
-        odom2map_pub = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
-
-        // auto latching_qos = rclcpp::QoS( 1 );
-        // latching_qos.durability( RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL );
-        // TODO intraprocess communication is only allowed with volatile durability, does not crash in manual composition?
-        // [component_container-2] terminate called after throwing an instance of 'std::invalid_argument'
-        // [component_container-2] what():  intraprocess communication allowed only with volatile durability
-        // Create a latching publisher for the map using transient local durability, that provides the latest map to "late" subscribers
-        // TODO implement solution for late subscribers, service call?
-        map_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
-
+        odom2map_pub        = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
+        map_points_pub      = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
         read_until_pub      = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
         graph_broadcast_pub = this->create_publisher<hdl_graph_slam::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast", rclcpp::QoS( 16 ) );
         odom_broadcast_pub  = this->create_publisher<hdl_graph_slam::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
@@ -442,13 +435,11 @@ private:
             } else {
                 // std::stringstream           sstp( private_nh.param<std::string>( "init_pose", "0 0 0 0 0 0" ) );
                 // TODO declare init_pose fix_first_node_stddev as double arrays?
-                std::stringstream           sstp = this->has_parameter( "init_pose" )
-                                                       ? std::stringstream( this->get_parameter( "init_pose" ).as_string() )
-                                                       : std::stringstream( this->declare_parameter<std::string>( "init_pose", "0 0 0 0 0 0" ) );
-                Eigen::Matrix<double, 6, 1> p;
-                for( int i = 0; i < 6; i++ ) {
-                    sstp >> p[i];
-                }
+                std::vector<double>         p_vec = this->has_parameter( "init_pose" )
+                                                        ? this->get_parameter( "init_pose" ).as_double_array()
+                                                        : this->declare_parameter<std::vector<double>>( "init_pose",
+                                                                                                { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
+                Eigen::Matrix<double, 6, 1> p( p_vec.data() );
                 pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitX() )
                                                    * Eigen::AngleAxisd( p[4], Eigen::Vector3d::UnitY() )
                                                    * Eigen::AngleAxisd( p[3], Eigen::Vector3d::UnitZ() ) )
@@ -844,7 +835,7 @@ private:
         // However for ROS2 foxy client->remove_pending_request() is not available.
         // Thats why we rely on the foxy implementation and hope it works
         // https://github.com/ros2/examples/blob/foxy/rclcpp/services/minimal_client/main.cpp
-        // TODO verify this method of checking the result
+        // TODO Service client call needs to be done from a different thread/node, multi robot not working
         auto client        = request_graph_service_clients[other_name];
         auto request       = std::make_shared<hdl_graph_slam::srv::PublishGraph::Request>();
         auto result_future = client->async_send_request( request );
@@ -1320,6 +1311,7 @@ private:
             if( keyframes.empty() ) {
                 // ROS2 services are of type void and dont return a bool.
                 // return false;
+                return;
             }
 
             msg.robot_name          = own_name;
