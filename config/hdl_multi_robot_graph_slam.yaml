@@ -95,6 +95,7 @@ floor_detection_component:
     sensor_height: 2.0
     height_clip_range: 1.0
     floor_pts_thresh: 512
+    floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
     # remappings are handled in the python respective launch file
@@ -104,6 +105,9 @@ hdl_graph_slam_component:
   ros__parameters:
     own_name: "atlas"
     /properties/scenario/rovers/names: ["atlas", "bestla"]
+    robot_remove_points_radius: 2.0
+    graph_request_min_accum_dist: 2.0
+    graph_request_max_robot_dist: 10.0
     # Initial pose
     x: 0.0
     y: 0.0
@@ -112,7 +116,7 @@ hdl_graph_slam_component:
     pitch: 0.0
     yaw: 0.0
     # init_pose array is overwritten by above values
-    init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
     init_pose_topic: "NONE"
     # Frame settings
     map_frame_id: "map"
@@ -131,14 +135,16 @@ hdl_graph_slam_component:
     keyframe_delta_angle: 2.0
     # fix first node for optimization stability
     fix_first_node: true
-    # TODO use a list of doubles for easier handling
-    fix_first_node_stddev: "10 10 10 1 1 1"
+    fix_first_node_adaptive: true
+    fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
     fix_first_node_adaptive: true
     # loop closure params
     distance_thresh: 15.0
     accum_distance_thresh: 25.0
     min_edge_interval: 15.0
     fitness_score_thresh: 2.5
+    loop_closure_edge_robust_kernel: "Huber"
+    loop_closure_edge_robust_kernel_size: 1.0
     # scan matching params
     registration_method: "FAST_GICP"
     reg_num_threads: 0
@@ -169,8 +175,6 @@ hdl_graph_slam_component:
     # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
     odometry_edge_robust_kernel: "NONE"
     odometry_edge_robust_kernel_size: 1.0
-    loop_closure_edge_robust_kernel: "Huber"
-    loop_closure_edge_robust_kernel_size: 1.0
     use_const_inf_matrix: false
     const_stddev_x: 0.5
     const_stddev_q: 0.1

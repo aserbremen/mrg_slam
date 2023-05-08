@@ -163,6 +163,7 @@ private:
         use_distance_filter  = this->declare_parameter<bool>( "use_distance_filter", true );
         distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
         distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
+        scan_period          = this->declare_parameter<double>( "scan_period", 0.1 );
 
         // Set within config yaml files
         base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "" );
@@ -332,9 +333,6 @@ private:
         deskewed->resize( cloud->size() );
 
         // double scan_period = private_nh.param<double>( "scan_period", 0.1 );
-        // TODO potentially add class member for scan period if it doesnt change during runtime
-        double scan_period = this->has_parameter( "scan_period" ) ? this->get_parameter( "scan_period" ).as_double()
-                                                                  : this->declare_parameter<double>( "scan_period", 0.1 );
         for( int i = 0; i < (int)cloud->size(); i++ ) {
             const auto& pt = cloud->at( i );
 
@@ -375,6 +373,7 @@ private:
     bool   use_distance_filter;
     double distance_near_thresh;
     double distance_far_thresh;
+    double scan_period;
 
     pcl::Filter<PointT>::Ptr downsample_filter;
     pcl::Filter<PointT>::Ptr outlier_removal_filter;

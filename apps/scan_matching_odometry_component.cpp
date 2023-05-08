@@ -53,7 +53,7 @@ public:
 
         initialize_params();
 
-        if( this->declare_parameter<bool>( "enable_imu_frontend", false ) ) {
+        if( enable_imu_frontend ) {
             // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters
             // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
@@ -188,6 +188,9 @@ private:
         max_acceptable_trans   = this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
         max_acceptable_angle   = this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
 
+        enable_robot_odometry_init_guess = this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
+        enable_imu_frontend              = this->declare_parameter<bool>( "enable_imu_frontend", false );
+
         // select a downsample method (VOXELGRID, APPROX_VOXELGRID, NONE)
         // std::string downsample_method     = pnh.param<std::string>( "downsample_method", "VOXELGRID" );
         // double      downsample_resolution = pnh.param<double>( "downsample_resolution", 0.1 );
@@ -212,9 +215,6 @@ private:
             pcl::PassThrough<PointT>::Ptr passthrough( new pcl::PassThrough<PointT>() );
             downsample_filter = passthrough;
         }
-
-        // Declare enable_robot_odometry_init_guess at this point once, TODO delete if declaring it is unnecessary
-        this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
 
         registration = select_registration_method( static_cast<rclcpp::Node*>( this ) );
     }
@@ -330,8 +330,7 @@ private:
         Eigen::Isometry3f msf_delta = Eigen::Isometry3f::Identity();
 
         // if( private_nh.param<bool>( "enable_imu_frontend", false ) ) {
-        // enable_imu_frontend declared in onInit
-        if( this->get_parameter( "enable_imu_frontend" ).as_bool() ) {
+        if( enable_imu_frontend ) {
             // if( msf_pose && msf_pose->header.stamp > keyframe_stamp && msf_pose_after_update
             //     && msf_pose_after_update->header.stamp > keyframe_stamp ) {
             if( msf_pose && rclcpp::Time( msf_pose->header.stamp ) > keyframe_stamp && msf_pose_after_update
@@ -346,7 +345,7 @@ private:
                 std::cerr << "msf data is too old" << std::endl;
             }
             // } else if( private_nh.param<bool>( "enable_robot_odometry_init_guess", false ) && !prev_time.isZero() ) {
-        } else if( this->get_parameter( "enable_robot_odometry_init_guess" ).as_bool() && !( prev_time.nanoseconds() == 0 ) ) {
+        } else if( enable_robot_odometry_init_guess && !( prev_time.nanoseconds() == 0 ) ) {
             // tf::StampedTransform transform;
             geometry_msgs::msg::TransformStamped transform;
             // if( tf_listener.waitForTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
@@ -481,7 +480,7 @@ private:
 
         // publish the transform
         // nav_msgs::Odometry odom;
-        nav_msgs::msg::Odometry   odom;
+        nav_msgs::msg::Odometry odom;
         odom.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
         odom.header.frame_id = odom_frame_id;
 
@@ -590,6 +589,9 @@ private:
     double keyframe_delta_trans;  // minimum distance between keyframes
     double keyframe_delta_angle;  //
     double keyframe_delta_time;   //
+
+    bool enable_robot_odometry_init_guess;
+    bool enable_imu_frontend;
 
     // registration validation by thresholding
     bool   transform_thresholding;  //
