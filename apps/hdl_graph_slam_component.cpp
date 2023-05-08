@@ -15,6 +15,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
@@ -259,11 +260,18 @@ public:
             if( robot_name != own_name ) {
                 // request_graph_service_clients[robot_name] = mt_nh.serviceClient<hdl_graph_slam::PublishGraph>(
                 // "/" + robot_name + "/hdl_graph_slam/publish_graph" );
-                request_graph_service_clients[robot_name] = this->create_client<hdl_graph_slam::srv::PublishGraph>(
-                    "/" + robot_name + "/hdl_graph_slam/publish_graph" );
+                // The service client from within this component is not working, so we create a publisher and subscriber to request the due
+                // to adding the same node to the exectuor multiple times
+                // graph request_graph_service_clients[robot_name] = this->create_client<hdl_graph_slam::srv::PublishGraph>(
+                //     "/" + robot_name + "/hdl_graph_slam/publish_graph" );
                 others_accum_dist[robot_name] = std::make_pair<double, double>( 0, -1 );
             }
         }
+        // Instead of creating a client for each robot, we subscribe to a topic that requests the graph from other robots
+        request_robot_graph_sub = this->create_subscription<std_msgs::msg::String>(
+            "/hdl_graph_slam/request_robot_graph", rclcpp::QoS( 16 ),
+            std::bind( &HdlGraphSlamComponent::request_robot_graph_callback, this, std::placeholders::_1 ) );
+        request_robot_graph_pub = this->create_publisher<std_msgs::msg::String>( "/hdl_graph_slam/request_robot_graph", rclcpp::QoS( 16 ) );
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
@@ -836,16 +844,21 @@ private:
         // Thats why we rely on the foxy implementation and hope it works
         // https://github.com/ros2/examples/blob/foxy/rclcpp/services/minimal_client/main.cpp
         // TODO Service client call needs to be done from a different thread/node, multi robot not working
-        auto client        = request_graph_service_clients[other_name];
-        auto request       = std::make_shared<hdl_graph_slam::srv::PublishGraph::Request>();
-        auto result_future = client->async_send_request( request );
-        if( rclcpp::spin_until_future_complete( shared_from_this(), result_future ) != rclcpp::FutureReturnCode::SUCCESS ) {
-            RCLCPP_ERROR_STREAM( this->get_logger(), "Failed to request graph from " << other_name );
-            client->remove_pending_request( result_future );
-        } else {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << other_name );
-            last_accum_dist = accum_dist;
-        }
+        // auto client        = request_graph_service_clients[other_name];
+        // auto request       = std::make_shared<hdl_graph_slam::srv::PublishGraph::Request>();
+        // auto result_future = client->async_send_request( request );
+        // if( rclcpp::spin_until_future_complete( shared_from_this(), result_future ) != rclcpp::FutureReturnCode::SUCCESS ) {
+        //     RCLCPP_ERROR_STREAM( this->get_logger(), "Failed to request graph from " << other_name );
+        //     client->remove_pending_request( result_future );
+        // } else {
+        //     RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << other_name );
+        //     last_accum_dist = accum_dist;
+        // }
+        // Instead we just publish a message to the request a specific robot graph
+        std_msgs::msg::String msg;
+        msg.data = other_name;
+        request_robot_graph_pub->publish( msg );
+        last_accum_dist = accum_dist;
     }
 
 
@@ -858,6 +871,20 @@ private:
     {
         std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
         init_pose = msg;
+    }
+
+    /**
+     * @brief Receive robot name from topic, used to request graph from other robots
+     * @param msg Containing the robot name, which is used to request the graph from the robot with the same name
+     */
+    void request_robot_graph_callback( const std_msgs::msg::String::SharedPtr msg )
+    {
+        // call the publish graph function from within this class if the robot name is the own robot name
+        if( msg->data == own_name ) {
+            auto req = std::make_shared<const hdl_graph_slam::srv::PublishGraph::Request>();
+            auto res = std::make_shared<hdl_graph_slam::srv::PublishGraph::Response>();
+            publish_graph_service( req, res );
+        }
     }
 
     /**
@@ -1409,12 +1436,14 @@ private:
     // ros::ServiceServer                                  get_map_service_server;
     // ros::ServiceServer                                  get_graph_estimate_service_server;
     // ros::ServiceServer                                  publish_graph_service_server;
-    std::unordered_map<std::string, rclcpp::Client<hdl_graph_slam::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
-    rclcpp::Service<hdl_graph_slam::srv::DumpGraph>::SharedPtr                                    dump_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::SaveMap>::SharedPtr                                      save_map_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::GetMap>::SharedPtr                                       get_map_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::GetGraphEstimate>::SharedPtr                             get_graph_estimate_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::PublishGraph>::SharedPtr                                 publish_graph_service_server;
+    // std::unordered_map<std::string, rclcpp::Client<hdl_graph_slam::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr            request_robot_graph_sub;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr               request_robot_graph_pub;
+    rclcpp::Service<hdl_graph_slam::srv::DumpGraph>::SharedPtr        dump_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::SaveMap>::SharedPtr          save_map_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::GetMap>::SharedPtr           get_map_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
+    rclcpp::Service<hdl_graph_slam::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
 
     std::string              own_name;
     std::vector<std::string> robot_names;
