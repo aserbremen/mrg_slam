@@ -472,6 +472,8 @@ private:
         trans_odom2map_mutex.unlock();
 
         int num_processed = 0;
+        RCLCPP_INFO_STREAM( this->get_logger(), "flushing " << keyframe_queue.size() << " keyframes" );
+        RCLCPP_INFO_STREAM( this->get_logger(), "odom2map:\n" << odom2map.matrix() );
         for( int i = 0; i < std::min<int>( keyframe_queue.size(), max_keyframes_per_update ); i++ ) {
             num_processed = i;
 
@@ -481,7 +483,8 @@ private:
 
             // add pose node
             Eigen::Isometry3d odom = odom2map * keyframe->odom;
-            keyframe->node         = graph_slam->add_se3_node( odom );
+            RCLCPP_INFO_STREAM( this->get_logger(), "adding node " << keyframe->gid << " with odom\n" << odom.matrix() );
+            keyframe->node = graph_slam->add_se3_node( odom );
             keyframe->set_gid( *gid_generator );
             keyframe_gids[keyframe->gid] = keyframe;
             // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used, it seems like it should be
@@ -515,7 +518,8 @@ private:
                     keyframe_gids[0] = anchor_kf;
 
                     anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
-                    auto edge   = new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "adding anchor edge with estimate:\n" << keyframe->node->estimate().matrix() );
+                    auto edge = new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator );
                     edges.emplace_back( edge );
                     edge_gids.insert( edge->gid );
                 }
@@ -527,11 +531,14 @@ private:
             }
 
             // add edge between consecutive keyframes
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "adding edge between consecutive keyframes " << prev_robot_keyframe->gid << " -> " << keyframe->gid );
             Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_robot_keyframe->odom;
-            Eigen::MatrixXd   information   = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud,
-                                                                                      relative_pose );
-            auto graph_edge = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
-            auto edge       = new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator );
+            RCLCPP_INFO_STREAM( this->get_logger(), "with relative pose:\n" << relative_pose.matrix() );
+            Eigen::MatrixXd information = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud,
+                                                                                  relative_pose );
+            auto            graph_edge  = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
+            auto            edge        = new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
@@ -1285,7 +1292,16 @@ private:
             msg.robot_name          = own_name;
             msg.latest_keyframe_gid = prev_robot_keyframe->gid;
             // tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
+            RCLCPP_INFO_STREAM( this->get_logger(), "publishing graph for robot " << own_name );
+            RCLCPP_INFO_STREAM( this->get_logger(), "prev robot keyframe odom:\n" << prev_robot_keyframe->odom.matrix() );
             msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
+            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: x" << msg.latest_keyframe_odom.position.x << " y "
+                                                                                  << msg.latest_keyframe_odom.position.y << " z "
+                                                                                  << msg.latest_keyframe_odom.position.z );
+            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: qx" << msg.latest_keyframe_odom.orientation.x << " qy "
+                                                                                   << msg.latest_keyframe_odom.orientation.y << " qz "
+                                                                                   << msg.latest_keyframe_odom.orientation.z << " qw "
+                                                                                   << msg.latest_keyframe_odom.orientation.w );
 
             msg.keyframes.resize( keyframes.size() );
             for( size_t i = 0; i < keyframes.size(); i++ ) {
@@ -1295,8 +1311,14 @@ private:
                 dst.stamp            = src->stamp;
                 dst.exclude_from_map = src->exclude_from_map;
                 // tf::poseEigenToMsg( src->estimate(), dst.estimate );
+                RCLCPP_INFO_STREAM( this->get_logger(), "src estimate:\n" << src->estimate().matrix() );
                 dst.estimate = tf2::toMsg( src->estimate() );
-                dst.cloud    = *src->cloud_msg;
+                RCLCPP_INFO_STREAM( this->get_logger(), "dst estimate: x " << dst.estimate.position.x << " y " << dst.estimate.position.y
+                                                                           << " z " << dst.estimate.position.z );
+                RCLCPP_INFO_STREAM( this->get_logger(), "dst estimate: qx "
+                                                            << dst.estimate.orientation.x << " qy " << dst.estimate.orientation.y << " qz "
+                                                            << dst.estimate.orientation.z << " qw " << dst.estimate.orientation.w );
+                dst.cloud = *src->cloud_msg;
             }
 
             msg.edges.resize( edges.size() );
@@ -1308,9 +1330,26 @@ private:
                 dst.from_gid = src->from_gid;
                 dst.to_gid   = src->to_gid;
                 // tf::poseEigenToMsg( src->relative_pose(), dst.relative_pose );
+                RCLCPP_INFO_STREAM( this->get_logger(), "src relative pose (edge) from " << src->from_gid << " to " << src->to_gid << ":\n"
+                                                                                         << src->relative_pose().matrix() );
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
+                RCLCPP_INFO_STREAM( this->get_logger(), "dst relative pose (edge) x " << dst.relative_pose.position.x << " y "
+                                                                                      << dst.relative_pose.position.y << " z "
+                                                                                      << dst.relative_pose.position.z );
+                RCLCPP_INFO_STREAM( this->get_logger(), "dst relative pose (edge) qx " << dst.relative_pose.orientation.x << " qy "
+                                                                                       << dst.relative_pose.orientation.y << " qz "
+                                                                                       << dst.relative_pose.orientation.z << " qw "
+                                                                                       << dst.relative_pose.orientation.w );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
+                RCLCPP_INFO_STREAM( this->get_logger(), "src information:\n" << src->information() );
                 information_map = src->information();
+                RCLCPP_INFO_STREAM( this->get_logger(), "dst information: " );
+                for( int i = 0; i < 6; i++ ) {
+                    for( int j = 0; j < 6; j++ ) {
+                        std::cout << dst.information[i * 6 + j] << " ";
+                    }
+                    std::cout << std::endl;
+                }
             }
         }
 
