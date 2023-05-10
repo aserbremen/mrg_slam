@@ -130,7 +130,7 @@ public:
         robot_remove_points_radius = static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2.0 ) );
         init_pose_vec  = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
         fix_first_node = this->declare_parameter<bool>( "fix_first_node", false );
-        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", true );
+        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", false );
         fix_first_node_stddev_vec = this->declare_parameter<std::vector<double>>(
             "fix_first_node_stddev",
             std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ), angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
@@ -310,6 +310,7 @@ public:
         // markers_pub.onInit( nh, mt_nh, private_nh );
         gps_processor.onInit( node_ros );
         imu_processor.onInit( node_ros );
+        // TODO only init floor_coeffs_processor if enable_floor_detection is true?
         floor_coeffs_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
 
@@ -360,7 +361,16 @@ private:
             std::vector<Eigen::Vector3d> others_positions;
             {
                 std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
-                map2odom = trans_odom2map.cast<double>().inverse();
+                // map2odom = trans_odom2map.cast<double>().inverse();
+                // Sometimes a sign flip is induced by the inversion of the identity transform
+                // TODO handle inverse calls in case of Identity matrices
+                if( trans_odom2map.isApprox( Eigen::Matrix4d::Identity() ) ) {
+                    map2odom.setIdentity();
+                } else {
+                    map2odom = trans_odom2map.inverse();
+                }
+                RCLCPP_INFO_STREAM( this->get_logger(), "trans_odom2map adaptive inverse\n" << map2odom.matrix() );
+                RCLCPP_INFO_STREAM( this->get_logger(), "trans_odom2map inverse\n" << trans_odom2map.inverse() );
 
                 others_positions.resize( others_odom_poses.size() );
                 size_t i = 0;
@@ -372,6 +382,7 @@ private:
                 }
             }
             if( !others_positions.empty() ) {
+                // TODO use identity aware inverse
                 Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
 
                 // transform other robots' positions to sensro frame
@@ -415,6 +426,9 @@ private:
             // create keyframe and add it to the queue
             KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
 
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe " << keyframe->gid << " to queue with odom\n"
+                                                                       << odom.matrix() << "and map2odom\n"
+                                                                       << map2odom.matrix() );
             std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
             keyframe_queue.push_back( keyframe );
         }
@@ -438,6 +452,7 @@ private:
         std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
 
         if( keyframe_queue.empty() ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Keyframe queue is empty not flushing" );
             return false;
         }
 
@@ -451,6 +466,9 @@ private:
                 pose = pose * keyframe_queue[0]->odom.inverse();  // "remove" odom (which will be added later again) such that the init
                                                                   // pose actually corresponds to the received pose
                 pose_mat = pose.matrix();
+                RCLCPP_INFO_STREAM( this->get_logger(), "init pose != nullptr: pose\n"
+                                                            << pose.matrix() << " keyframe_queue[0]->odom.inverse()\n"
+                                                            << keyframe_queue[0]->odom.inverse().matrix() );
             } else {
                 Eigen::Matrix<double, 6, 1> p( init_pose_vec.data() );
                 pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitX() )
@@ -463,12 +481,13 @@ private:
             }
             RCLCPP_INFO_STREAM( this->get_logger(), "initial pose:\n" << pose_mat );
             trans_odom2map_mutex.lock();
-            trans_odom2map = pose_mat.cast<float>();
+            // trans_odom2map = pose_mat.cast<float>();
+            trans_odom2map = pose_mat;
             trans_odom2map_mutex.unlock();
         }
 
         trans_odom2map_mutex.lock();
-        Eigen::Isometry3d odom2map( trans_odom2map.cast<double>() );
+        Eigen::Isometry3d odom2map( trans_odom2map );
         trans_odom2map_mutex.unlock();
 
         int num_processed = 0;
@@ -503,9 +522,9 @@ private:
                     for( int i = 0; i < 6; i++ ) {
                         information( i, i ) = 1.0 / ( fix_first_node_stddev_vec[i] * fix_first_node_stddev_vec[i] );
                     }
-                    RCLCPP_INFO_STREAM( this->get_logger(), "fixing first node with information:\n" << information );
 
                     anchor_node = graph_slam->add_se3_node( Eigen::Isometry3d::Identity() );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "anchor node estimate after adding:\n" << anchor_node->estimate().matrix() );
                     anchor_node->setFixed( true );
                     // KeyFrame::Ptr anchor_kf( new KeyFrame( ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
                     KeyFrame::Ptr anchor_kf( new KeyFrame( rclcpp::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
@@ -517,8 +536,19 @@ private:
                     anchor_kf->node  = anchor_node;
                     keyframe_gids[0] = anchor_kf;
 
-                    anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
-                    RCLCPP_INFO_STREAM( this->get_logger(), "adding anchor edge with estimate:\n" << keyframe->node->estimate().matrix() );
+                    // anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
+                    anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node,
+                                                            anchor_node->estimate().inverse() * keyframe->node->estimate(), information );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "keyframe node pointer address: " << &( keyframe->node ) );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "anchor node pointer address:   " << &( anchor_node ) );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "adding anchor edge with anchor_node estimate:\n"
+                                                                << anchor_node->estimate().matrix() );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "adding anchor edge with keyframe node estimate:\n"
+                                                                << keyframe->node->estimate().matrix() );
+                    RCLCPP_INFO_STREAM( this->get_logger(),
+                                        "adding anchor edge with relative pose:\n"
+                                            << ( anchor_node->estimate().inverse() * keyframe->node->estimate() ).matrix() );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "fixing first node with information:\n" << information );
                     auto edge = new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator );
                     edges.emplace_back( edge );
                     edge_gids.insert( edge->gid );
@@ -527,6 +557,8 @@ private:
 
             if( i == 0 && keyframes.empty() ) {
                 prev_robot_keyframe = keyframe;
+                RCLCPP_INFO_STREAM( this->get_logger(), "returning after adding first keyframe" );
+                RCLCPP_INFO_STREAM( this->get_logger(), "prev_robot_keyframe\n" << prev_robot_keyframe->odom.matrix() );
                 continue;
             }
 
@@ -534,6 +566,9 @@ private:
             RCLCPP_INFO_STREAM( this->get_logger(),
                                 "adding edge between consecutive keyframes " << prev_robot_keyframe->gid << " -> " << keyframe->gid );
             Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_robot_keyframe->odom;
+            RCLCPP_INFO_STREAM( this->get_logger(), "prev robot keyframe odom\n" << prev_robot_keyframe->odom.matrix() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "keyframe odom\n" << keyframe->odom.matrix() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "keyframe odom inverse\n" << keyframe->odom.inverse().matrix() );
             RCLCPP_INFO_STREAM( this->get_logger(), "with relative pose:\n" << relative_pose.matrix() );
             Eigen::MatrixXd information = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud,
                                                                                   relative_pose );
@@ -544,6 +579,9 @@ private:
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
             //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
             graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Setting prev_robot_keyframe\n"
+                                                        << prev_robot_keyframe->odom.matrix() << " to current keyframe\n"
+                                                        << keyframe->odom.matrix() );
             prev_robot_keyframe = keyframe;
         }
 
@@ -660,6 +698,8 @@ private:
             keyframe->gid                = keyframe_ros.gid;
             keyframe->exclude_from_map   = keyframe_ros.exclude_from_map;
             keyframe_gids[keyframe->gid] = keyframe;
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Adding keyframe to keyframe_gids: " << keyframe->gid << " with pose " << pose.matrix() );
             new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure
                                                   // don't add it to keyframe_hash, which is only used for floor_coeffs
                                                   // keyframe_hash[keyframe->stamp] = keyframe;
@@ -676,12 +716,12 @@ private:
             }
 
             // ROS_INFO_STREAM( "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
+
             RCLCPP_INFO_STREAM( this->get_logger(),
                                 "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
-
             Eigen::Isometry3d relpose;
             // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
-            // tf2::fromMsg( edge_ros.relative_pose, relpose );
+            tf2::fromMsg( edge_ros.relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros.information.data() );
             auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
             auto edge       = new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP );
@@ -824,6 +864,7 @@ private:
         std_msgs::msg::String msg;
         msg.data = other_name;
         request_robot_graph_pub->publish( msg );
+        // TODO only update last_accum_dist if the request was successful
         last_accum_dist = accum_dist;
     }
 
@@ -1101,20 +1142,24 @@ private:
         graph_slam->optimize( g2o_solver_num_iterations );
 
         // get transformations between map and robots
-        Eigen::Isometry3d               trans = prev_robot_keyframe->node->estimate() * prev_robot_keyframe->odom.inverse();
+        Eigen::Isometry3d trans = prev_robot_keyframe->node->estimate() * prev_robot_keyframe->odom.inverse();
+        RCLCPP_INFO_STREAM( this->get_logger(), "prev_robot_keyframe->node->estimate():\n"
+                                                    << prev_robot_keyframe->node->estimate().matrix() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "prev_robot_keyframe->odom.inverse():\n" << prev_robot_keyframe->odom.inverse().matrix() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "trans\n" << trans.matrix() );
         std::vector<KeyFrame::ConstPtr> others_last_kf;
         trans_odom2map_mutex.lock();
-        trans_odom2map = trans.matrix().cast<float>();
+        trans_odom2map = trans.matrix();
         others_last_kf.reserve( others_prev_robot_keyframes.size() );
         for( const auto &other_prev_kf : others_prev_robot_keyframes ) {
             //                                                node pointer                      odometry (not stored in kf for other
             //                                                robots)
             Eigen::Isometry3d other_trans        = other_prev_kf.second.first->node->estimate() * other_prev_kf.second.second.inverse();
             others_odom2map[other_prev_kf.first] = other_trans;
-            // ROS_INFO_STREAM( other_prev_kf.first );
-            // ROS_INFO_STREAM( "estimate:\n" << other_prev_kf.second.first->node->estimate().matrix() );
-            // ROS_INFO_STREAM( "odom:\n" << other_prev_kf.second.second.matrix() );
-            // ROS_INFO_STREAM( "trans:\n" << other_trans.matrix() );
+            RCLCPP_INFO_STREAM( this->get_logger(), other_prev_kf.first );
+            RCLCPP_INFO_STREAM( this->get_logger(), "estimate:\n" << other_prev_kf.second.first->node->estimate().matrix() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "odom:\n" << other_prev_kf.second.second.matrix() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "trans:\n" << other_trans.matrix() );
 
             auto iter = others_odom_poses.find( other_prev_kf.first );
 
@@ -1143,8 +1188,8 @@ private:
 
         // if( odom2map_pub.getNumSubscribers() ) {
         if( odom2map_pub->get_subscription_count() ) {
-            geometry_msgs::msg::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(),
-                                                                        map_frame_id, odom_frame_id );
+            geometry_msgs::msg::TransformStamped ts = matrixd2transform( prev_robot_keyframe->stamp, trans.matrix(), map_frame_id,
+                                                                         odom_frame_id );
             // odom2map_pub.publish( ts );
             odom2map_pub->publish( ts );
         }
@@ -1295,13 +1340,13 @@ private:
             RCLCPP_INFO_STREAM( this->get_logger(), "publishing graph for robot " << own_name );
             RCLCPP_INFO_STREAM( this->get_logger(), "prev robot keyframe odom:\n" << prev_robot_keyframe->odom.matrix() );
             msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
-            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: x" << msg.latest_keyframe_odom.position.x << " y "
-                                                                                  << msg.latest_keyframe_odom.position.y << " z "
-                                                                                  << msg.latest_keyframe_odom.position.z );
-            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: qx" << msg.latest_keyframe_odom.orientation.x << " qy "
-                                                                                   << msg.latest_keyframe_odom.orientation.y << " qz "
-                                                                                   << msg.latest_keyframe_odom.orientation.z << " qw "
-                                                                                   << msg.latest_keyframe_odom.orientation.w );
+            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: x " << msg.latest_keyframe_odom.position.x << " y "
+                                                                                   << msg.latest_keyframe_odom.position.y << " z "
+                                                                                   << msg.latest_keyframe_odom.position.z );
+            RCLCPP_INFO_STREAM( this->get_logger(), "msg latest keyframe odom: qx " << msg.latest_keyframe_odom.orientation.x << " qy "
+                                                                                    << msg.latest_keyframe_odom.orientation.y << " qz "
+                                                                                    << msg.latest_keyframe_odom.orientation.z << " qw "
+                                                                                    << msg.latest_keyframe_odom.orientation.w );
 
             msg.keyframes.resize( keyframes.size() );
             for( size_t i = 0; i < keyframes.size(); i++ ) {
@@ -1393,8 +1438,9 @@ private:
     rclcpp::Publisher<hdl_graph_slam::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
     rclcpp::Publisher<hdl_graph_slam::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
 
-    std::mutex      trans_odom2map_mutex;
-    Eigen::Matrix4f trans_odom2map;
+    std::mutex trans_odom2map_mutex;
+    // Eigen::Matrix4f trans_odom2map;
+    Eigen::Matrix4d trans_odom2map;
     // ros::Publisher                                     odom2map_pub;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr odom2map_pub;
     std::unordered_map<std::string, Eigen::Isometry3d>                 others_odom2map;  // odom2map transform for other robots

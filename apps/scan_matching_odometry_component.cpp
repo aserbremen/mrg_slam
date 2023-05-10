@@ -429,7 +429,7 @@ private:
 
         // broadcast keyframe with namespace aware topic name
         std::string keyframe_str   = this->get_effective_namespace() == "/" ? "keyframe" : this->get_effective_namespace() + "/keyframe";
-        auto        keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
+        auto        keyframe_trans = matrixf2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
         // keyframe_broadcaster.sendTransform( keyframe_trans );
         keyframe_broadcaster->sendTransform( keyframe_trans );
 
@@ -470,7 +470,7 @@ private:
     {
         // publish transform stamped for IMU integration
         // geometry_msgs::TransformStamped odom_trans = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
-        geometry_msgs::msg::TransformStamped odom_trans = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
+        geometry_msgs::msg::TransformStamped odom_trans = matrixf2transform( stamp, pose, odom_frame_id, base_frame_id );
         // trans_pub.publish( odom_trans );
         trans_pub->publish( odom_trans );
 
