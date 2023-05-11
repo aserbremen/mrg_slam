@@ -147,6 +147,7 @@ public:
         anchor_edge = nullptr;
         // graph_slam.reset( new GraphSLAM( private_nh.param<std::string>( "g2o_solver_type", "lm_var" ) ) );
         graph_slam.reset( new GraphSLAM( this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" ) ) );
+        graph_slam->set_save_graph( this->declare_parameter<bool>( "save_graph", true ) );
         // keyframe_updater.reset( new KeyframeUpdater( private_nh ) );
         // loop_detector.reset( new LoopDetector( private_nh ) );
         // map_cloud_generator.reset( new MapCloudGenerator() );

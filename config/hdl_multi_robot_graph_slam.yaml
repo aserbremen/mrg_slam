@@ -7,7 +7,7 @@ define: &lidar_odom_frame_id "odom"
     model_namespace: "atlas"
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
-    use_sim_time: false # true for rosbags, false for gazebo
+    use_sim_time: true # true for rosbags and for gazebo
     start_rviz2: true
 
 # Transform between lidar and base_link
@@ -187,4 +187,5 @@ hdl_graph_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.05
+    save_graph: true
     # remappings are handled in the python respective launch file

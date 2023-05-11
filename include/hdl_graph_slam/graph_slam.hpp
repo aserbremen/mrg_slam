@@ -163,9 +163,14 @@ public:
      */
     bool load( const std::string& filename );
 
+    void set_save_graph( bool save_graph );
+
 public:
     g2o::RobustKernelFactory*        robust_kernel_factory;
     std::unique_ptr<g2o::HyperGraph> graph;  // g2o graph
+
+private:
+    bool save_graph_at_each_optimization = true;
 };
 
 }  // namespace hdl_graph_slam

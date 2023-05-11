@@ -352,6 +352,8 @@ GraphSLAM::add_robust_kernel( g2o::HyperGraph::Edge* edge, const std::string& ke
 int
 GraphSLAM::optimize( int num_iterations )
 {
+    static int optimize_count = 0;
+
     g2o::SparseOptimizer* optimizer = dynamic_cast<g2o::SparseOptimizer*>( this->graph.get() );
 
     std::cout << std::endl;
@@ -363,8 +365,15 @@ GraphSLAM::optimize( int num_iterations )
     optimizer->initializeOptimization();
     optimizer->setVerbose( true );
 
-    std::cout << "chi2" << std::endl;
     double chi2 = optimizer->chi2();
+    std::cout << "chi2 " << chi2 << std::endl;
+
+    if( save_graph_at_each_optimization ) {
+        std::stringstream ss;
+        ss << std::setw( 3 ) << std::setfill( '0' ) << optimize_count;
+        std::string filename = "graph_before_optimization_" + ss.str() + ".g2o";
+        optimizer->save( filename.c_str() );
+    }
 
     std::cout << "optimize!!" << std::endl;
     // ROS2 migration use std::chrono::system_clock insteead of ros::Walltime::now(), see https://github.com/ros-planning/moveit2/issues/31
@@ -372,6 +381,14 @@ GraphSLAM::optimize( int num_iterations )
     auto t1         = std::chrono::system_clock::now();
     int  iterations = optimizer->optimize( num_iterations );
 
+    if( save_graph_at_each_optimization ) {
+        std::stringstream ss;
+        ss << std::setw( 3 ) << std::setfill( '0' ) << optimize_count;
+        std::string filename = "graph_after_optimization_" + ss.str() + ".g2o";
+        optimizer->save( filename.c_str() );
+    }
+
+    optimize_count++;
     auto t2 = std::chrono::system_clock::now();
     std::cout << "done" << std::endl;
     std::cout << "iterations: " << iterations << " / " << num_iterations << std::endl;
@@ -439,6 +456,12 @@ GraphSLAM::load( const std::string& filename )
     }
 
     return true;
+}
+
+void
+GraphSLAM::set_save_graph( bool save_graph )
+{
+    this->save_graph_at_each_optimization = save_graph;
 }
 
 }  // namespace hdl_graph_slam
