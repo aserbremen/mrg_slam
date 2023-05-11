@@ -130,7 +130,7 @@ public:
         robot_remove_points_radius = static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2.0 ) );
         init_pose_vec  = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
         fix_first_node = this->declare_parameter<bool>( "fix_first_node", false );
-        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", true );
+        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", false );
         fix_first_node_stddev_vec = this->declare_parameter<std::vector<double>>(
             "fix_first_node_stddev",
             std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ), angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
@@ -361,7 +361,13 @@ private:
             std::vector<Eigen::Vector3d> others_positions;
             {
                 std::lock_guard<std::mutex> lock( trans_odom2map_mutex );
-                map2odom = trans_odom2map.cast<double>().inverse();
+                // Weird bug where the sign of certain numbers is flipped
+                // map2odom = trans_odom2map.inverse().cast<double>(); TODO check if this fails at other places
+                if( trans_odom2map.isApprox( Eigen::Matrix4f::Identity() ) ) {
+                    map2odom.setIdentity();
+                } else {
+                    trans_odom2map.inverse().cast<double>();
+                }
 
                 others_positions.resize( others_odom_poses.size() );
                 size_t i = 0;
@@ -675,7 +681,7 @@ private:
 
             Eigen::Isometry3d relpose;
             // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
-            // tf2::fromMsg( edge_ros.relative_pose, relpose );
+            tf2::fromMsg( edge_ros.relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros.information.data() );
             auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
             auto edge       = new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP );
@@ -818,6 +824,7 @@ private:
         std_msgs::msg::String msg;
         msg.data = other_name;
         request_robot_graph_pub->publish( msg );
+        // TODO only update last_accum_dist if the request was successful
         last_accum_dist = accum_dist;
     }
 
@@ -1081,6 +1088,8 @@ private:
         // move the first node anchor position to the current estimate of the first node pose
         // so the first node moves freely while trying to stay around the origin
         // if( anchor_node && private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+        // For the multi robot case, fixing the first node adaptively (with initial positions that are not the identity transform) this
+        // leads to ever moving pose graph
         if( anchor_node && fix_first_node_adaptive ) {
             Eigen::Isometry3d anchor_target = static_cast<g2o::VertexSE3 *>( anchor_edge->vertices()[1] )->estimate();
             anchor_node->setEstimate( anchor_target );
