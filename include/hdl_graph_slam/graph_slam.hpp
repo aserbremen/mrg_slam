@@ -170,7 +170,7 @@ public:
     std::unique_ptr<g2o::HyperGraph> graph;  // g2o graph
 
 private:
-    bool save_graph_at_each_optimization = true;
+    bool save_graph_at_each_optimization = false;
 };
 
 }  // namespace hdl_graph_slam
