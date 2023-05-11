@@ -155,7 +155,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     }
 
     std::cout << "loop found!!" << std::endl;
-    std::cout << "relpose: " << relative_pose.block<3, 1>( 0, 3 ) << " - "
+    std::cout << "relpose: " << relative_pose.block<3, 1>( 0, 3 ).transpose() << " - "
               << Eigen::Quaternionf( relative_pose.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 
     if( new_keyframe->accum_distance >= 0 ) {
