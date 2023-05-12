@@ -23,10 +23,13 @@ FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
     floor_plane_node_ptr = nullptr;
 
     // TODO: ROS2 parameter handling, verify
-    floor_edge_stddev = node->declare_parameter<double>( "floor_edge_stddev", 10.0 );
-    floor_sub         = node->create_subscription<hdl_graph_slam::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
+    floor_edge_stddev             = node->declare_parameter<double>( "floor_edge_stddev", 10.0 );
+    floor_edge_robust_kernel      = node->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
+    floor_edge_robust_kernel_size = node->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
+
+    floor_sub = node->create_subscription<hdl_graph_slam::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
                                                                              std::bind( &FloorCoeffsProcessor::floor_coeffs_callback, this,
-                                                                                                std::placeholders::_1 ) );
+                                                                                        std::placeholders::_1 ) );
 }
 
 /**
@@ -85,22 +88,8 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
         Eigen::Vector4d coeffs( floor_coeffs->coeffs[0], floor_coeffs->coeffs[1], floor_coeffs->coeffs[2], floor_coeffs->coeffs[3] );
         Eigen::Matrix3d information = Eigen::Matrix3d::Identity() * ( 1.0 / floor_edge_stddev );
         auto            edge        = graph_slam->add_se3_plane_edge( keyframe->node, floor_plane_node_ptr, coeffs, information );
-        // TODO: ROS2 parameter handling, do floor_edge_robust_kernel or floor_edge_robust_kernel_size change over time? declare member
-        // variable and set in onInit method?
         // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>("floor_edge_robust_kernel", "NONE" ),
         //                                private_nh->param<double>( "floor_edge_robust_kernel_size", 1.0 ) );
-        std::string floor_edge_robust_kernel;
-        if( node->has_parameter( "floor_edge_robust_kernel" ) ) {
-            floor_edge_robust_kernel = node->get_parameter( "floor_edge_robust_kernel" ).as_string();
-        } else {
-            floor_edge_robust_kernel = node->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
-        }
-        double floor_edge_robust_kernel_size;
-        if( node->has_parameter( "floor_edge_robust_kernel_size" ) ) {
-            floor_edge_robust_kernel_size = node->get_parameter( "floor_edge_robust_kernel_size" ).as_double();
-        } else {
-            floor_edge_robust_kernel_size = node->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
-        }
         graph_slam->add_robust_kernel( edge, floor_edge_robust_kernel, floor_edge_robust_kernel_size );
 
         keyframe->floor_coeffs = coeffs;

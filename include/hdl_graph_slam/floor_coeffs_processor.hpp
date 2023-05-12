@@ -44,6 +44,8 @@ private:
     rclcpp::Subscription<hdl_graph_slam::msg::FloorCoeffs>::SharedPtr floor_sub;
 
     double                                                       floor_edge_stddev;
+    std::string                                                  floor_edge_robust_kernel;
+    double                                                       floor_edge_robust_kernel_size;
     std::mutex                                                   floor_coeffs_queue_mutex;
     std::deque<hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue;
 
