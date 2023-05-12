@@ -119,7 +119,7 @@ hdl_graph_slam_component:
     # fix first node for optimization stability
     fix_first_node: true
     # TODO use a list of doubles for easier handling
-    fix_first_node_stddev: "10 10 10 1 1 1"
+    fix_first_node_stddev: [0.05, 0.05, 0.05, 0.017, 0.017, 0.017]
     fix_first_node_adaptive: true
     # loop closure params
     distance_thresh: 15.0
@@ -170,6 +170,7 @@ hdl_graph_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.05
+    save_graph: true
     # TODO use point topics in the python launch file
     # remappings are handled in the python respective launch file
     # remap from "/filtered_points" to "/prefiltering/filtered_points"

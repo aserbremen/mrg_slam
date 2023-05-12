@@ -186,5 +186,5 @@ hdl_graph_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.05
-    save_graph: true
+    save_graph: false
     # remappings are handled in the python respective launch file
