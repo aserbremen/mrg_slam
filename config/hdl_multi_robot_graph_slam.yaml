@@ -17,10 +17,10 @@ lidar2base_publisher:
     lidar2base_y: 0.0
     lidar2base_z: 0.0
     lidar2base_roll: 0.0
-    lidar2base_pitch: 0.0
+    lidar2base_pitch: 0.261799 # 15 degrees inclined
     lidar2base_yaw: 0.0
-    base_frame_id: "base_link/front_laser" # default "base_link"
-    lidar_frame_id: "velodyne"
+    base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
+    lidar_frame_id: "velodyne" # is prepended by model_namespace
 
 # In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
 clock_publisher_ros2:
@@ -30,7 +30,7 @@ clock_publisher_ros2:
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
-    base_link_frame: "base_link/front_laser" # default "base_link"
+    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
     
     deskewing: false
     
