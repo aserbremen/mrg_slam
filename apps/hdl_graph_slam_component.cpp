@@ -490,9 +490,7 @@ private:
             Eigen::Isometry3d odom = odom2map * keyframe->odom;
             keyframe->node         = graph_slam->add_se3_node( odom );
             keyframe->set_gid( *gid_generator );
-            keyframe_gids[keyframe->gid] = keyframe;
-            // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used, it seems like it should be
-            // builtin_interfaces::msg::Time
+            keyframe_gids[keyframe->gid]   = keyframe;
             keyframe_hash[keyframe->stamp] = keyframe;
 
             // first keyframe?
