@@ -10,7 +10,7 @@ from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
 # Parameter type mapping to infer the correct data type from the cli string
-param_mapping = {
+PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
     'start_rviz2': bool,
@@ -40,7 +40,7 @@ def overwrite_yaml_params_from_cli(yaml_params, cli_params):
     for key, value in cli_params.items():
         if key in yaml_params and value != '':
             # Since all parameters from cli in ROS2 are strings, we need to infer the correct data type
-            yaml_params[key] = param_mapping[key](value)
+            yaml_params[key] = PARAM_MAPPING[key](value)
             # Overwrite the boolean values since they are not correctly parsed, non empty strings are always True
             if value == 'true' or value == 'True':
                 yaml_params[key] = True
@@ -274,30 +274,9 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    return LaunchDescription([
-        # Declare launch arguments that overwrite yaml parameters when set
-        DeclareLaunchArgument(name='model_namespace', default_value=''),
-        DeclareLaunchArgument(name='use_sim_time', default_value=''),
-        DeclareLaunchArgument(name='start_rviz2', default_value=''),
-        DeclareLaunchArgument(name='enable_floor_detection', default_value=''),
-        DeclareLaunchArgument(name='enable_gps', default_value=''),
-        DeclareLaunchArgument(name='enable_imu_acceleration', default_value=''),
-        DeclareLaunchArgument(name='enable_imu_orientation', default_value=''),
-        DeclareLaunchArgument(name='tf_link_values', default_value=''),
-        DeclareLaunchArgument(name='points_topic', default_value=''),
-        DeclareLaunchArgument(name='map_frame_id', default_value=''),
-        DeclareLaunchArgument(name='odom_frame_id', default_value=''),
-        DeclareLaunchArgument(name='robot_odom_frame_id', default_value=''),
-        DeclareLaunchArgument(name='enable_robot_odometry_init_guess', default_value=''),
-        DeclareLaunchArgument(name='imu_topic', default_value=''),
-        # init pose arguments
-        DeclareLaunchArgument(name='x', default_value=''),
-        DeclareLaunchArgument(name='y', default_value=''),
-        DeclareLaunchArgument(name='z', default_value=''),
-        DeclareLaunchArgument(name='roll', default_value=''),
-        DeclareLaunchArgument(name='pitch', default_value=''),
-        DeclareLaunchArgument(name='yaw', default_value=''),
-        DeclareLaunchArgument(name='init_pose_topic', default_value=''),
-        # Launch the hdl_graph_slam multi robot node
-        OpaqueFunction(function=launch_setup)
-    ])
+    launch_description_list = []
+    for param_name, _ in PARAM_MAPPING.items():
+        launch_description_list.append(DeclareLaunchArgument(name=param_name, default_value=''))
+    launch_description_list.append(OpaqueFunction(function=launch_setup))
+
+    return LaunchDescription(launch_description_list)
