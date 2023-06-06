@@ -27,7 +27,7 @@ FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
     floor_edge_robust_kernel      = node->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
     floor_edge_robust_kernel_size = node->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
 
-    floor_sub = node->create_subscription<hdl_graph_slam::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
+    floor_sub = node->create_subscription<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
                                                                              std::bind( &FloorCoeffsProcessor::floor_coeffs_callback, this,
                                                                                         std::placeholders::_1 ) );
 }
@@ -37,7 +37,7 @@ FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
  * @param floor_coeffs_msg
  */
 void
-FloorCoeffsProcessor::floor_coeffs_callback( hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg )
+FloorCoeffsProcessor::floor_coeffs_callback( vamex_slam_msgs::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg )
 {
     if( floor_coeffs_msg->coeffs.empty() ) {
         return;
@@ -103,7 +103,7 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
     //                                         return stamp < coeffs->header.stamp;
     //                                     } );
     auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), rclcpp::Time( latest_keyframe_stamp ),
-                                        [=]( const rclcpp::Time &stamp, const hdl_graph_slam::msg::FloorCoeffs::ConstSharedPtr &coeffs ) {
+                                        [=]( const rclcpp::Time &stamp, const vamex_slam_msgs::msg::FloorCoeffs::ConstSharedPtr &coeffs ) {
                                             return stamp < rclcpp::Time( coeffs->header.stamp );
                                         } );
     floor_coeffs_queue.erase( floor_coeffs_queue.begin(), remove_loc );

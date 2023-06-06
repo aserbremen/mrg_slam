@@ -2,7 +2,7 @@
 
 #include <pcl_conversions/pcl_conversions.h>  //
 
-#include <hdl_graph_slam/msg/floor_coeffs.hpp>
+#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 #include <hdl_graph_slam/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -46,7 +46,7 @@ public:
                                                                                std::bind( &FloorDetectionComponent::cloud_callback, this,
                                                                                           std::placeholders::_1 ) );
 
-        floor_pub = this->create_publisher<hdl_graph_slam::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub = this->create_publisher<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
         read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
         floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
@@ -78,7 +78,7 @@ public:
                                                                                           std::placeholders::_1 ) );
 
         // floor_pub = nh.advertise<hdl_graph_slam::FloorCoeffs>( "/floor_detection/floor_coeffs", 32 );
-        floor_pub = this->create_publisher<hdl_graph_slam::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub = this->create_publisher<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
         // read_until_pub     = nh.advertise<std_msgs::Header>( "/floor_detection/read_until", 32 );
         // floor_filtered_pub = nh.advertise<sensor_msgs::PointCloud2>( "/floor_detection/floor_filtered_points", 32 );
@@ -176,7 +176,7 @@ private:
         boost::optional<Eigen::Vector4f> floor = detect( cloud );
 
         // publish the detected floor coefficients
-        hdl_graph_slam::msg::FloorCoeffs coeffs;
+        vamex_slam_msgs::msg::FloorCoeffs coeffs;
         coeffs.header = cloud_msg->header;
         if( floor ) {
             coeffs.coeffs.resize( 4 );
@@ -357,7 +357,7 @@ private:
     // ros::Publisher floor_pub;
     // ros::Publisher                                                 floor_points_pub;
     // ros::Publisher                                                 floor_filtered_pub;
-    rclcpp::Publisher<hdl_graph_slam::msg::FloorCoeffs>::SharedPtr floor_pub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    floor_points_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    floor_filtered_pub;
 

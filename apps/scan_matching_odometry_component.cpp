@@ -8,10 +8,10 @@
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <hdl_graph_slam/msg/scan_matching_status.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <vamex_slam_msgs/msg/scan_matching_status.hpp>
 // #include <ros/ros.h>
 // #include <geometry_msgs/PoseWithCovarianceStamped.h>
 // #include <geometry_msgs/TransformStamped.h>
@@ -74,7 +74,7 @@ public:
         read_until_pub = this->create_publisher<std_msgs::msg::Header>( "/scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
         odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "/scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
         trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
-        status_pub = this->create_publisher<hdl_graph_slam::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
+        status_pub = this->create_publisher<vamex_slam_msgs::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
         aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/scan_matching_odometry/aligned_points",
                                                                                     rclcpp::QoS( 32 ) );
 
@@ -143,7 +143,7 @@ public:
         read_until_pub = this->create_publisher<std_msgs::msg::Header>( "/scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
         odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "/scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
         trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
-        status_pub = this->create_publisher<hdl_graph_slam::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
+        status_pub = this->create_publisher<vamex_slam_msgs::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
         aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/scan_matching_odometry/aligned_points",
                                                                                     rclcpp::QoS( 32 ) );
 
@@ -513,7 +513,7 @@ private:
             return;
         }
 
-        hdl_graph_slam::msg::ScanMatchingStatus status;
+        vamex_slam_msgs::msg::ScanMatchingStatus status;
         status.header.frame_id = frame_id;
         status.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
         status.has_converged   = registration->hasConverged();
@@ -565,10 +565,10 @@ private:
     // ros::Publisher           trans_pub;
     // ros::Publisher           aligned_points_pub;
     // ros::Publisher           status_pub;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                 odom_pub;
-    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr    trans_pub;
-    rclcpp::Publisher<hdl_graph_slam::msg::ScanMatchingStatus>::SharedPtr status_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr           aligned_points_pub;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                  odom_pub;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr     trans_pub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::ScanMatchingStatus>::SharedPtr status_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr            aligned_points_pub;
 
 
     // tf::TransformListener    tf_listener;

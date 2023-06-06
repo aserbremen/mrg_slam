@@ -1,6 +1,0 @@
-bool utm
-float32 resolution
-int32 count_threshold
-string destination
----
-bool success

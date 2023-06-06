@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.5)
 
 # Find necessary packages
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components)
 find_package(rcutils REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(vamex_slam_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -30,48 +30,6 @@ find_package(rclpy REQUIRED)
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
 endif ()
-
-########################
-## message generation ##
-########################
-set(msg_files
-  "msg/EdgeEstimate.msg"
-  "msg/EdgeRos.msg"
-  "msg/FloorCoeffs.msg"
-  "msg/GraphEstimate.msg"
-  "msg/GraphRos.msg"
-  "msg/KeyFrameEstimate.msg"
-  "msg/KeyFrameRos.msg"
-  "msg/PoseWithName.msg"
-  "msg/PoseWithNameArray.msg"
-  "msg/ScanMatchingStatus.msg"
-  # in case one unified branch for ROS1 and ROS2 is wanted, use the following message definitions instead.
-  # This is due to the fact that 'duration' and 'time' (ROS1) cannot easily be bridged to 'builin_interfaces/Time' 'builin_interfaces/Duration'
-  # see # https://docs.ros.org/en/foxy/The-ROS2-Project/Contributing/Migration-Guide.html#message-service-and-action-definitions
-  # "msg/KeyFrameRos2.msg"
-  # "msg/KeyFrameEstimateRos2.msg"
-  # "msg/GraphRos2.msg"
-  # "msg/GraphEstimateRos2.msg"
-)
-  
-set(srv_files
-  "srv/DumpGraph.srv"
-  "srv/GetGraphEstimate.srv"
-  "srv/GetMap.srv"
-  "srv/PublishGraph.srv"
-  "srv/SaveMap.srv"
-  # in case one unified branch for ROS1 and ROS2 is wanted, use the following message definitions instead
-  # This is due to the fact that 'duration' and 'time' (ROS1) cannot easily be bridged to 'builin_interfaces/Time' 'builin_interfaces/Duration',
-  # see # https://docs.ros.org/en/foxy/The-ROS2-Project/Contributing/Migration-Guide.html#message-service-and-action-definitions
-  # "srv/GetGraphEstimateRos2.srv"
-  # "srv/GetMapRos2.srv"
-)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-    ${msg_files}
-    ${srv_files}
-    DEPENDENCIES builtin_interfaces std_msgs nmea_msgs sensor_msgs geometry_msgs nav_msgs geographic_msgs visualization_msgs tf2_geometry_msgs
-)
 
 ###########
 ## Build ##
@@ -106,11 +64,13 @@ ament_target_dependencies(floor_detection_component
   tf2_ros
   geometry_msgs
   sensor_msgs
+  nav_msgs
+  vamex_slam_msgs
   ndt_omp
   fast_gicp
 )
 # Make the component depend on custom messages in its own package.
-rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(floor_detection_component "hdl_graph_slam::FloorDetectionComponent")
 set(node_plugins "{node_plugins}hdl_graph_slam::FloorDetectionComponent;$<TARGET_FILE:floor_detection_component>\n")
@@ -146,11 +106,10 @@ ament_target_dependencies(scan_matching_odometry_component
   geometry_msgs
   sensor_msgs
   nav_msgs
+  vamex_slam_msgs
   ndt_omp
   fast_gicp
 )
-# Make the component depend on custom messages in its own package.
-rosidl_target_interfaces(scan_matching_odometry_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(scan_matching_odometry_component "hdl_graph_slam::ScanMatchingOdometryComponent")
 set(node_plugins "{node_plugins}hdl_graph_slam::ScanMatchingOdometryComponent;$<TARGET_FILE:scan_matching_odometry_component>\n")
@@ -252,12 +211,10 @@ ament_target_dependencies(hdl_graph_slam_component
   nav_msgs
   geographic_msgs
   visualization_msgs
+  vamex_slam_msgs
   fast_gicp
   ndt_omp
 )
-# The next line is needed for custom messages to be used within the same package.
-# https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Single-Package-Define-And-Use-Interface.html#link-against-the-interface
-rosidl_target_interfaces(hdl_graph_slam_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")
 set(node_plugins "{node_plugins}hdl_graph_slam::HdlGraphSlamComponent;$<TARGET_FILE:hdl_graph_slam_component>\n")
@@ -326,7 +283,7 @@ install(FILES
 # Install python nodes
 ament_python_install_package(scripts)
 
-# Install launch executables
+# Install python nodes
 install(PROGRAMS
   scripts/map2odom_publisher_ros2.py
   scripts/clock_publisher_ros2.py

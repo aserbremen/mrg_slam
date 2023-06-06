@@ -5,19 +5,19 @@
 
 #include <chrono>
 #include <functional>
-#include <hdl_graph_slam/msg/graph_ros.hpp>
-#include <hdl_graph_slam/msg/pose_with_name.hpp>
-#include <hdl_graph_slam/msg/pose_with_name_array.hpp>
-#include <hdl_graph_slam/srv/dump_graph.hpp>
-#include <hdl_graph_slam/srv/get_graph_estimate.hpp>
-#include <hdl_graph_slam/srv/get_map.hpp>
-#include <hdl_graph_slam/srv/publish_graph.hpp>
-#include <hdl_graph_slam/srv/save_map.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <vamex_slam_msgs/msg/graph_ros.hpp>
+#include <vamex_slam_msgs/msg/pose_with_name.hpp>
+#include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
+#include <vamex_slam_msgs/srv/dump_graph.hpp>
+#include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
+#include <vamex_slam_msgs/srv/get_map.hpp>
+#include <vamex_slam_msgs/srv/publish_graph.hpp>
+#include <vamex_slam_msgs/srv/save_map.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
 // #include <ros/ros.h>
@@ -196,11 +196,11 @@ public:
         // graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamComponent::graph_callback, this );
         // odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamComponent::odom_broadcast_callback, this
         // );
-        graph_broadcast_sub = this->create_subscription<hdl_graph_slam::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
-                                                                                        rclcpp::QoS( 16 ),
-                                                                                        std::bind( &HdlGraphSlamComponent::graph_callback,
-                                                                                                   this, std::placeholders::_1 ) );
-        odom_broadcast_sub  = this->create_subscription<hdl_graph_slam::msg::PoseWithName>(
+        graph_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
+                                                                                         rclcpp::QoS( 16 ),
+                                                                                         std::bind( &HdlGraphSlamComponent::graph_callback,
+                                                                                                    this, std::placeholders::_1 ) );
+        odom_broadcast_sub  = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
             "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 16 ),
             std::bind( &HdlGraphSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
 
@@ -222,11 +222,12 @@ public:
         odom2map_pub        = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
         map_points_pub      = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
         read_until_pub      = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
-        graph_broadcast_pub = this->create_publisher<hdl_graph_slam::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast", rclcpp::QoS( 16 ) );
-        odom_broadcast_pub  = this->create_publisher<hdl_graph_slam::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
-                                                                                        rclcpp::QoS( 16 ) );
-        others_poses_pub    = this->create_publisher<hdl_graph_slam::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
-                                                                                           rclcpp::QoS( 16 ) );
+        graph_broadcast_pub = this->create_publisher<vamex_slam_msgs::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
+                                                                                      rclcpp::QoS( 16 ) );
+        odom_broadcast_pub  = this->create_publisher<vamex_slam_msgs::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
+                                                                                         rclcpp::QoS( 16 ) );
+        others_poses_pub    = this->create_publisher<vamex_slam_msgs::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
+                                                                                            rclcpp::QoS( 16 ) );
 
         // dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamComponent::dump_service, this );
         // save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamComponent::save_map_service, this );
@@ -240,36 +241,36 @@ public:
         // If these service callbacks dont work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Dumb service
-        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::DumpGraph::Request> req,
-                            std::shared_ptr<hdl_graph_slam::srv::DumpGraph::Response>      res )>
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::DumpGraph::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::DumpGraph::Response>      res )>
             dump_service_callback = std::bind( &HdlGraphSlamComponent::dump_service, this, std::placeholders::_1, std::placeholders::_2 );
-        dump_service_server       = this->create_service<hdl_graph_slam::srv::DumpGraph>( "/hdl_graph_slam/dump", dump_service_callback );
+        dump_service_server       = this->create_service<vamex_slam_msgs::srv::DumpGraph>( "/hdl_graph_slam/dump", dump_service_callback );
         // Save map service
-        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::SaveMap::Request> req,
-                            std::shared_ptr<hdl_graph_slam::srv::SaveMap::Response>      res )>
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::SaveMap::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::SaveMap::Response>      res )>
             save_map_service_callback = std::bind( &HdlGraphSlamComponent::save_map_service, this, std::placeholders::_1,
                                                    std::placeholders::_2 );
-        save_map_service_server       = this->create_service<hdl_graph_slam::srv::SaveMap>( "/hdl_graph_slam/save_map",
+        save_map_service_server       = this->create_service<vamex_slam_msgs::srv::SaveMap>( "/hdl_graph_slam/save_map",
                                                                                       save_map_service_callback );
         // Get map service
-        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetMap::Request> req,
-                            std::shared_ptr<hdl_graph_slam::srv::GetMap::Response>      res )>
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetMap::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::GetMap::Response>      res )>
             get_map_service_callback = std::bind( &HdlGraphSlamComponent::get_map_service, this, std::placeholders::_1,
                                                   std::placeholders::_2 );
-        get_map_service_server = this->create_service<hdl_graph_slam::srv::GetMap>( "/hdl_graph_slam/get_map", get_map_service_callback );
+        get_map_service_server = this->create_service<vamex_slam_msgs::srv::GetMap>( "/hdl_graph_slam/get_map", get_map_service_callback );
         // Get graph estimate service
-        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Request> req,
-                            std::shared_ptr<hdl_graph_slam::srv::GetGraphEstimate::Response>      res )>
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetGraphEstimate::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::GetGraphEstimate::Response>      res )>
             get_graph_estimate_service_callback = std::bind( &HdlGraphSlamComponent::get_graph_estimate_service, this,
                                                              std::placeholders::_1, std::placeholders::_2 );
-        get_graph_estimate_service_server       = this->create_service<hdl_graph_slam::srv::GetGraphEstimate>(
+        get_graph_estimate_service_server       = this->create_service<vamex_slam_msgs::srv::GetGraphEstimate>(
             "/hdl_graph_slam/get_graph_estimate", get_graph_estimate_service_callback );
         // Publish graph service
-        std::function<void( const std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Request> req,
-                            std::shared_ptr<hdl_graph_slam::srv::PublishGraph::Response>      res )>
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::PublishGraph::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::PublishGraph::Response>      res )>
             publish_graph_service_callback = std::bind( &HdlGraphSlamComponent::publish_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
-        publish_graph_service_server       = this->create_service<hdl_graph_slam::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
+        publish_graph_service_server       = this->create_service<vamex_slam_msgs::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
                                                                                                 publish_graph_service_callback );
 
         for( const auto &robot_name : robot_names ) {
@@ -278,7 +279,7 @@ public:
                 // "/" + robot_name + "/hdl_graph_slam/publish_graph" );
                 // The service client from within this component is not working, so we create a publisher and subscriber to request the due
                 // to adding the same node to the exectuor multiple times
-                // graph request_graph_service_clients[robot_name] = this->create_client<hdl_graph_slam::srv::PublishGraph>(
+                // graph request_graph_service_clients[robot_name] = this->create_client<vamex_slam_msgs::srv::PublishGraph>(
                 //     "/" + robot_name + "/hdl_graph_slam/publish_graph" );
                 others_accum_dist[robot_name] = std::make_pair<double, double>( 0, -1 );
             }
@@ -427,7 +428,7 @@ private:
         }
 
         // publish own odometry
-        hdl_graph_slam::msg::PoseWithName pose_msg;
+        vamex_slam_msgs::msg::PoseWithName pose_msg;
         pose_msg.header     = odom_msg->header;
         pose_msg.robot_name = own_name;
         pose_msg.pose       = odom_msg->pose.pose;
@@ -566,7 +567,7 @@ private:
      * @param graph_msg
      */
     // void graph_callback( const hdl_graph_slam::GraphRos::ConstPtr &graph_msg )
-    void graph_callback( hdl_graph_slam::msg::GraphRos::ConstSharedPtr graph_msg )
+    void graph_callback( vamex_slam_msgs::msg::GraphRos::ConstSharedPtr graph_msg )
     {
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
         if( graph_msg->robot_name != own_name ) {
@@ -592,8 +593,8 @@ private:
 
         // std::unordered_map<GlobalId, const KeyFrameRos *> unique_keyframes;
         // std::unordered_map<GlobalId, const EdgeRos *>     unique_edges;
-        std::unordered_map<GlobalId, const hdl_graph_slam::msg::KeyFrameRos *> unique_keyframes;
-        std::unordered_map<GlobalId, const hdl_graph_slam::msg::EdgeRos *>     unique_edges;
+        std::unordered_map<GlobalId, const vamex_slam_msgs::msg::KeyFrameRos *> unique_keyframes;
+        std::unordered_map<GlobalId, const vamex_slam_msgs::msg::EdgeRos *>     unique_edges;
 
         std::unordered_map<std::string, std::pair<const GlobalId *, const geometry_msgs::msg::Pose *>> latest_robot_keyframes;
 
@@ -727,14 +728,14 @@ private:
      * @param graph_msg
      */
     // void odom_broadcast_callback( const hdl_graph_slam::PoseWithName::ConstPtr &pose_msg )
-    void odom_broadcast_callback( hdl_graph_slam::msg::PoseWithName::ConstSharedPtr pose_msg )
+    void odom_broadcast_callback( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr pose_msg )
     {
         if( pose_msg->robot_name == own_name ) {
             return;
         }
 
         // PoseWithNameArray pose_array_msg;
-        hdl_graph_slam::msg::PoseWithNameArray pose_array_msg;
+        vamex_slam_msgs::msg::PoseWithNameArray pose_array_msg;
         pose_array_msg.header.stamp    = pose_msg->header.stamp;
         pose_array_msg.header.frame_id = map_frame_id;
 
@@ -809,7 +810,7 @@ private:
         // https://github.com/ros2/examples/blob/foxy/rclcpp/services/minimal_client/main.cpp
         // TODO Service client call needs to be done from a different thread/node, multi robot not working
         // auto client        = request_graph_service_clients[other_name];
-        // auto request       = std::make_shared<hdl_graph_slam::srv::PublishGraph::Request>();
+        // auto request       = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
         // auto result_future = client->async_send_request( request );
         // if( rclcpp::spin_until_future_complete( shared_from_this(), result_future ) != rclcpp::FutureReturnCode::SUCCESS ) {
         //     RCLCPP_ERROR_STREAM( this->get_logger(), "Failed to request graph from " << other_name );
@@ -846,8 +847,8 @@ private:
     {
         // call the publish graph function from within this class if the robot name is the own robot name
         if( msg->data == own_name ) {
-            auto req = std::make_shared<const hdl_graph_slam::srv::PublishGraph::Request>();
-            auto res = std::make_shared<hdl_graph_slam::srv::PublishGraph::Response>();
+            auto req = std::make_shared<const vamex_slam_msgs::srv::PublishGraph::Request>();
+            auto res = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Response>();
             publish_graph_service( req, res );
         }
     }
@@ -922,7 +923,7 @@ private:
      */
     // bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
     // TODO test this service
-    void get_map_service( hdl_graph_slam::srv::GetMap::Request::ConstSharedPtr req, hdl_graph_slam::srv::GetMap::Response::SharedPtr res )
+    void get_map_service( vamex_slam_msgs::srv::GetMap::Request::ConstSharedPtr req, vamex_slam_msgs::srv::GetMap::Response::SharedPtr res )
     {
         std::lock_guard<std::mutex> lock( cloud_msg_mutex );
 
@@ -956,8 +957,8 @@ private:
      * @return
      */
     // bool get_graph_estimate_service( hdl_graph_slam::GetGraphEstimateRequest &req, hdl_graph_slam::GetGraphEstimateResponse &res )
-    void get_graph_estimate_service( hdl_graph_slam::srv::GetGraphEstimate::Request::ConstSharedPtr req,
-                                     hdl_graph_slam::srv::GetGraphEstimate::Response::SharedPtr     res )
+    void get_graph_estimate_service( vamex_slam_msgs::srv::GetGraphEstimate::Request::ConstSharedPtr req,
+                                     vamex_slam_msgs::srv::GetGraphEstimate::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( graph_estimate_msg_mutex );
 
@@ -970,7 +971,7 @@ private:
 
             if( !graph_estimate_msg ) {
                 // graph_estimate_msg = hdl_graph_slam::GraphEstimatePtr( new hdl_graph_slam::GraphEstimate() );
-                graph_estimate_msg = hdl_graph_slam::msg::GraphEstimate::SharedPtr( new hdl_graph_slam::msg::GraphEstimate() );
+                graph_estimate_msg = vamex_slam_msgs::msg::GraphEstimate::SharedPtr( new vamex_slam_msgs::msg::GraphEstimate() );
             }
 
             std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp;
@@ -1166,8 +1167,8 @@ private:
     //  * @return
     //  */
     // bool dump_service( hdl_graph_slam::DumpGraphRequest &req, hdl_graph_slam::DumpGraphResponse &res )
-    void dump_service( hdl_graph_slam::srv::DumpGraph::Request::ConstSharedPtr req,
-                       hdl_graph_slam::srv::DumpGraph::Response::SharedPtr     res )
+    void dump_service( vamex_slam_msgs::srv::DumpGraph::Request::ConstSharedPtr req,
+                       vamex_slam_msgs::srv::DumpGraph::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
@@ -1222,8 +1223,8 @@ private:
      * @return
      */
     // bool save_map_service( hdl_graph_slam::SaveMapRequest &req, hdl_graph_slam::SaveMapResponse &res )
-    void save_map_service( hdl_graph_slam::srv::SaveMap::Request::ConstSharedPtr req,
-                           hdl_graph_slam::srv::SaveMap::Response::SharedPtr     res )
+    void save_map_service( vamex_slam_msgs::srv::SaveMap::Request::ConstSharedPtr req,
+                           vamex_slam_msgs::srv::SaveMap::Response::SharedPtr     res )
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
@@ -1276,11 +1277,11 @@ private:
      */
     // bool publish_graph_service( hdl_graph_slam::PublishGraphRequest &req, hdl_graph_slam::PublishGraphResponse &res )
     // TODO ROS2 test this
-    void publish_graph_service( hdl_graph_slam::srv::PublishGraph::Request::ConstSharedPtr req,
-                                hdl_graph_slam::srv::PublishGraph::Response::SharedPtr     res )
+    void publish_graph_service( vamex_slam_msgs::srv::PublishGraph::Request::ConstSharedPtr req,
+                                vamex_slam_msgs::srv::PublishGraph::Response::SharedPtr     res )
     {
         // GraphRos msg;
-        hdl_graph_slam::msg::GraphRos msg;
+        vamex_slam_msgs::msg::GraphRos msg;
         {
             std::lock_guard<std::mutex> lock( main_thread_mutex );
 
@@ -1349,8 +1350,8 @@ private:
 
     // ros::Subscriber graph_broadcast_sub;
     // ros::Publisher  graph_broadcast_pub;
-    rclcpp::Subscription<hdl_graph_slam::msg::GraphRos>::SharedPtr graph_broadcast_sub;
-    rclcpp::Publisher<hdl_graph_slam::msg::GraphRos>::SharedPtr    graph_broadcast_pub;
+    rclcpp::Subscription<vamex_slam_msgs::msg::GraphRos>::SharedPtr graph_broadcast_sub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::GraphRos>::SharedPtr    graph_broadcast_pub;
 
     std::string map_frame_id;
     std::string odom_frame_id;
@@ -1358,9 +1359,9 @@ private:
     // ros::Subscriber odom_broadcast_sub;
     // ros::Publisher  odom_broadcast_pub;
     // ros::Publisher  others_poses_pub;
-    rclcpp::Subscription<hdl_graph_slam::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
-    rclcpp::Publisher<hdl_graph_slam::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
-    rclcpp::Publisher<hdl_graph_slam::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
+    rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
 
     std::mutex      trans_odom2map_mutex;
     Eigen::Matrix4f trans_odom2map;
@@ -1385,14 +1386,14 @@ private:
     // ros::ServiceServer                                  get_map_service_server;
     // ros::ServiceServer                                  get_graph_estimate_service_server;
     // ros::ServiceServer                                  publish_graph_service_server;
-    // std::unordered_map<std::string, rclcpp::Client<hdl_graph_slam::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+    // std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr            request_robot_graph_sub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr               request_robot_graph_pub;
-    rclcpp::Service<hdl_graph_slam::srv::DumpGraph>::SharedPtr        dump_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::SaveMap>::SharedPtr          save_map_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::GetMap>::SharedPtr           get_map_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
-    rclcpp::Service<hdl_graph_slam::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::DumpGraph>::SharedPtr        dump_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
 
     std::string              own_name;
     std::vector<std::string> robot_names;
@@ -1413,7 +1414,7 @@ private:
     std::mutex       graph_estimate_msg_mutex;
     std::atomic_bool graph_estimate_msg_update_required;
     // hdl_graph_slam::GraphEstimatePtr graph_estimate_msg;
-    hdl_graph_slam::msg::GraphEstimate::SharedPtr graph_estimate_msg;
+    vamex_slam_msgs::msg::GraphEstimate::SharedPtr graph_estimate_msg;
 
     // getting init pose from topic
     // ros::Subscriber init_pose_sub;
@@ -1430,7 +1431,7 @@ private:
     // graph queue
     std::mutex graph_queue_mutex;
     // std::deque<hdl_graph_slam::GraphRosConstPtr> graph_queue;
-    std::deque<hdl_graph_slam::msg::GraphRos::ConstSharedPtr> graph_queue;
+    std::deque<vamex_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
 
     // for map cloud generation and graph publishing
     double                             map_cloud_resolution;
