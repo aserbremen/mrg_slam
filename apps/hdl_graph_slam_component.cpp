@@ -251,7 +251,7 @@ public:
             save_map_service_callback = std::bind( &HdlGraphSlamComponent::save_map_service, this, std::placeholders::_1,
                                                    std::placeholders::_2 );
         save_map_service_server       = this->create_service<vamex_slam_msgs::srv::SaveMap>( "/hdl_graph_slam/save_map",
-                                                                                      save_map_service_callback );
+                                                                                       save_map_service_callback );
         // Get map service
         std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetMap::Request> req,
                             std::shared_ptr<vamex_slam_msgs::srv::GetMap::Response>      res )>
@@ -271,7 +271,7 @@ public:
             publish_graph_service_callback = std::bind( &HdlGraphSlamComponent::publish_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
         publish_graph_service_server       = this->create_service<vamex_slam_msgs::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
-                                                                                                publish_graph_service_callback );
+                                                                                                 publish_graph_service_callback );
 
         for( const auto &robot_name : robot_names ) {
             if( robot_name != own_name ) {
@@ -822,6 +822,7 @@ private:
         // Instead we just publish a message to the request a specific robot graph
         std_msgs::msg::String msg;
         msg.data = other_name;
+        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from " << other_name );
         request_robot_graph_pub->publish( msg );
         // TODO only update last_accum_dist if the request was successful
         last_accum_dist = accum_dist;
@@ -1387,8 +1388,8 @@ private:
     // ros::ServiceServer                                  get_graph_estimate_service_server;
     // ros::ServiceServer                                  publish_graph_service_server;
     // std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr            request_robot_graph_sub;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr               request_robot_graph_pub;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr             request_robot_graph_sub;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr                request_robot_graph_pub;
     rclcpp::Service<vamex_slam_msgs::srv::DumpGraph>::SharedPtr        dump_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;

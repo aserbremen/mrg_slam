@@ -250,6 +250,25 @@ if (BUILD_MANUAL_COMPOSITION)
   )
 endif()
 
+################################
+## Multi Robot Communicator ####
+################################
+add_executable(multi_robot_communicator
+  apps/multi_robot_communicator.cpp
+)
+ament_target_dependencies(multi_robot_communicator
+  rclcpp
+  vamex_slam_msgs
+  tf2
+  tf2_ros
+  tf2_eigen
+  nav_msgs
+  geometry_msgs
+)
+install(TARGETS multi_robot_communicator
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Here we can export all downstream dependencies and include directories
 # TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
 # TODO export package for downstream packages to use see: https://discourse.ros.org/t/ament-best-practice-for-sharing-libraries/3602/2
