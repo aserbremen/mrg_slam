@@ -1325,6 +1325,8 @@ private:
         }
 
         // graph_broadcast_pub.publish( msg );
+        RCLCPP_INFO_STREAM( this->get_logger(),
+                            "Publishing graph with " << msg.keyframes.size() << " keyframes and " << msg.edges.size() << " edges." );
         graph_broadcast_pub->publish( msg );
 
         // ROS2 services are of type void and dont return a bool.
