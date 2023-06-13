@@ -258,14 +258,16 @@ add_executable(multi_robot_communicator
 )
 ament_target_dependencies(multi_robot_communicator
   rclcpp
-  vamex_slam_msgs
   tf2
   tf2_ros
   tf2_eigen
+  vamex_slam_msgs
   nav_msgs
   geometry_msgs
 )
 install(TARGETS multi_robot_communicator
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
   DESTINATION lib/${PROJECT_NAME}
 )
 
