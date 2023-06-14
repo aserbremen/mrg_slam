@@ -11,22 +11,31 @@
 #include <unordered_map>
 #include <utility>
 #include <vamex_slam_msgs/msg/pose_with_name.hpp>
+#include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
 
 namespace hdl_graph_slam {
 
 class MultiRobotCommunicator : public rclcpp::Node {
 public:
+    enum class PublishGraphTriggerMode {
+        ODOMETRY,  // only considers odometry including drift and no loop closures
+        SLAM,      // considers the keyframes that are added to the graph (including loop closures corrections)
+    };
+
     MultiRobotCommunicator() : Node( "multi_robot_communicator" ), communication_ready_( false )
     {
-        robot_names_ = this->declare_parameter<std::vector<std::string>>( "robot_names", std::vector<std::string>{ "atlas", "bestla" } );
+        std::string publish_graph_trigger_mode_str = this->declare_parameter<std::string>( "publish_graph_trigger_mode", "slam" );
+
+        trigger_mode_ = trigger_mode_from_string( publish_graph_trigger_mode_str );
+
         own_name_    = this->declare_parameter<std::string>( "own_name", "atlas" );
+        robot_names_ = this->declare_parameter<std::vector<std::string>>( "robot_names", std::vector<std::string>{ "atlas", "bestla" } );
         graph_request_min_accum_dist_ = this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
         graph_request_max_robot_dist_ = this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
         graph_request_min_robot_dist_ = this->declare_parameter<double>( "graph_request_min_robot_dist", 2.0 );
         graph_request_min_time_delay_ = this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
         communication_delay_          = this->declare_parameter<int>( "communication_delay", 5 );
-
 
         std::string service_name = "/hdl_graph_slam/publish_graph";
         if( robot_names_.empty() ) {
@@ -58,12 +67,20 @@ public:
             last_graph_request_times_[robot_name] = builtin_interfaces::msg::Time();
         }
 
-        // Subscribe to the odom broadcast topic using the same reentrant callback group as the service clients
+        // Subscribe to the odom broadcast or the others poses topic using the same reentrant callback group as the service clients
         auto subscription_options           = rclcpp::SubscriptionOptions();
         subscription_options.callback_group = reentrant_callback_group;
-        odom_broadcast_sub_                 = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
-            "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 20 ),
-            std::bind( &MultiRobotCommunicator::odom_broadcast_callback, this, std::placeholders::_1 ), subscription_options );
+
+        if( trigger_mode_ == PublishGraphTriggerMode::ODOMETRY ) {
+            odom_broadcast_sub_ = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
+                "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 100 ),
+                std::bind( &MultiRobotCommunicator::odom_broadcast_callback, this, std::placeholders::_1 ), subscription_options );
+        } else if( trigger_mode_ == PublishGraphTriggerMode::SLAM ) {
+            std::string others_poses_topic_name = "/" + own_name_ + "/hdl_graph_slam/others_poses";
+            others_poses_sub_                   = this->create_subscription<vamex_slam_msgs::msg::PoseWithNameArray>(
+                others_poses_topic_name, rclcpp::QoS( 100 ),
+                std::bind( &MultiRobotCommunicator::others_poses_callback, this, std::placeholders::_1 ), subscription_options );
+        }
 
         // Initialiaze the tf2 buffer and listener to get odom 2 map transforms
         tf_buffer_   = std::make_shared<tf2_ros::Buffer>( this->get_clock() );
@@ -103,16 +120,40 @@ public:
         update_odom2map_transform( odom_msg->robot_name );
 
         // update the distances to all robots
-        update_distance( odom_msg );
+        update_distance( *odom_msg );
 
         // publish the graph if the last graph publish was more than 5 seconds ago
-        request_graph_publish( odom_msg );
+        request_graph_publish( *odom_msg );
     }
+
+    void others_poses_callback( vamex_slam_msgs::msg::PoseWithNameArray::ConstSharedPtr others_poses_msg )
+    {
+        if( init_timer_ == nullptr ) {
+            init_timer_ = this->create_wall_timer( std::chrono::seconds( communication_delay_ ),
+                                                   std::bind( &MultiRobotCommunicator::communication_delay_timer_callback, this ) );
+            return;
+        }
+
+        if( !communication_ready_ ) {
+            return;
+        }
+
+        RCLCPP_DEBUG_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 5000,
+                                      "Received others poses broadcast from " << others_poses_msg->poses.size() << " robots" );
+
+        update_odom2map_transforms();
+
+        for( const auto& odom_msg : others_poses_msg->poses ) {
+            update_distance( odom_msg );
+
+            request_graph_publish( odom_msg );
+        }
+    }
+
 
     void update_odom2map_transform( const std::string& robot_name )
     {
         // TODO add map frame and odom frame as member variables
-        // for( const auto& robot_name : robot_names_ ) {
         std::string map_frame  = robot_name + "/map";
         std::string odom_frame = robot_name + "/odom";
         if( !tf_buffer_->canTransform( map_frame, odom_frame, rclcpp::Time( 0 ), rclcpp::Duration( 1, 0 ) ) ) {
@@ -133,12 +174,38 @@ public:
         RCLCPP_DEBUG_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 5000,
                                       "Received odom2map transform for " << robot_name << " with transform\n"
                                                                          << tf2::transformToEigen( t_odom2map ).matrix() );
-        // }
     }
 
-    void update_distance( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr odom_msg )
+    void update_odom2map_transforms()
     {
-        const auto& robot_name = odom_msg->robot_name;
+        // TODO add map frame and odom frame as member variables
+        for( const auto& robot_name : robot_names_ ) {
+            std::string map_frame  = robot_name + "/map";
+            std::string odom_frame = robot_name + "/odom";
+            if( !tf_buffer_->canTransform( map_frame, odom_frame, rclcpp::Time( 0 ), rclcpp::Duration( 1, 0 ) ) ) {
+                RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 500,
+                                             "Cannot transform source frame " << odom_frame << " to target frame " << map_frame );
+                return;
+            }
+
+            geometry_msgs::msg::TransformStamped t_odom2map;
+            try {
+                t_odom2map = tf_buffer_->lookupTransform( map_frame, odom_frame, rclcpp::Time( 0 ) );
+            } catch( tf2::TransformException& ex ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Could not look up transform: " << ex.what() );
+                return;
+            }
+
+            robot_odom2map_transforms_[robot_name] = std::make_pair( t_odom2map.transform, tf2::transformToEigen( t_odom2map ) );
+            RCLCPP_DEBUG_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 5000,
+                                          "Received odom2map transform for " << robot_name << " with transform\n"
+                                                                             << tf2::transformToEigen( t_odom2map ).matrix() );
+        }
+    }
+
+    void update_distance( const vamex_slam_msgs::msg::PoseWithName& odom_msg )
+    {
+        const auto& robot_name = odom_msg.robot_name;
         if( robot_name == own_name_ ) {
             return;
         }
@@ -167,9 +234,9 @@ public:
         }
     }
 
-    void request_graph_publish( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr odom_msg )
+    void request_graph_publish( const vamex_slam_msgs::msg::PoseWithName& odom_msg )
     {
-        const std::string& robot_name = odom_msg->robot_name;
+        const std::string& robot_name = odom_msg.robot_name;
         if( robot_name == own_name_ ) {
             return;
         }
@@ -189,11 +256,11 @@ public:
             return;
         }
 
-        if( ( rclcpp::Time( odom_msg->header.stamp ) - rclcpp::Time( last_graph_request_times_[robot_name] ) ).seconds()
+        if( ( rclcpp::Time( odom_msg.header.stamp ) - rclcpp::Time( last_graph_request_times_[robot_name] ) ).seconds()
             < graph_request_min_time_delay_ ) {
             RCLCPP_DEBUG_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 2500,
                                           "Not requesting graph from " << robot_name << " time delay since last graph request is "
-                                                                       << ( rclcpp::Time( odom_msg->header.stamp )
+                                                                       << ( rclcpp::Time( odom_msg.header.stamp )
                                                                             - rclcpp::Time( last_graph_request_times_[robot_name] ) )
                                                                               .seconds() );
             return;
@@ -209,10 +276,10 @@ public:
         }
 
         double& last_accum_dist = robot_distances_[robot_name].second;
-        if( fabs( odom_msg->accum_dist - last_accum_dist ) < graph_request_min_accum_dist_ && last_accum_dist >= 0 ) {
+        if( fabs( odom_msg.accum_dist - last_accum_dist ) < graph_request_min_accum_dist_ && last_accum_dist >= 0 ) {
             RCLCPP_DEBUG_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 4000,
                                           "Not requesting graph from " << robot_name << " because delta accum_dist is "
-                                                                       << fabs( odom_msg->accum_dist - last_accum_dist )
+                                                                       << fabs( odom_msg.accum_dist - last_accum_dist )
                                                                        << " and last accum distance is " << last_accum_dist );
             return;
         }
@@ -247,11 +314,28 @@ public:
         // Set the last transforms to current transforms
         last_publish_graph_poses_[robot_name] = std::make_pair( robot_odom2baselink_transforms_[own_name_],
                                                                 robot_odom2baselink_transforms_[robot_name] );
-        last_graph_request_times_[robot_name] = odom_msg->header.stamp;
-        last_accum_dist                       = odom_msg->accum_dist;
+        last_graph_request_times_[robot_name] = odom_msg.header.stamp;
+        last_accum_dist                       = odom_msg.accum_dist;
     }
 
+
 private:
+    PublishGraphTriggerMode trigger_mode_from_string( std::string& trigger_mode_str )
+    {
+        std::transform( trigger_mode_str.begin(), trigger_mode_str.end(), trigger_mode_str.begin(),
+                        []( unsigned char c ) { return std::tolower( c ); } );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Publish graph trigger mode is " << trigger_mode_str );
+        if( trigger_mode_str == "odometry" ) {
+            return PublishGraphTriggerMode::ODOMETRY;
+        } else if( trigger_mode_str == "slam" ) {
+            return PublishGraphTriggerMode::SLAM;
+        } else {
+            RCLCPP_WARN_STREAM( this->get_logger(),
+                                "Unknown publish graph trigger mode " << trigger_mode_str << ". Using default value 'odometry'" );
+            return PublishGraphTriggerMode::ODOMETRY;
+        }
+    }
+
     // TODO std::mutex for odom2map transforms and other values?
     // TODO: possibly check if graph updated at all between robots
 
@@ -275,6 +359,8 @@ private:
     // Subscription to the odom broadcast topic, most recent robot poses taking loop closures into account
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr odom_broadcast_sub_;
 
+    rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_sub_;
+
     std::string              own_name_;
     std::vector<std::string> robot_names_;
 
@@ -282,6 +368,8 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     rclcpp::TimerBase::SharedPtr init_timer_;
+
+    PublishGraphTriggerMode trigger_mode_;
 
     double graph_request_min_accum_dist_;
     double graph_request_max_robot_dist_;
