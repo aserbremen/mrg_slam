@@ -62,7 +62,7 @@ matrix2transform( const rclcpp::Time& stamp, const Eigen::Matrix4f& pose, const 
     odom_quat.z = quat.z();
 
     geometry_msgs::msg::TransformStamped odom_trans;
-    odom_trans.header.stamp    = stamp.     operator builtin_interfaces::msg::Time();
+    odom_trans.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
     odom_trans.header.frame_id = frame_id;
     odom_trans.child_frame_id  = child_frame_id;
 
@@ -187,10 +187,9 @@ odom2isometry( const nav_msgs::msg::Odometry::ConstSharedPtr& odom_msg )
 void
 print_ros2_parameters( const std::vector<rclcpp::Parameter>& ros_params, const rclcpp::Logger& logger )
 {
-    // TODO  Simplify the output of the parameters using value_to_string() method, switch case is not needed probably
-    for( size_t i = 0; i < ros_params.size(); i++ ) {
-        const auto& param = ros_params[i];
-        RCLCPP_INFO_STREAM( logger, param.get_name() << " " << param.value_to_string() );
+    for( const auto& param : ros_params ) {
+        RCLCPP_INFO_STREAM( logger,
+                            std::left << std::setw( 28 ) << std::setfill( ' ' ) << param.get_name() << " " << param.value_to_string() );
     }
 }
 
