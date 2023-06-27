@@ -118,9 +118,9 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     };
     // auto                            stamp   = ros::Time::now();
     // Directly declare builtin_interfaces::msg::Time
-    builtin_interfaces::msg::Time stamp                       = node->now().operator builtin_interfaces::msg::Time();
-    RobotId                                           own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::msg::MarkerArray              markers;
+    builtin_interfaces::msg::Time        stamp   = node->now().operator builtin_interfaces::msg::Time();
+    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray markers;
     markers.markers.resize( __NUM_MARKERS__ );
 
     // node markers
@@ -421,9 +421,9 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
 
     // auto                            stamp   = ros::Time::now();
     // Directly declare builtin_interfaces::msg::Time
-    builtin_interfaces::msg::Time stamp                       = node->now().operator builtin_interfaces::msg::Time();
-    RobotId                                           own_rid = gid_gen.getRobotId( own_name );
-    visualization_msgs::msg::MarkerArray              markers;
+    builtin_interfaces::msg::Time        stamp   = node->now().operator builtin_interfaces::msg::Time();
+    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    visualization_msgs::msg::MarkerArray markers;
 
     markers.markers.resize( keyframes.size() );
 

@@ -1,4 +1,5 @@
 # Parameters reused in this yaml file
+# TODO unify some of the parameters with defines that are reused, i.e. robot_names, model_namespace, etc.
 define: &lidar_odom_frame_id "odom"
 
 # Parameters shared across all nodes or general parameters
@@ -8,7 +9,7 @@ define: &lidar_odom_frame_id "odom"
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
     use_sim_time: true # true for rosbags and for gazebo
-    start_rviz2: true
+    start_rviz2: false
 
 # Transform between lidar and base_link
 lidar2base_publisher:
@@ -106,8 +107,6 @@ hdl_graph_slam_component:
     own_name: "atlas"
     /properties/scenario/rovers/names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
-    graph_request_min_accum_dist: 2.0
-    graph_request_max_robot_dist: 10.0
     # Initial pose
     x: 0.0
     y: 0.0
@@ -187,4 +186,19 @@ hdl_graph_slam_component:
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.05
     save_graph: false
+    # remappings are handled in the python respective launch file
+
+
+# Multi robot communicator
+multi_robot_communicator:
+  ros__parameters:
+    enable_multi_robot_communicator: true
+    own_name: "atlas"
+    robot_names: ["atlas", "bestla"]
+    publish_graph_trigger_mode: "slam"
+    graph_request_min_accum_dist: 3.0
+    graph_request_max_robot_dist: 10.0
+    graph_request_min_robot_dist: 2.0
+    graph_request_min_time_delay: 5.0
+    communication_delay: 5
     # remappings are handled in the python respective launch file
