@@ -85,8 +85,7 @@ public:
         }
 
         // Print all parameters of this node
-        std::vector<rclcpp::Parameter> params_vec = this->get_parameters( this->list_parameters( std::vector<std::string>{}, 0 ).names );
-        print_ros2_parameters( params_vec, this->get_logger() );
+        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
     }
 
     void communication_delay_timer_callback()

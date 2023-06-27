@@ -87,8 +87,7 @@ public:
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
 
         // Optionally print the all parameters declared in this node so far
-        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
-        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
     }
 
 

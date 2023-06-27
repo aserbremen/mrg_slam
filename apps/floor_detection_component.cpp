@@ -2,10 +2,10 @@
 
 #include <pcl_conversions/pcl_conversions.h>  //
 
-#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 #include <hdl_graph_slam/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 // #include <hdl_graph_slam/FloorCoeffs.h>
 // #include <nodelet/nodelet.h>
 // #include <ros/ros.h>
@@ -54,8 +54,7 @@ public:
         floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
 
         // Optionally print the all parameters declared in this node so far
-        const auto& list_params = this->list_parameters( std::vector<std::string>{}, 0 );
-        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
     }
 
     virtual ~FloorDetectionComponent() {}
@@ -358,8 +357,8 @@ private:
     // ros::Publisher                                                 floor_points_pub;
     // ros::Publisher                                                 floor_filtered_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    floor_points_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    floor_filtered_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_points_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_filtered_pub;
 
     std::string points_topic;
     // ros::Publisher read_until_pub;

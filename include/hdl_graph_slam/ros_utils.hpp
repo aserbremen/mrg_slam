@@ -185,9 +185,11 @@ odom2isometry( const nav_msgs::msg::Odometry::ConstSharedPtr& odom_msg )
 }
 
 void
-print_ros2_parameters( const std::vector<rclcpp::Parameter>& ros_params, const rclcpp::Logger& logger )
+print_ros2_parameters( rclcpp::node_interfaces::NodeParametersInterface::ConstSharedPtr param_interface, const rclcpp::Logger& logger )
 {
-    for( const auto& param : ros_params ) {
+    const auto& list_params = param_interface->list_parameters( std::vector<std::string>{}, 0 );
+    const auto& params_vec  = param_interface->get_parameters( list_params.names );
+    for( const auto& param : params_vec ) {
         RCLCPP_INFO_STREAM( logger,
                             std::left << std::setw( 28 ) << std::setfill( ' ' ) << param.get_name() << " " << param.value_to_string() );
     }

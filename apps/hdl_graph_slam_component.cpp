@@ -298,9 +298,8 @@ public:
         floor_coeffs_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
 
-        // Optionally print the all parameters declared in this node so far
-        const auto &list_params = this->list_parameters( std::vector<std::string>{}, 0 );
-        print_ros2_parameters( this->get_parameters( list_params.names ), this->get_logger() );
+        // Print the all parameters declared in this node so far
+        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
     }
 
 private:
