@@ -15,6 +15,7 @@
 #include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
 #include <vamex_slam_msgs/srv/dump_graph.hpp>
 #include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
+#include <vamex_slam_msgs/srv/get_graph_gids.hpp>
 #include <vamex_slam_msgs/srv/get_map.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
 #include <vamex_slam_msgs/srv/save_map.hpp>
@@ -272,6 +273,13 @@ public:
                                                         std::placeholders::_2 );
         publish_graph_service_server       = this->create_service<vamex_slam_msgs::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
                                                                                                  publish_graph_service_callback );
+        // Get graph IDs (gids) service
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Response>      res )>
+            get_graph_gids_service_callback = std::bind( &HdlGraphSlamComponent::get_graph_gids_service, this, std::placeholders::_1,
+                                                         std::placeholders::_2 );
+        get_graph_gids_service_server       = this->create_service<vamex_slam_msgs::srv::GetGraphGids>( "/hdl_graph_slam/get_graph_gids",
+                                                                                                  get_graph_gids_service_callback );
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
@@ -1241,22 +1249,50 @@ private:
             // tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
             msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
-            msg.keyframes.resize( keyframes.size() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed gids: " );
+            for( auto gid : req->processed_gids ) {
+                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+            }
+
+            msg.keyframes.reserve( keyframes.size() );
+            int added_keyframes = 0;
             for( size_t i = 0; i < keyframes.size(); i++ ) {
-                auto &dst            = msg.keyframes[i];
-                auto &src            = keyframes[i];
+                auto &src = keyframes[i];
+                // Skip adding keyframes that have already been processed by the other robot
+                auto it_processed_gids = std::find( req->processed_gids.begin(), req->processed_gids.end(), src->gid );
+                if( it_processed_gids != req->processed_gids.end() ) {
+                    RCLCPP_INFO_STREAM( this->get_logger(),
+                                        "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
+                    continue;
+                }
+
+                // auto &dst = msg.keyframes[i];
+                vamex_slam_msgs::msg::KeyFrameRos dst;
                 dst.gid              = src->gid;
                 dst.stamp            = src->stamp;
                 dst.exclude_from_map = src->exclude_from_map;
                 // tf::poseEigenToMsg( src->estimate(), dst.estimate );
                 dst.estimate = tf2::toMsg( src->estimate() );
                 dst.cloud    = *src->cloud_msg;
+                msg.keyframes.push_back( std::move( dst ) );
+                added_keyframes++;
             }
+            msg.keyframes.resize( added_keyframes );
 
-            msg.edges.resize( edges.size() );
+            msg.edges.reserve( edges.size() );
+            int added_edges = 0;
             for( size_t i = 0; i < edges.size(); i++ ) {
-                auto &dst    = msg.edges[i];
-                auto &src    = edges[i];
+                auto &src = edges[i];
+                // Skip adding edges that have already been processed by the other robot
+                auto it_processed_gids = std::find( req->processed_gids.begin(), req->processed_gids.end(), src->gid );
+                if( it_processed_gids != req->processed_gids.end() ) {
+                    RCLCPP_INFO_STREAM( this->get_logger(),
+                                        "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
+                    continue;
+                }
+
+                // auto &dst = msg.edges[i];
+                vamex_slam_msgs::msg::EdgeRos dst;
                 dst.type     = src->type == Edge::TYPE_ODOM ? 0 : 1;
                 dst.gid      = src->gid;
                 dst.from_gid = src->from_gid;
@@ -1265,16 +1301,41 @@ private:
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();
+                msg.edges.push_back( std::move( dst ) );
+                added_edges++;
             }
+            msg.edges.resize( added_edges );
         }
 
         // graph_broadcast_pub.publish( msg );
         RCLCPP_INFO_STREAM( this->get_logger(),
                             "Publishing graph with " << msg.keyframes.size() << " keyframes and " << msg.edges.size() << " edges." );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Publishing the following keyframe gids: " );
+        for( auto keyframe : msg.keyframes ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), keyframe.gid );
+        }
+        RCLCPP_INFO_STREAM( this->get_logger(), "Publishing the following edge gids: " );
+        for( auto edge : msg.edges ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), edge.gid );
+        }
         graph_broadcast_pub->publish( msg );
 
         // ROS2 services are of type void and dont return a bool.
         // return true;
+    }
+
+    void get_graph_gids_service( vamex_slam_msgs::srv::GetGraphGids::Request::ConstSharedPtr req,
+                                 vamex_slam_msgs::srv::GetGraphGids::Response::SharedPtr     res )
+    {
+        std::lock_guard<std::mutex> lock( main_thread_mutex );
+
+        res->gids.reserve( keyframes.size() + edges.size() );
+        for( const auto &keyframe : keyframes ) {
+            res->gids.push_back( keyframe->gid );
+        }
+        for( const auto &edge : edges ) {
+            res->gids.push_back( edge->gid );
+        }
     }
 
 private:
@@ -1339,6 +1400,7 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
 
     std::string              own_name;
     std::vector<std::string> robot_names;

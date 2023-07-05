@@ -249,6 +249,7 @@ def launch_setup(context, *args, **kwargs):
             ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
             ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
             ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
+            ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
         ],
         extra_arguments=[{'use_intra_process_comms': True}]
     )
@@ -272,6 +273,9 @@ def launch_setup(context, *args, **kwargs):
         namespace=model_namespace,
         parameters=[multi_robot_communicator_params, shared_params],
         arguments=['--ros-args', '--log-level', 'multi_robot_communicator:=DEBUG'],
+        remappings=[
+            ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
+        ],
         output='screen'
     )
 

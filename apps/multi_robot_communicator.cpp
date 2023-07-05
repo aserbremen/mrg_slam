@@ -12,6 +12,7 @@
 #include <utility>
 #include <vamex_slam_msgs/msg/pose_with_name.hpp>
 #include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
+#include <vamex_slam_msgs/srv/get_graph_gids.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
 
 namespace hdl_graph_slam {
@@ -57,6 +58,13 @@ public:
                                                                                                           rmw_qos_profile_services_default,
                                                                                                           reentrant_callback_group );
         }
+
+        // Create the service client to get the graph gids
+        std::string get_graph_gids_service_name = "/hdl_graph_slam/get_graph_gids";
+        RCLCPP_INFO_STREAM( this->get_logger(), "Creating get graph gids client with service name " << get_graph_gids_service_name );
+        get_graph_gids_client_ = this->create_client<vamex_slam_msgs::srv::GetGraphGids>( get_graph_gids_service_name,
+                                                                                          rmw_qos_profile_services_default,
+                                                                                          reentrant_callback_group );
 
         // Set the distances from this robot to other robots to a negative value to indicate that they are not known yet
         for( const auto& robot_name : robot_names_ ) {
@@ -285,11 +293,39 @@ public:
             return;
         }
 
+        // Get all gids of this robot, check if the service server is available
+        while( get_graph_gids_client_->wait_for_service( std::chrono::seconds( 1 ) ) == false ) {
+            if( !rclcpp::ok() ) {
+                RCLCPP_ERROR_STREAM( this->get_logger(), "Interrupted while waiting for the service "
+                                                             << get_graph_gids_client_->get_service_name() << ", returning" );
+                return;
+            }
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Service " << get_graph_gids_client_->get_service_name() << " not available, waiting again..." );
+        }
+
+        vamex_slam_msgs::srv::GetGraphGids::Request::SharedPtr request_gid =
+            std::make_shared<vamex_slam_msgs::srv::GetGraphGids::Request>();
+        auto gid_result_future = get_graph_gids_client_->async_send_request( request_gid );
+
+        std::future_status status_gid = gid_result_future.wait_for( std::chrono::seconds( 1 ) );
+
+        if( status_gid == std::future_status::timeout ) {
+            RCLCPP_WARN_STREAM( this->get_logger(),
+                                "Timeout while waiting for the service " << get_graph_gids_client_->get_service_name() << ", returning" );
+            return;
+        }
+        if( status_gid == std::future_status::ready ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Sucessfully got own gids" );
+        }
+
+        auto own_gids = gid_result_future.get()->gids;
+
         // check if the service server is available
         while( publish_graph_clients_[robot_name]->wait_for_service( std::chrono::seconds( 1 ) ) == false ) {
             if( !rclcpp::ok() ) {
                 RCLCPP_ERROR_STREAM( this->get_logger(), "Interrupted while waiting for the service "
-                                                             << publish_graph_clients_[robot_name]->get_service_name() << " Exiting" );
+                                                             << publish_graph_clients_[robot_name]->get_service_name() << ", returning" );
                 return;
             }
             RCLCPP_INFO_STREAM( this->get_logger(), "Service " << publish_graph_clients_[robot_name]->get_service_name()
@@ -297,6 +333,7 @@ public:
         }
 
         vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr request = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
+        request->processed_gids                                        = own_gids;
         RCLCPP_INFO_STREAM( this->get_logger(),
                             "Distance from " << own_name_ << " to " << robot_name << " is " << robot_distances_[robot_name].first << " m" );
         RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from " << robot_name );
@@ -304,12 +341,12 @@ public:
 
         std::future_status status = result_future.wait_for( std::chrono::seconds( 2 ) );
 
-        if( status == std::future_status::ready ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << robot_name );
-        }
         if( status == std::future_status::timeout ) {
             RCLCPP_WARN_STREAM( this->get_logger(), "Timeout while waiting for graph from " << robot_name );
             return;
+        }
+        if( status == std::future_status::ready ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Successfully requested graph from " << robot_name );
         }
 
         // Set the last transforms to current transforms
@@ -340,6 +377,9 @@ private:
 
     // robot name -> publihsh graph client for that robot
     std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> publish_graph_clients_;
+
+    // Get graph gids of own robot to include them in the graph request
+    rclcpp::Client<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr get_graph_gids_client_;
 
     // Subscription to odom broadcast topic, most recent odometry robot poses with drift and without loop closures (odom trigger mode)
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr odom_broadcast_sub_;
@@ -373,6 +413,7 @@ private:
 
     PublishGraphTriggerMode publish_graph_trigger_model_;
 
+    // Some ROS2 parameters
     double graph_request_min_accum_dist_;
     double graph_request_max_robot_dist_;
     double graph_request_min_robot_dist_;
