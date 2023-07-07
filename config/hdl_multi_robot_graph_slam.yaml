@@ -1,14 +1,10 @@
-# Parameters reused in this yaml file
-# TODO unify some of the parameters with defines that are reused, i.e. robot_names, model_namespace, etc.
-define: &lidar_odom_frame_id "odom"
-
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
     model_namespace: "atlas"
+    use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
-    use_sim_time: true # true for rosbags and for gazebo
     start_rviz2: false
 
 # Transform between lidar and base_link
@@ -31,10 +27,6 @@ clock_publisher_ros2:
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
-    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
-    
-    deskewing: false
-    
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
     downsample_resolution: 0.1
@@ -54,12 +46,16 @@ prefiltering_component:
     distance_far_thresh: 100.0
 
     scan_period: 0.1
+    deskewing: false
+    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
+    
     # remappings are handled in the python respective launch file
 
 # Scan matching component parameters
 scan_matching_odometry_component:
   ros__parameters:
-    odom_frame_id: *lidar_odom_frame_id
+    points_topic: "/velodyne_points"
+    odom_frame_id: "odom"
     robot_odom_frame_id: "robot_odom"
 
     keyframe_delta_trans: 1.0
@@ -67,9 +63,11 @@ scan_matching_odometry_component:
     keyframe_delta_time: 10000.0
 
     transform_thresholding: false
-    enable_robot_odometry_init_guess: false
     max_acceptable_trans: 1.0
     max_acceptable_angle: 1.0
+
+    enable_robot_odometry_init_guess: false
+    enable_imu_frontend: false
 
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "NONE"
@@ -84,7 +82,7 @@ scan_matching_odometry_component:
     reg_max_optimizer_iterations: 20
     reg_use_reciprocal_correspondences: false
     reg_correspondence_randomness: 20
-    reg_resolution: 1.0
+    reg_resolution: 1.0 # NDT 0.5
     reg_nn_search_method: "DIRECT7"
     # remappings are handled in the python respective launch file
 
@@ -99,6 +97,8 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
+    points_topic: "/velodyne_points"
+  
     # remappings are handled in the python respective launch file
 
 # HDL graph slam component parameters
@@ -108,6 +108,8 @@ hdl_graph_slam_component:
     /properties/scenario/rovers/names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
     # Initial pose
+    # gravelpit tubs atlas x 10 y -13 z -2.15
+    # gravelpit tubs bestla x 8 y -20 z -2.05
     x: 0.0
     y: 0.0
     z: 0.0
@@ -119,7 +121,7 @@ hdl_graph_slam_component:
     init_pose_topic: "NONE"
     # Frame settings
     map_frame_id: "map"
-    odom_frame_id: *lidar_odom_frame_id
+    odom_frame_id: "odom"
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
