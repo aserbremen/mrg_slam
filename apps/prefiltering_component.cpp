@@ -38,13 +38,50 @@ public:
     typedef pcl::PointXYZI PointT;
 
     // We need to pass NodeOptions in ROS2 to register a component
-    PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
+    PrefilteringComponent( const rclcpp::NodeOptions&            options,
+                           const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
+        Node( "prefiltering_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
 
-        initialize_params();
+        initialize_params( param_vec );
 
-        if( this->declare_parameter<bool>( "deskewing", false ) ) {
+        if( downsample_method == "VOXELGRID" ) {
+            std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
+            auto voxelgrid = new pcl::VoxelGrid<PointT>();
+            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            downsample_filter.reset( voxelgrid );
+        } else if( downsample_method == "APPROX_VOXELGRID" ) {
+            std::cout << "downsample: APPROX_VOXELGRID " << downsample_resolution << std::endl;
+            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
+            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            downsample_filter = approx_voxelgrid;
+        } else {
+            if( downsample_method != "NONE" ) {
+                std::cerr << "warning: unknown downsampling type (" << downsample_method << ")" << std::endl;
+                std::cerr << "       : use passthrough filter" << std::endl;
+            }
+            std::cout << "downsample: NONE" << std::endl;
+        }
+
+        if( outlier_removal_method == "STATISTICAL" ) {
+            std::cout << "outlier_removal: STATISTICAL " << statistical_mean_k << " - " << statistical_stddev_mul_thresh << std::endl;
+            pcl::StatisticalOutlierRemoval<PointT>::Ptr sor( new pcl::StatisticalOutlierRemoval<PointT>() );
+            sor->setMeanK( statistical_mean_k );
+            sor->setStddevMulThresh( statistical_stddev_mul_thresh );
+            outlier_removal_filter = sor;
+        } else if( outlier_removal_method == "RADIUS" ) {
+            std::cout << "outlier_removal: RADIUS " << radius_radius << " - " << radius_min_neighbors << std::endl;
+
+            pcl::RadiusOutlierRemoval<PointT>::Ptr rad( new pcl::RadiusOutlierRemoval<PointT>() );
+            rad->setRadiusSearch( radius_radius );
+            rad->setMinNeighborsInRadius( radius_min_neighbors );
+            outlier_removal_filter = rad;
+        } else {
+            std::cout << "outlier_removal: NONE" << std::endl;
+        }
+
+        if( use_deskewing ) {
             // TODO: QOS? sensordata qos?
             imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1 ),
                                                                         std::bind( &PrefilteringComponent::imu_callback, this,
@@ -67,105 +104,49 @@ public:
 
     virtual ~PrefilteringComponent() {}
 
-    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
-    /*
-    virtual void onInit()
-    {
-        // This class is the node handle as it is derived from rclcpp::Node
-        // nh         = getNodeHandle();
-        // private_nh = getPrivateNodeHandle();
-
-        RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
-
-        initialize_params();
-
-        // if( private_nh.param<bool>( "deskewing", false ) ) {
-        //     imu_sub = nh.subscribe( "/imu/data", 1, &PrefilteringComponent::imu_callback, this );
-        // }
-        if( this->declare_parameter<bool>( "deskewing", false ) ) {
-            // TODO: QOS? sensordata qos?
-            imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1 ),
-                                                                        std::bind( &PrefilteringComponent::imu_callback, this,
-                                                                                   std::placeholders::_1 ) );
-        }
-
-        // points_sub  = nh.subscribe( "/velodyne_points", 64, &PrefilteringComponent::cloud_callback, this );
-        // points_pub  = nh.advertise<sensor_msgs::PointCloud2>( "/prefiltering/filtered_points", 32 );
-        // colored_pub = nh.advertise<sensor_msgs::PointCloud2>( "/prefiltering/colored_points", 32 );
-        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/velodyne_points", rclcpp::QoS( 64 ),
-                                                                               std::bind( &PrefilteringComponent::cloud_callback, this,
-                                                                                           std::placeholders::_1 ) );
-        points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
-        colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
-    }
-    */
-
 private:
-    void initialize_params()
+    void initialize_params( std::vector<rclcpp::Parameter> param_vec = std::vector<rclcpp::Parameter>() )
     {
-        // std::string downsample_method     = private_nh.param<std::string>( "downsample_method", "VOXELGRID" );
-        // double      downsample_resolution = private_nh.param<double>( "downsample_resolution", 0.1 );
-        std::string downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        double      downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        // Declare all parameters first
+        this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        this->declare_parameter<double>( "downsample_resolution", 0.1 );
 
-        if( downsample_method == "VOXELGRID" ) {
-            std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
-            auto voxelgrid = new pcl::VoxelGrid<PointT>();
-            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter.reset( voxelgrid );
-        } else if( downsample_method == "APPROX_VOXELGRID" ) {
-            std::cout << "downsample: APPROX_VOXELGRID " << downsample_resolution << std::endl;
-            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
-            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter = approx_voxelgrid;
-        } else {
-            if( downsample_method != "NONE" ) {
-                std::cerr << "warning: unknown downsampling type (" << downsample_method << ")" << std::endl;
-                std::cerr << "       : use passthrough filter" << std::endl;
-            }
-            std::cout << "downsample: NONE" << std::endl;
+        this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        this->declare_parameter<int>( "statistical_mean_k", 20 );
+        this->declare_parameter<double>( "statistical_stddev", 1.0 );
+        this->declare_parameter<double>( "radius_radius", 0.8 );
+        this->declare_parameter<int>( "radius_min_neighbors", 2 );
+
+        this->declare_parameter<bool>( "use_distance_filter", true );
+        this->declare_parameter<double>( "distance_near_thresh", 1.0 );
+        this->declare_parameter<double>( "distance_far_thresh", 100.0 );
+
+        this->declare_parameter<double>( "scan_period", 0.1 );
+        this->declare_parameter<bool>( "deskewing", false );
+        this->declare_parameter<std::string>( "base_link_frame", "base_link" );
+
+        // Overwrite parameters if param_vec is provided, use case manual composition
+        if( !param_vec.empty() ) {
+            this->set_parameters( param_vec );
         }
 
-        // std::string outlier_removal_method = private_nh.param<std::string>( "outlier_removal_method", "STATISTICAL" );
-        std::string outlier_removal_method = this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
-        if( outlier_removal_method == "STATISTICAL" ) {
-            // int    mean_k            = private_nh.param<int>( "statistical_mean_k", 20 );
-            // double stddev_mul_thresh = private_nh.param<double>( "statistical_stddev", 1.0 );
-            int    mean_k            = this->declare_parameter<int>( "statistical_mean_k", 20 );
-            double stddev_mul_thresh = this->declare_parameter<double>( "statistical_stddev", 1.0 );
-            std::cout << "outlier_removal: STATISTICAL " << mean_k << " - " << stddev_mul_thresh << std::endl;
+        // Set all member variables
+        downsample_method     = this->get_parameter( "downsample_method" ).as_string();
+        downsample_resolution = this->get_parameter( "downsample_resolution" ).as_double();
 
-            pcl::StatisticalOutlierRemoval<PointT>::Ptr sor( new pcl::StatisticalOutlierRemoval<PointT>() );
-            sor->setMeanK( mean_k );
-            sor->setStddevMulThresh( stddev_mul_thresh );
-            outlier_removal_filter = sor;
-        } else if( outlier_removal_method == "RADIUS" ) {
-            // double radius        = private_nh.param<double>( "radius_radius", 0.8 );
-            // int    min_neighbors = private_nh.param<int>( "radius_min_neighbors", 2 );
-            double radius        = this->declare_parameter<double>( "radius_radius", 0.8 );
-            int    min_neighbors = this->declare_parameter<int>( "radius_min_neighbors", 2 );
-            std::cout << "outlier_removal: RADIUS " << radius << " - " << min_neighbors << std::endl;
+        outlier_removal_method        = this->get_parameter( "outlier_removal_method" ).as_string();
+        statistical_mean_k            = this->get_parameter( "statistical_mean_k" ).as_int();
+        statistical_stddev_mul_thresh = this->get_parameter( "statistical_stddev" ).as_double();
+        radius_radius                 = this->get_parameter( "radius_radius" ).as_double();
+        radius_min_neighbors          = this->get_parameter( "radius_min_neighbors" ).as_int();
 
-            pcl::RadiusOutlierRemoval<PointT>::Ptr rad( new pcl::RadiusOutlierRemoval<PointT>() );
-            rad->setRadiusSearch( radius );
-            rad->setMinNeighborsInRadius( min_neighbors );
-            outlier_removal_filter = rad;
-        } else {
-            std::cout << "outlier_removal: NONE" << std::endl;
-        }
+        use_distance_filter  = this->get_parameter( "use_distance_filter" ).as_bool();
+        distance_near_thresh = this->get_parameter( "distance_near_thresh" ).as_double();
+        distance_far_thresh  = this->get_parameter( "distance_far_thresh" ).as_double();
 
-        // use_distance_filter  = private_nh.param<bool>( "use_distance_filter", true );
-        // distance_near_thresh = private_nh.param<double>( "distance_near_thresh", 1.0 );
-        // distance_far_thresh  = private_nh.param<double>( "distance_far_thresh", 100.0 );
-        // base_link_frame = private_nh.param<std::string>( "base_link_frame", "" );
-
-        use_distance_filter  = this->declare_parameter<bool>( "use_distance_filter", true );
-        distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
-        distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
-        scan_period          = this->declare_parameter<double>( "scan_period", 0.1 );
-
-        // Set within config yaml files
-        base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "" );
+        scan_period     = this->get_parameter( "scan_period" ).as_double();
+        use_deskewing   = this->get_parameter( "deskewing" ).as_bool();
+        base_link_frame = this->get_parameter( "base_link_frame" ).as_string();
     }
 
     // void imu_callback( const sensor_msgs::ImuConstPtr& imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -367,12 +348,23 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     std::unique_ptr<tf2_ros::Buffer>            tf_buffer;
 
-    std::string base_link_frame;
+    // Algorithm, ROS2 parameters
+    std::string downsample_method;
+    double      downsample_resolution;
+
+    std::string outlier_removal_method;
+    int         statistical_mean_k;
+    double      statistical_stddev_mul_thresh;
+    double      radius_radius;
+    int         radius_min_neighbors;
 
     bool   use_distance_filter;
     double distance_near_thresh;
     double distance_far_thresh;
-    double scan_period;
+
+    double      scan_period;
+    bool        use_deskewing;
+    std::string base_link_frame;
 
     pcl::Filter<PointT>::Ptr downsample_filter;
     pcl::Filter<PointT>::Ptr outlier_removal_filter;
