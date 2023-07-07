@@ -3,7 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "floor_detection_component.cpp"
-#include "hdl_graph_slam_component.cpp"
+// #include "hdl_graph_slam_component.cpp"
 #include "prefiltering_component.cpp"
 #include "scan_matching_odometry_component.cpp"
 
@@ -18,7 +18,7 @@
 int
 main( int argc, char const *argv[] )
 {
-    if( argc != 2 ) {
+    if( argc < 2 ) {
         std::cout << "Usage: ros2 run hdl_graph_slam hdl_graph_slam_manual_composition <path_to_config_yaml>" << std::endl;
         return 1;
     }
@@ -31,29 +31,51 @@ main( int argc, char const *argv[] )
 
     std::string config_path = argv[1];
     std::cout << "Trying to parse config: " << config_path << std::endl;
-    rclcpp::ParameterMap param_map_direct = rclcpp::parameter_map_from_yaml_file( config_path );
-    for( auto const &node_params : param_map_direct ) {
-        std::cout << "All parameters for node: " << node_params.first << std::endl;
+    std::shared_ptr<rclcpp::ParameterMap> param_map = std::make_shared<rclcpp::ParameterMap>(
+        rclcpp::parameter_map_from_yaml_file( config_path ) );
+    std::vector<rclcpp::Parameter> params_prefiltering           = std::vector<rclcpp::Parameter>();
+    std::vector<rclcpp::Parameter> params_floor_detection        = std::vector<rclcpp::Parameter>();
+    std::vector<rclcpp::Parameter> params_scan_matching_odometry = std::vector<rclcpp::Parameter>();
+    std::vector<rclcpp::Parameter> params_hdl_graph_slam         = std::vector<rclcpp::Parameter>();
+    for( auto const &node_params : *param_map ) {
+        std::string node_name = node_params.first;
+        std::cout << node_name << " has parameters # " << node_params.second.size() << std::endl;
         for( auto const &param : node_params.second ) {
             std::cout << std::left << std::setw( 28 ) << std::setfill( ' ' ) << param.get_name() << " " << param.value_to_string()
                       << std::endl;
         }
+        std::cout << std::endl;
+        if( node_name.find( "prefiltering_component" ) != std::string::npos ) {
+            params_prefiltering = node_params.second;
+        }
+        if( node_name.find( "floor_detection_component" ) != std::string::npos ) {
+            params_floor_detection = node_params.second;
+        }
+        if( node_name.find( "scan_matching_odometry_component" ) != std::string::npos ) {
+            params_scan_matching_odometry = node_params.second;
+        }
+        if( node_name.find( "hdl_graph_slam_component" ) != std::string::npos ) {
+            params_hdl_graph_slam = node_params.second;
+        }
     }
+    // TODO add the /** shared params to the respective param vectors
 
     // Create an executor that will be used compose components
     rclcpp::executors::SingleThreadedExecutor exec;
     rclcpp::NodeOptions                       options;
     options.use_intra_process_comms( true );
+    options.allow_undeclared_parameters( true );
 
     // Add our nodes to the executor
-    auto prefiltering_component = std::make_shared<hdl_graph_slam::PrefilteringComponent>( options );
+    auto prefiltering_component = std::make_shared<hdl_graph_slam::PrefilteringComponent>( options, params_prefiltering );
     exec.add_node( prefiltering_component );
-    auto floor_detection_component = std::make_shared<hdl_graph_slam::FloorDetectionComponent>( options );
+    auto floor_detection_component = std::make_shared<hdl_graph_slam::FloorDetectionComponent>( options, params_floor_detection );
     exec.add_node( floor_detection_component );
-    auto scan_matching_odometry_component = std::make_shared<hdl_graph_slam::ScanMatchingOdometryComponent>( options );
+    auto scan_matching_odometry_component =
+        std::make_shared<hdl_graph_slam::ScanMatchingOdometryComponent>( options, params_scan_matching_odometry );
     exec.add_node( scan_matching_odometry_component );
-    auto hdl_graph_slam_component = std::make_shared<hdl_graph_slam::HdlGraphSlamComponent>( options );
-    exec.add_node( hdl_graph_slam_component );
+    // auto hdl_graph_slam_component = std::make_shared<hdl_graph_slam::HdlGraphSlamComponent>( options );
+    // exec.add_node( hdl_graph_slam_component );
 
     exec.spin();
 
