@@ -105,7 +105,7 @@ public:
     virtual ~PrefilteringComponent() {}
 
 private:
-    void initialize_params( std::vector<rclcpp::Parameter> param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
     {
         // Declare all parameters first
         this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );

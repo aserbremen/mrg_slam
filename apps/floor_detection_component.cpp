@@ -65,7 +65,7 @@ private:
     /**
      * @brief initialize parameters
      */
-    void initialize_params( std::vector<rclcpp::Parameter> param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
     {
         // Declare all parameters first
         tilt_deg          = this->declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
