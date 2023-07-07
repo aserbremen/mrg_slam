@@ -36,11 +36,13 @@ public:
 
     // FloorDetectionComponent() {}
     // For ROS2 components it is necessary to pass rclcpp::NodeOptions
-    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options )
+    FloorDetectionComponent( const rclcpp::NodeOptions&            options,
+                             const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
+        Node( "floor_detection_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
 
-        initialize_params();
+        initialize_params( param_vec );
 
         points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
                                                                                std::bind( &FloorDetectionComponent::cloud_callback, this,
@@ -59,68 +61,41 @@ public:
 
     virtual ~FloorDetectionComponent() {}
 
-    // It seems like there is no onInit() method in ROS2, so we have to initiliaze the node in the constructor
-    /*
-    virtual void onInit()
-    {
-        // NODELET_DEBUG( "initializing floor_detection_nodelet..." );
-        RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
-        // This class is the node handle as it is derived from rclcpp::Node
-        // nh         = getNodeHandle();
-        // private_nh = getPrivateNodeHandle();
-
-        initialize_params();
-
-        // points_sub = nh.subscribe( "/filtered_points", 256, &FloorDetectionComponent::cloud_callback, this );
-        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
-                                                                               std::bind( &FloorDetectionComponent::cloud_callback, this,
-                                                                                          std::placeholders::_1 ) );
-
-        // floor_pub = nh.advertise<hdl_graph_slam::FloorCoeffs>( "/floor_detection/floor_coeffs", 32 );
-        floor_pub = this->create_publisher<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
-
-        // read_until_pub     = nh.advertise<std_msgs::Header>( "/floor_detection/read_until", 32 );
-        // floor_filtered_pub = nh.advertise<sensor_msgs::PointCloud2>( "/floor_detection/floor_filtered_points", 32 );
-        // floor_points_pub   = nh.advertise<sensor_msgs::PointCloud2>( "/floor_detection/floor_points", 32 );
-        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
-        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
-                                                                                    rclcpp::QoS( 32 ) );
-        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
-    }
-    */
-
 private:
     /**
      * @brief initialize parameters
      */
-    void initialize_params()
+    void initialize_params( std::vector<rclcpp::Parameter> param_vec = std::vector<rclcpp::Parameter>() )
     {
-        /*
-        tilt_deg          = private_nh.param<double>( "tilt_deg", 0.0 );           // approximate sensor tilt angle [deg]
-        sensor_height     = private_nh.param<double>( "sensor_height", 2.0 );      // approximate sensor height [m]
-        height_clip_range = private_nh.param<double>( "height_clip_range", 1.0 );  // points with heights in [sensor_height -
-                                                                                   // height_clip_range, sensor_height + height_clip_range]
-                                                                                   // will be used for floor detection
-        floor_pts_thresh = private_nh.param<int>( "floor_pts_thresh", 512 );       // minimum number of support points of RANSAC to accept a
-                                                                                   // detected floor plane
-        floor_normal_thresh = private_nh.param<double>( "floor_normal_thresh", 10.0 );  // verticality check thresold for the detected floor
-                                                                                        // plane [deg]
-        use_normal_filtering = private_nh.param<bool>( "use_normal_filtering", true );  // if true, points with "non-"vertical normals will
-                                                                                        // be filtered before RANSAC
-        normal_filter_thresh = private_nh.param<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
-
-        points_topic         = private_nh.param<std::string>( "points_topic", "/velodyne_points" );
-        */
-
-        // ROS2: Parameter handling, verify
-        tilt_deg             = this->declare_parameter<double>( "tilt_deg", 0.0 );
-        sensor_height        = this->declare_parameter<double>( "sensor_height", 2.0 );
-        height_clip_range    = this->declare_parameter<double>( "height_clip_range", 1.0 );
-        floor_pts_thresh     = this->declare_parameter<int>( "floor_pts_thresh", 512 );
-        floor_normal_thresh  = this->declare_parameter<double>( "floor_normal_thresh", 10.0 );
-        use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );
-        normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );
+        // Declare all parameters first
+        tilt_deg          = this->declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
+        sensor_height     = this->declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
+        height_clip_range = this->declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height -
+                                                                    height_clip_range, sensor_height + height_clip_range] will be used for
+                                                                    floor detection */
+        floor_pts_thresh = this->declare_parameter<int>( "floor_pts_thresh", 512 );  // minimum number of support points of RANSAC to accept
+                                                                                     // a detected floor plane
+        floor_normal_thresh = this->declare_parameter<double>( "floor_normal_thresh", 10.0 );    // verticality check thresold for the
+                                                                                                 // detected floor plane [deg]
+        use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
+                                                                                                 // normals will be filtered before RANSAC
+        normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
         points_topic         = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+
+        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
+        if( !param_vec.empty() ) {
+            this->set_parameters( param_vec );
+        }
+
+        // Set the member variables
+        tilt_deg             = this->get_parameter( "tilt_deg" ).as_double();
+        sensor_height        = this->get_parameter( "sensor_height" ).as_double();
+        height_clip_range    = this->get_parameter( "height_clip_range" ).as_double();
+        floor_pts_thresh     = this->get_parameter( "floor_pts_thresh" ).as_int();
+        floor_normal_thresh  = this->get_parameter( "floor_normal_thresh" ).as_double();
+        use_normal_filtering = this->get_parameter( "use_normal_filtering" ).as_bool();
+        normal_filter_thresh = this->get_parameter( "normal_filter_thresh" ).as_double();
+        points_topic         = this->get_parameter( "points_topic" ).as_string();
     }
 
     // /**
@@ -354,8 +329,6 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
 
     // ros::Publisher floor_pub;
-    // ros::Publisher                                                 floor_points_pub;
-    // ros::Publisher                                                 floor_filtered_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_points_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_filtered_pub;

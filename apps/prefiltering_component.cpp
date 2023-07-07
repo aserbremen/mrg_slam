@@ -125,7 +125,7 @@ private:
         this->declare_parameter<bool>( "deskewing", false );
         this->declare_parameter<std::string>( "base_link_frame", "base_link" );
 
-        // Overwrite parameters if param_vec is provided, use case manual composition
+        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
         if( !param_vec.empty() ) {
             this->set_parameters( param_vec );
         }
