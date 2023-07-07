@@ -18,15 +18,32 @@
 int
 main( int argc, char const *argv[] )
 {
+    if( argc != 2 ) {
+        std::cout << "Usage: ros2 run hdl_graph_slam hdl_graph_slam_manual_composition <path_to_config_yaml>" << std::endl;
+        return 1;
+    }
+
     // Force flush of the stdout buffer
     setvbuf( stdout, NULL, _IONBF, BUFSIZ );
 
     // Initialize any global resources needed by the middleware and the client library.
     rclcpp::init( argc, argv );
 
+    std::string config_path = argv[1];
+    std::cout << "Trying to parse config: " << config_path << std::endl;
+    rclcpp::ParameterMap param_map_direct = rclcpp::parameter_map_from_yaml_file( config_path );
+    for( auto const &node_params : param_map_direct ) {
+        std::cout << "All parameters for node: " << node_params.first << std::endl;
+        for( auto const &param : node_params.second ) {
+            std::cout << std::left << std::setw( 28 ) << std::setfill( ' ' ) << param.get_name() << " " << param.value_to_string()
+                      << std::endl;
+        }
+    }
+
     // Create an executor that will be used compose components
     rclcpp::executors::SingleThreadedExecutor exec;
     rclcpp::NodeOptions                       options;
+    options.use_intra_process_comms( true );
 
     // Add our nodes to the executor
     auto prefiltering_component = std::make_shared<hdl_graph_slam::PrefilteringComponent>( options );
