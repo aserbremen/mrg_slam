@@ -90,7 +90,9 @@ public:
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
     // HdlGraphSlamComponent() {}
-    HdlGraphSlamComponent( const rclcpp::NodeOptions &options ) : Node( "hdl_graph_slam_component", options )
+    HdlGraphSlamComponent( const rclcpp::NodeOptions            &options,
+                           const std::vector<rclcpp::Parameter> &_param_vec = std::vector<rclcpp::Parameter>() ) :
+        Node( "hdl_graph_slam_component", options ), param_vec( _param_vec )
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
@@ -106,77 +108,27 @@ public:
         // Deactivate this timer immediately so the initialization is only performed once
         one_shot_initalization_timer->cancel();
 
+        initialize_params( param_vec );
+
         // Get the shared pointer to the ROS2 node to pass it to other classes and functions
         auto node_ros = shared_from_this();
-        // This class is the node handle as it is derived from rclcpp::Node
-        // nh         = getNodeHandle();
-        // mt_nh      = getMTNodeHandle();
-        // private_nh = getPrivateNodeHandle();
 
-        // init parameters
-        // map_frame_id              = private_nh.param<std::string>( "map_frame_id", "map" );
-        // odom_frame_id             = private_nh.param<std::string>( "odom_frame_id", "odom" );
-        // map_cloud_resolution      = private_nh.param<double>( "map_cloud_resolution", 0.05 );
-        // map_cloud_count_threshold = private_nh.param<int>( "map_cloud_count_threshold", 2 );
-        // Declare only once across all nodes
-        map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
-        odom_frame_id             = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        map_cloud_resolution      = this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
-        map_cloud_count_threshold = this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
+        // Initialize variables
         trans_odom2map.setIdentity();
-
-        // max_keyframes_per_update = private_nh.param<int>( "max_keyframes_per_update", 10 );
-        max_keyframes_per_update = this->declare_parameter<int>( "max_keyframes_per_update", 10 );
-
-        robot_remove_points_radius = static_cast<float>( this->declare_parameter<double>( "robot_remove_points_radius", 2.0 ) );
-        init_pose_vec  = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
-        fix_first_node = this->declare_parameter<bool>( "fix_first_node", false );
-        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", false );
-        fix_first_node_stddev_vec = this->declare_parameter<std::vector<double>>(
-            "fix_first_node_stddev",
-            std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ), angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
-        odometry_edge_robust_kernel          = this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
-        odometry_edge_robust_kernel_size     = this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
-        loop_closure_edge_robust_kernel      = this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel", "Huber" );
-        loop_closure_edge_robust_kernel_size = this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
-        g2o_solver_num_iterations            = this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
-
-        //
         anchor_node = nullptr;
         anchor_edge = nullptr;
-        // graph_slam.reset( new GraphSLAM( private_nh.param<std::string>( "g2o_solver_type", "lm_var" ) ) );
-        graph_slam.reset( new GraphSLAM( this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" ) ) );
-        graph_slam->set_save_graph( this->declare_parameter<bool>( "save_graph", true ) );
-        // keyframe_updater.reset( new KeyframeUpdater( private_nh ) );
-        // loop_detector.reset( new LoopDetector( private_nh ) );
-        // map_cloud_generator.reset( new MapCloudGenerator() );
-        // inf_calclator.reset( new InformationMatrixCalculator( private_nh ) );
+
+        graph_slam.reset( new GraphSLAM( g2o_solver_type ) );
+        graph_slam->set_save_graph( save_graph );
 
         keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
         loop_detector.reset( new LoopDetector( node_ros ) );
         map_cloud_generator.reset( new MapCloudGenerator() );
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
 
-        // points_topic = private_nh.param<std::string>( "points_topic", "/velodyne_points" );
-        points_topic = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-
-        // own_name = private_nh.param<std::string>( "own_name", "atlas" );
-        // Declare only once across nodes
-        own_name = this->has_parameter( "own_name" ) ? this->get_parameter( "own_name" ).as_string()
-                                                     : this->declare_parameter<std::string>( "own_name", "atlas" );
-        // robot_names.push_back( own_name );
-        // robot_names   = private_nh.param<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
-        robot_names = this->declare_parameter<std::vector<std::string>>( "/properties/scenario/rovers/names", robot_names );
-        // gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( own_name, robot_names ) );
         gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( node_ros, own_name, robot_names ) );
 
         // subscribers
-        // odom_sub.reset( new message_filters::Subscriber<nav_msgs::Odometry>( mt_nh, "/odom", 256 ) );
-        // cloud_sub.reset( new message_filters::Subscriber<sensor_msgs::PointCloud2>( mt_nh, "/filtered_points", 32 ) );
-        // TODO further specify qos profile
-        std::string model_namespace = this->declare_parameter<std::string>( "model_namespace", "" );
-        std::string odom_sub_topic  = this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
-        std::string cloud_sub_topic = this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
         if( !model_namespace.empty() ) {
             odom_sub_topic  = "/" + model_namespace + "/scan_matching_odometry" + odom_sub_topic;
             cloud_sub_topic = "/" + model_namespace + "/prefiltering" + cloud_sub_topic;
@@ -192,9 +144,7 @@ public:
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
         sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
-        // graph_broadcast_sub = nh.subscribe( "/hdl_graph_slam/graph_broadcast", 16, &HdlGraphSlamComponent::graph_callback, this );
-        // odom_broadcast_sub  = nh.subscribe( "/hdl_graph_slam/odom_broadcast", 16, &HdlGraphSlamComponent::odom_broadcast_callback, this
-        // );
+
         graph_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
                                                                                          rclcpp::QoS( 16 ),
                                                                                          std::bind( &HdlGraphSlamComponent::graph_callback,
@@ -203,8 +153,6 @@ public:
             "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 16 ),
             std::bind( &HdlGraphSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
 
-        // init_pose_topic = private_nh.param<std::string>( "init_pose_topic", "NONE" );
-        init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
         if( init_pose_topic != "NONE" ) {
             init_pose_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_pose_topic, rclcpp::QoS( 32 ),
                                                                                 std::bind( &HdlGraphSlamComponent::init_pose_callback, this,
@@ -212,12 +160,6 @@ public:
         }
 
         // publishers
-        // odom2map_pub        = mt_nh.advertise<geometry_msgs::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
-        // map_points_pub      = mt_nh.advertise<sensor_msgs::PointCloud2>( "/hdl_graph_slam/map_points", 1, true );
-        // read_until_pub      = mt_nh.advertise<std_msgs::Header>( "/hdl_graph_slam/read_until", 16 );
-        // graph_broadcast_pub = mt_nh.advertise<hdl_graph_slam::GraphRos>( "/hdl_graph_slam/graph_broadcast", 16 );
-        // odom_broadcast_pub  = mt_nh.advertise<hdl_graph_slam::PoseWithName>( "/hdl_graph_slam/odom_broadcast", 16 );
-        // others_poses_pub    = mt_nh.advertise<hdl_graph_slam::PoseWithNameArray>( "/hdl_graph_slam/others_poses", 16 );
         odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
         map_points_pub          = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
         read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
@@ -230,13 +172,6 @@ public:
         others_poses_pub        = this->create_publisher<vamex_slam_msgs::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
                                                                                             rclcpp::QoS( 16 ) );
 
-        // dump_service_server     = mt_nh.advertiseService( "/hdl_graph_slam/dump", &HdlGraphSlamComponent::dump_service, this );
-        // save_map_service_server = mt_nh.advertiseService( "/hdl_graph_slam/save_map", &HdlGraphSlamComponent::save_map_service, this );
-        // get_map_service_server  = mt_nh.advertiseService( "/hdl_graph_slam/get_map", &HdlGraphSlamComponent::get_map_service, this );
-        // get_graph_estimate_service_server = mt_nh.advertiseService( "/hdl_graph_slam/get_graph_estimate",
-        //                                                             &HdlGraphSlamComponent::get_graph_estimate_service, this );
-        // publish_graph_service_server      = mt_nh.advertiseService( "/hdl_graph_slam/publish_graph",
-        //                                                             &HdlGraphSlamComponent::publish_graph_service, this );
         // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when the callback is a class
         // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
         // If these service callbacks dont work during runtime, try using lambda functions as in
@@ -283,24 +218,11 @@ public:
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
-        // double graph_update_interval       = private_nh.param<double>( "graph_update_interval", 3.0 );
-        // double map_cloud_update_interval   = private_nh.param<double>( "map_cloud_update_interval", 10.0 );
-        double graph_update_interval     = this->declare_parameter<double>( "graph_update_interval", 3.0 );
-        double map_cloud_update_interval = this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-
-        // optimization_timer                 = mt_nh.createWallTimer( ros::WallDuration( graph_update_interval ),
-        //                                                             &HdlGraphSlamNodelet::optimization_timer_callback, this );
-        // map_publish_timer                  = mt_nh.createWallTimer( ros::WallDuration( map_cloud_update_interval ),
-        //                                                             &HdlGraphSlamNodelet::map_points_publish_timer_callback, this );
         optimization_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( graph_update_interval, 0 ),
                                                    std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ) );
         map_publish_timer  = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
                                                    std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
 
-        // gps_processor.onInit( nh, mt_nh, private_nh );
-        // imu_processor.onInit( nh, mt_nh, private_nh );
-        // floor_coeffs_processor.onInit( nh, mt_nh, private_nh );
-        // markers_pub.onInit( nh, mt_nh, private_nh );
         gps_processor.onInit( node_ros );
         imu_processor.onInit( node_ros );
         floor_coeffs_processor.onInit( node_ros );
@@ -311,6 +233,144 @@ public:
     }
 
 private:
+    void initialize_params( const std::vector<rclcpp::Parameter> &param_vec = std::vector<rclcpp::Parameter>() )
+    {
+        // Declare all parameters used by this class and its members first
+
+        // General and scenario parameters
+        this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        this->declare_parameter<std::string>( "own_name", "atlas" );
+        this->declare_parameter<std::vector<std::string>>( "/properties/scenario/rovers/names", { "atlas", "bestla" } );
+        this->declare_parameter<std::string>( "model_namespace", "" );
+        this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
+        this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
+
+        // Map parameters
+        this->declare_parameter<std::string>( "map_frame_id", "map" );
+        this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
+        this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
+
+        // Initial pose parameters
+        this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
+        this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
+
+        // Removing points of other robots from point cloud
+        this->declare_parameter<double>( "robot_remove_points_radius", 2.0 );
+
+        // GraphSLAM parameters
+        this->declare_parameter<bool>( "fix_first_node", false );
+        this->declare_parameter<bool>( "fix_first_node_adaptive", false );
+        this->declare_parameter<std::vector<double>>( "fix_first_node_stddev",
+                                                      std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ),
+                                                                           angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
+        this->declare_parameter<int>( "max_keyframes_per_update", 10 );
+        this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
+        this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
+        this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel", "Huber" );
+        this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
+        this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
+        this->declare_parameter<bool>( "save_graph", true );
+        this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
+        this->declare_parameter<double>( "graph_update_interval", 3.0 );
+        this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
+
+        // KeyframeUpdater parameters (not directly used by this class)
+        this->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
+        this->declare_parameter<double>( "keyframe_delta_angle", 2.0 );
+
+        // LoopDetector parameters (not directly used by this class)
+        this->declare_parameter<double>( "distance_thresh", 5.0 );
+        this->declare_parameter<double>( "accum_distance_thresh", 8.0 );
+        this->declare_parameter<double>( "min_edge_interval", 5.0 );
+        this->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
+        this->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+
+        // Loop closure (scan matching regisration LoopDetector) parameters (not directly used by this class)
+        this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
+        this->declare_parameter<int>( "reg_num_threads", 0 );
+        this->declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
+        this->declare_parameter<int>( "reg_maximum_iterations", 64 );
+        this->declare_parameter<double>( "reg_max_correspondence_distance", 2.0 );
+        this->declare_parameter<int>( "reg_max_optimizer_iterations", 20 );
+        this->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false );
+        this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
+        this->declare_parameter<double>( "reg_resolution", 1.0 );
+        this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+
+        // InformationMatrixCalculator parameters (not directly used by this class)
+        this->declare_parameter<bool>( "use_const_inf_matrix", false );
+        this->declare_parameter<double>( "const_stddev_x", 0.5 );
+        this->declare_parameter<double>( "const_stddev_q", 0.1 );
+        this->declare_parameter<double>( "var_gain_a", 20.0 );
+        this->declare_parameter<double>( "min_stddev_x", 0.1 );
+        this->declare_parameter<double>( "max_stddev_x", 5.0 );
+        this->declare_parameter<double>( "min_stddev_q", 0.05 );
+        this->declare_parameter<double>( "max_stddev_q", 0.2 );
+        // this->declare_parameter<double>( "fitness_score_thresh", 0.5 ); // already declared for LoopDetector
+
+        // GpsProcessor parameters (not directly used by this class)
+        this->declare_parameter<bool>( "enable_gps", true );
+        this->declare_parameter<double>( "gps_time_offset", 0.0 );
+        this->declare_parameter<double>( "gps_edge_stddev_xy", 10000.0 );
+        this->declare_parameter<double>( "gps_edge_stddev_z", 10.0 );
+        this->declare_parameter<std::string>( "gps_edge_robust_kernel", "NONE" );
+        this->declare_parameter<double>( "gps_edge_robust_kernel_size", 1.0 );
+
+        // ImuProcessor parameters (not directly used by this class)
+        this->declare_parameter<double>( "imu_time_offset", 0.0 );
+        this->declare_parameter<bool>( "enable_imu_orientation", false );
+        this->declare_parameter<bool>( "enable_imu_acceleration", false );
+        this->declare_parameter<double>( "imu_orientation_edge_stddev", 0.1 );
+        this->declare_parameter<double>( "imu_acceleration_edge_stddev", 3.0 );
+        this->declare_parameter<std::string>( "imu_orientation_edge_robust_kernel", "NONE" );
+        this->declare_parameter<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" );
+        this->declare_parameter<double>( "imu_orientation_edge_robust_kernel_size", 1.0 );
+        this->declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
+
+        // FloorCoeffsProcessor parameters (not directly used by this class)
+        this->declare_parameter<double>( "floor_edge_stddev", 10.0 );
+        this->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
+        this->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
+
+        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
+        if( !param_vec.empty() ) {
+            this->set_parameters( param_vec );
+        }
+
+        // Set member variables for this class
+        points_topic    = this->get_parameter( "points_topic" ).as_string();
+        own_name        = this->get_parameter( "own_name" ).as_string();
+        robot_names     = this->get_parameter( "/properties/scenario/rovers/names" ).as_string_array();
+        model_namespace = this->get_parameter( "model_namespace" ).as_string();
+        odom_sub_topic  = this->get_parameter( "odom_sub_topic" ).as_string();
+        cloud_sub_topic = this->get_parameter( "cloud_sub_topic" ).as_string();
+
+        map_frame_id              = this->get_parameter( "map_frame_id" ).as_string();
+        odom_frame_id             = this->get_parameter( "odom_frame_id" ).as_string();
+        map_cloud_resolution      = this->get_parameter( "map_cloud_resolution" ).as_double();
+        map_cloud_count_threshold = this->get_parameter( "map_cloud_count_threshold" ).as_int();
+
+        init_pose_topic = this->get_parameter( "init_pose_topic" ).as_string();
+        init_pose_vec   = this->get_parameter( "init_pose" ).as_double_array();
+
+        robot_remove_points_radius = static_cast<float>( this->get_parameter( "robot_remove_points_radius" ).as_double() );
+
+        fix_first_node                       = this->get_parameter( "fix_first_node" ).as_bool();
+        fix_first_node_adaptive              = this->get_parameter( "fix_first_node_adaptive" ).as_bool();
+        fix_first_node_stddev_vec            = this->get_parameter( "fix_first_node_stddev" ).as_double_array();
+        max_keyframes_per_update             = this->get_parameter( "max_keyframes_per_update" ).as_int();
+        odometry_edge_robust_kernel          = this->get_parameter( "odometry_edge_robust_kernel" ).as_string();
+        odometry_edge_robust_kernel_size     = this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
+        loop_closure_edge_robust_kernel      = this->get_parameter( "loop_closure_edge_robust_kernel" ).as_string();
+        loop_closure_edge_robust_kernel_size = this->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double();
+        g2o_solver_num_iterations            = this->get_parameter( "g2o_solver_num_iterations" ).as_int();
+        g2o_solver_type                      = this->get_parameter( "g2o_solver_type" ).as_string();
+        save_graph                           = this->get_parameter( "save_graph" ).as_bool();
+        graph_update_interval                = this->get_parameter( "graph_update_interval" ).as_double();
+        map_cloud_update_interval            = this->get_parameter( "map_cloud_update_interval" ).as_double();
+    }
+
     /**
      * @brief received point clouds are pushed to #keyframe_queue
      * @param odom_msg
@@ -1352,7 +1412,9 @@ private:
     // std::unique_ptr<message_filters::Subscriber<nav_msgs::Odometry>>       odom_sub;
     // std::unique_ptr<message_filters::Subscriber<sensor_msgs::PointCloud2>> cloud_sub;
     // std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>>       sync;
+    std::string                                                      odom_sub_topic;
     message_filters::Subscriber<nav_msgs::msg::Odometry>             odom_sub;
+    std::string                                                      cloud_sub_topic;
     message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub;
     std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>> sync;
 
@@ -1361,9 +1423,6 @@ private:
     rclcpp::Subscription<vamex_slam_msgs::msg::GraphRos>::SharedPtr  graph_broadcast_sub;
     rclcpp::Publisher<vamex_slam_msgs::msg::GraphRos>::SharedPtr     graph_broadcast_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr slam_pose_broadcast_pub;
-
-    std::string map_frame_id;
-    std::string odom_frame_id;
 
     // ros::Subscriber odom_broadcast_sub;
     // ros::Publisher  odom_broadcast_pub;
@@ -1380,7 +1439,6 @@ private:
     // std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::Pose>> others_odom_poses;
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
 
-    std::string points_topic;
     // ros::Publisher read_until_pub;
     // ros::Publisher map_points_pub;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
@@ -1401,9 +1459,6 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
-
-    std::string              own_name;
-    std::vector<std::string> robot_names;
 
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
@@ -1441,6 +1496,8 @@ private:
     std::deque<vamex_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
 
     // for map cloud generation and graph publishing
+    std::string                        map_frame_id;
+    std::string                        odom_frame_id;
     double                             map_cloud_resolution;
     double                             map_cloud_count_threshold;
     std::mutex                         snapshots_mutex;
@@ -1452,6 +1509,13 @@ private:
     std::unique_ptr<GlobalIdGenerator> gid_generator;
 
     // More parameters
+    std::vector<rclcpp::Parameter> param_vec;  // Externally provided by manual composition (debugging)
+
+    std::string              points_topic;
+    std::string              own_name;
+    std::vector<std::string> robot_names;
+    std::string              model_namespace;
+
     float               robot_remove_points_radius;
     std::vector<double> init_pose_vec;
     bool                fix_first_node;
@@ -1461,7 +1525,12 @@ private:
     double              odometry_edge_robust_kernel_size;
     std::string         loop_closure_edge_robust_kernel;
     double              loop_closure_edge_robust_kernel_size;
+    std::string         g2o_solver_type;
+    bool                save_graph;
     int                 g2o_solver_num_iterations;
+    double              graph_update_interval;
+    double              map_cloud_update_interval;
+
 
     // graph slam
     // all the below members must be accessed after locking main_thread_mutex
