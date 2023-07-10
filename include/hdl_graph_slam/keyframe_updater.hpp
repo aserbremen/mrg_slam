@@ -36,12 +36,9 @@ public:
     double get_accum_distance() const;
 
 private:
-    // ROS2 Node handling
-    rclcpp::Node::SharedPtr node;
-
     // parameters
-    double keyframe_delta_trans;  //
-    double keyframe_delta_angle;  //
+    double keyframe_delta_trans;
+    double keyframe_delta_angle;
 
     bool              is_first;
     double            accum_distance;

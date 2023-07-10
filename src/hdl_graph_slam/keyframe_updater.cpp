@@ -4,13 +4,10 @@
 
 namespace hdl_graph_slam {
 
-KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr _node ) :
-    node( _node ), is_first( true ), prev_keypose( Eigen::Isometry3d::Identity() )
+KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr _node ) : is_first( true ), prev_keypose( Eigen::Isometry3d::Identity() )
 {
-    // keyframe_delta_trans = pnh.param<double>( "keyframe_delta_trans", 2.0 );
-    // keyframe_delta_angle = pnh.param<double>( "keyframe_delta_angle", 2.0 );
-    keyframe_delta_trans = node->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
-    keyframe_delta_angle = node->declare_parameter<double>( "keyframe_delta_angle", 2.0 );
+    keyframe_delta_trans = _node->get_parameter( "keyframe_delta_trans" ).as_double();
+    keyframe_delta_angle = _node->get_parameter( "keyframe_delta_angle" ).as_double();
 
     accum_distance = 0.0;
 }
