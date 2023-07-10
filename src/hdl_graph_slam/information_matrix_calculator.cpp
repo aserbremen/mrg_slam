@@ -7,44 +7,18 @@
 
 namespace hdl_graph_slam {
 
-// InformationMatrixCalculator::InformationMatrixCalculator( ros::NodeHandle& nh )
-// {
-//     use_const_inf_matrix = nh.param<bool>( "use_const_inf_matrix", false );
-//     const_stddev_x       = nh.param<double>( "const_stddev_x", 0.5 );
-//     const_stddev_q       = nh.param<double>( "const_stddev_q", 0.1 );
-
-//     var_gain_a           = nh.param<double>( "var_gain_a", 20.0 );
-//     min_stddev_x         = nh.param<double>( "min_stddev_x", 0.1 );
-//     max_stddev_x         = nh.param<double>( "max_stddev_x", 5.0 );
-//     min_stddev_q         = nh.param<double>( "min_stddev_q", 0.05 );
-//     max_stddev_q         = nh.param<double>( "max_stddev_q", 0.2 );
-//     fitness_score_thresh = nh.param<double>( "fitness_score_thresh", 0.5 );
-// }
-
-InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPtr _node ) : node( _node )
+InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPtr _node )
 {
-    // TODO: ROS2 parameter handling
-    // use_const_inf_matrix = nh.param<bool>( "use_const_inf_matrix", false );
-    // const_stddev_x       = nh.param<double>( "const_stddev_x", 0.5 );
-    // const_stddev_q       = nh.param<double>( "const_stddev_q", 0.1 );
-    use_const_inf_matrix = node->declare_parameter<bool>( "use_const_inf_matrix", false );
-    const_stddev_x       = node->declare_parameter<double>( "const_stddev_x", 0.5 );
-    const_stddev_q       = node->declare_parameter<double>( "const_stddev_q", 0.1 );
+    use_const_inf_matrix = _node->get_parameter( "use_const_inf_matrix" ).as_bool();
+    const_stddev_x       = _node->get_parameter( "const_stddev_x" ).as_double();
+    const_stddev_q       = _node->get_parameter( "const_stddev_q" ).as_double();
 
-    // var_gain_a           = nh.param<double>( "var_gain_a", 20.0 );
-    // min_stddev_x         = nh.param<double>( "min_stddev_x", 0.1 );
-    // max_stddev_x         = nh.param<double>( "max_stddev_x", 5.0 );
-    // min_stddev_q         = nh.param<double>( "min_stddev_q", 0.05 );
-    // max_stddev_q         = nh.param<double>( "max_stddev_q", 0.2 );
-    // fitness_score_thresh = nh.param<double>( "fitness_score_thresh", 0.5 );
-    var_gain_a   = node->declare_parameter<double>( "var_gain_a", 20.0 );
-    min_stddev_x = node->declare_parameter<double>( "min_stddev_x", 0.1 );
-    max_stddev_x = node->declare_parameter<double>( "max_stddev_x", 5.0 );
-    min_stddev_q = node->declare_parameter<double>( "min_stddev_q", 0.05 );
-    max_stddev_q = node->declare_parameter<double>( "max_stddev_q", 0.2 );
-    // Parameter also used in loop detector, make sure to declare it once
-    fitness_score_thresh = node->has_parameter( "fitness_score_thresh" ) ? node->get_parameter( "fitness_score_thresh" ).as_double()
-                                                                         : node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+    var_gain_a           = _node->get_parameter( "var_gain_a" ).as_double();
+    min_stddev_x         = _node->get_parameter( "min_stddev_x" ).as_double();
+    max_stddev_x         = _node->get_parameter( "max_stddev_x" ).as_double();
+    min_stddev_q         = _node->get_parameter( "min_stddev_q" ).as_double();
+    max_stddev_q         = _node->get_parameter( "max_stddev_q" ).as_double();
+    fitness_score_thresh = _node->get_parameter( "fitness_score_thresh" ).as_double();
 }
 
 
