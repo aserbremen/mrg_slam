@@ -33,10 +33,8 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     // map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
     // own_name     = private_nh.param<std::string>( "own_name", "atlas" );
     // Declare only once across all nodes
-    map_frame_id = node->has_parameter( "map_frame_id" ) ? node->get_parameter( "map_frame_id" ).as_string()
-                                                         : node->declare_parameter<std::string>( "map_frame_id", "map" );
-    own_name     = node->has_parameter( "own_name" ) ? node->get_parameter( "own_name" ).as_string()
-                                                     : node->declare_parameter<std::string>( "own_name", "atlas" );
+    map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
+    own_name     = node->get_parameter( "own_name" ).as_string();
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
     color_blue.r = 31.0 / 255.0;
