@@ -31,13 +31,22 @@ main( int argc, char const *argv[] )
 
     std::string config_path = argv[1];
     std::cout << "Trying to parse config: " << config_path << std::endl;
-    std::shared_ptr<rclcpp::ParameterMap> param_map = std::make_shared<rclcpp::ParameterMap>(
-        rclcpp::parameter_map_from_yaml_file( config_path ) );
-    std::vector<rclcpp::Parameter> params_prefiltering           = std::vector<rclcpp::Parameter>();
-    std::vector<rclcpp::Parameter> params_floor_detection        = std::vector<rclcpp::Parameter>();
-    std::vector<rclcpp::Parameter> params_scan_matching_odometry = std::vector<rclcpp::Parameter>();
-    std::vector<rclcpp::Parameter> params_hdl_graph_slam         = std::vector<rclcpp::Parameter>();
-    for( auto const &node_params : *param_map ) {
+    rclcpp::ParameterMap           param_map     = rclcpp::parameter_map_from_yaml_file( config_path );
+    std::vector<rclcpp::Parameter> params_shared = param_map["/**"];
+
+    // Print shared params
+    std::cout << "Shared parameters # " << params_shared.size() << std::endl;
+    for( const auto &shared_param : params_shared ) {
+        std::cout << shared_param.get_name() << " " << shared_param.value_to_string() << std::endl;
+    }
+
+    // Initialize with shared params
+    std::vector<rclcpp::Parameter> params_prefiltering           = std::vector<rclcpp::Parameter>( params_shared );
+    std::vector<rclcpp::Parameter> params_floor_detection        = std::vector<rclcpp::Parameter>( params_shared );
+    std::vector<rclcpp::Parameter> params_scan_matching_odometry = std::vector<rclcpp::Parameter>( params_shared );
+    std::vector<rclcpp::Parameter> params_hdl_graph_slam         = std::vector<rclcpp::Parameter>( params_shared );
+
+    for( auto const &node_params : param_map ) {
         std::string node_name = node_params.first;
         std::cout << node_name << " has parameters # " << node_params.second.size() << std::endl;
         for( auto const &param : node_params.second ) {
@@ -45,20 +54,21 @@ main( int argc, char const *argv[] )
                       << std::endl;
         }
         std::cout << std::endl;
+        // Add node specific params
         if( node_name.find( "prefiltering_component" ) != std::string::npos ) {
-            params_prefiltering = node_params.second;
+            params_prefiltering.insert( params_prefiltering.end(), node_params.second.begin(), node_params.second.end() );
         }
         if( node_name.find( "floor_detection_component" ) != std::string::npos ) {
-            params_floor_detection = node_params.second;
+            params_floor_detection.insert( params_floor_detection.end(), node_params.second.begin(), node_params.second.end() );
         }
         if( node_name.find( "scan_matching_odometry_component" ) != std::string::npos ) {
-            params_scan_matching_odometry = node_params.second;
+            params_scan_matching_odometry.insert( params_scan_matching_odometry.end(), node_params.second.begin(),
+                                                  node_params.second.end() );
         }
         if( node_name.find( "hdl_graph_slam_component" ) != std::string::npos ) {
-            params_hdl_graph_slam = node_params.second;
+            params_hdl_graph_slam.insert( params_hdl_graph_slam.end(), node_params.second.begin(), node_params.second.end() );
         }
     }
-    // TODO add the /** shared params to the respective param vectors
 
     // Create an executor that will be used compose components
     rclcpp::executors::SingleThreadedExecutor exec;
