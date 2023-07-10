@@ -1074,7 +1074,9 @@ private:
             & !floor_coeffs_processor.flush( graph_slam, keyframes, keyframe_hash, prev_robot_keyframe->stamp )
             & !gps_processor.flush( graph_slam, keyframes ) & !imu_processor.flush( graph_slam, keyframes, base_frame_id ) ) {
             // Publish the current slam pose if nothing has been updated
-            publish_slam_pose_broadcast( prev_robot_keyframe );
+            if( prev_robot_keyframe != nullptr ) {
+                publish_slam_pose_broadcast( prev_robot_keyframe );
+            }
 
             return;
         }
