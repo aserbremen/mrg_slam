@@ -24,7 +24,7 @@ namespace hdl_graph_slam {
 
 class GpsProcessor {
 public:
-    GpsProcessor() : node( nullptr ) {}
+    GpsProcessor() {}
 
     // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr _node );
@@ -38,13 +38,13 @@ public:
     const boost::optional<Eigen::Vector3d> &zero_utm() const { return zero_utm_vec; }
 
 private:
-    rclcpp::Node::SharedPtr                                                node;
     rclcpp::Subscription<nmea_msgs::msg::Sentence>::SharedPtr              nmea_sub;
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr           navsat_sub;
     rclcpp::Subscription<geographic_msgs::msg::GeoPointStamped>::SharedPtr gps_sub;
 
     std::unique_ptr<NmeaSentenceParser> nmea_parser;
 
+    bool                                                         enable_gps;
     double                                                       gps_time_offset;
     double                                                       gps_edge_stddev_xy;
     double                                                       gps_edge_stddev_z;
