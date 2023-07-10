@@ -78,7 +78,7 @@ private:
                         hdl_graph_slam::GraphSLAM& graph_slam );
 
 private:
-    rclcpp::Node::SharedPtr node;
+    rclcpp::Node::SharedPtr node_ros;
 
     double distance_thresh,
         distance_thresh_squared;            // estimated distance between keyframes consisting a loop must be less than this distance

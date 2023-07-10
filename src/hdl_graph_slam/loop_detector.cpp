@@ -6,28 +6,18 @@
 namespace hdl_graph_slam {
 
 // LoopDetector::LoopDetector( ros::NodeHandle& pnh )
-LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node( _node )
+LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
 {
-    // distance_thresh                = pnh.param<double>( "distance_thresh", 5.0 );
-    // distance_thresh_squared        = distance_thresh * distance_thresh;
-    // accum_distance_thresh          = pnh.param<double>( "accum_distance_thresh", 8.0 );
-    // distance_from_last_edge_thresh = pnh.param<double>( "min_edge_interval", 5.0 );
-    // fitness_score_max_range = pnh.param<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
-    // fitness_score_thresh    = pnh.param<double>( "fitness_score_thresh", 0.5 );
-    // registration             = select_registration_method( pnh );
-
-    distance_thresh                = node->declare_parameter<double>( "distance_thresh", 5.0 );
+    distance_thresh                = node_ros->get_parameter( "distance_thresh" ).as_double();
     distance_thresh_squared        = distance_thresh * distance_thresh;
-    accum_distance_thresh          = node->declare_parameter<double>( "accum_distance_thresh", 8.0 );
-    distance_from_last_edge_thresh = node->declare_parameter<double>( "min_edge_interval", 5.0 );
+    accum_distance_thresh          = node_ros->get_parameter( "accum_distance_thresh" ).as_double();
+    distance_from_last_edge_thresh = node_ros->get_parameter( "min_edge_interval" ).as_double();
 
-    fitness_score_max_range = node->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
-    // Parameter also used in loop detector, make sure to declare it once
-    fitness_score_thresh = node->has_parameter( "fitness_score_thresh" ) ? node->get_parameter( "fitness_score_thresh" ).as_double()
-                                                                         : node->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+    fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
+    fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
 
-    // TODO pass a raw rclpp::Node pointer to select_registration_method
-    registration             = select_registration_method( node.get() );
+    registration = select_registration_method( node_ros.get() );
+
     last_edge_accum_distance = 0.0;
 }
 
@@ -119,7 +109,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     std::cout << "num_candidates: " << candidate_keyframes.size() << std::endl;
     std::cout << "matching" << std::flush;
     // auto t1 = ros::Time::now();
-    auto t1 = node->now();
+    auto t1 = node_ros->now();
 
     pcl::PointCloud<PointT>::Ptr aligned( new pcl::PointCloud<PointT>() );
     for( const auto& candidate : candidate_keyframes ) {
@@ -144,7 +134,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     }
 
     // auto t2 = ros::Time::now();
-    auto t2 = node->now();
+    auto t2 = node_ros->now();
     std::cout << " done" << std::endl;
     std::cout << "best_score: " << boost::format( "%.3f" ) % best_score << "    time: " << boost::format( "%.3f" ) % ( t2 - t1 ).seconds()
               << "[sec]" << std::endl;
