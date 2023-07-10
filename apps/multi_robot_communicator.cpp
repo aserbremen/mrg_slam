@@ -61,10 +61,11 @@ public:
 
         // Create the service client to get the graph gids
         std::string get_graph_gids_service_name = "/hdl_graph_slam/get_graph_gids";
-        RCLCPP_INFO_STREAM( this->get_logger(), "Creating get graph gids client with service name " << get_graph_gids_service_name );
-        get_graph_gids_client_ = this->create_client<vamex_slam_msgs::srv::GetGraphGids>( get_graph_gids_service_name,
+        get_graph_gids_client_                  = this->create_client<vamex_slam_msgs::srv::GetGraphGids>( get_graph_gids_service_name,
                                                                                           rmw_qos_profile_services_default,
                                                                                           reentrant_callback_group );
+        RCLCPP_INFO_STREAM( this->get_logger(),
+                            "Creating get graph gids client with service name " << get_graph_gids_client_->get_service_name() );
 
         // Set the distances from this robot to other robots to a negative value to indicate that they are not known yet
         for( const auto& robot_name : robot_names_ ) {
@@ -99,7 +100,7 @@ public:
     void communication_delay_timer_callback()
     {
         init_timer_->cancel();
-        RCLCPP_INFO_STREAM( this->get_logger(), "Communication delay timer callback" );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Starting communication between rovers" );
         communication_ready_ = true;
     }
 
