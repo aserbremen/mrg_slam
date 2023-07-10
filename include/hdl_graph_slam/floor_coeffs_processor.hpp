@@ -39,7 +39,6 @@ public:
 private:
     // ros::NodeHandle        *private_nh;
     // ros::Subscriber         floor_sub;
-    rclcpp::Node::SharedPtr node;
 
     rclcpp::Subscription<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_sub;
 

@@ -6,30 +6,18 @@
 
 namespace hdl_graph_slam {
 
-// void
-// FloorCoeffsProcessor::onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh_ )
-// {
-//     private_nh           = &private_nh_;
-//     floor_plane_node_ptr = nullptr;
-
-//     floor_edge_stddev = private_nh->param<double>( "floor_edge_stddev", 10.0 );
-//     floor_sub         = nh.subscribe( "/floor_coeffs", 1024, &FloorCoeffsProcessor::floor_coeffs_callback, this );
-// }
-
 void
 FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
-    node                 = _node;
     floor_plane_node_ptr = nullptr;
 
-    // TODO: ROS2 parameter handling, verify
-    floor_edge_stddev             = node->declare_parameter<double>( "floor_edge_stddev", 10.0 );
-    floor_edge_robust_kernel      = node->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
-    floor_edge_robust_kernel_size = node->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
+    floor_edge_stddev             = _node->get_parameter( "floor_edge_stddev" ).as_double();
+    floor_edge_robust_kernel      = _node->get_parameter( "floor_edge_robust_kernel" ).as_string();
+    floor_edge_robust_kernel_size = _node->get_parameter( "floor_edge_robust_kernel_size" ).as_double();
 
-    floor_sub = node->create_subscription<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
-                                                                             std::bind( &FloorCoeffsProcessor::floor_coeffs_callback, this,
-                                                                                        std::placeholders::_1 ) );
+    floor_sub = _node->create_subscription<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
+                                                                               std::bind( &FloorCoeffsProcessor::floor_coeffs_callback,
+                                                                                          this, std::placeholders::_1 ) );
 }
 
 /**
