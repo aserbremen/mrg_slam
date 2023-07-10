@@ -272,7 +272,6 @@ def launch_setup(context, *args, **kwargs):
         name='multi_robot_communicator',
         namespace=model_namespace,
         parameters=[multi_robot_communicator_params, shared_params],
-        arguments=['--ros-args', '--log-level', 'multi_robot_communicator:=DEBUG'],
         remappings=[
             ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
         ],
