@@ -13,19 +13,6 @@
 
 namespace hdl_graph_slam {
 
-// void
-// ImuProcessor::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh_ )
-// {
-//     private_nh = &private_nh_;
-
-//     imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
-//     enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
-//     enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
-//     imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
-//     imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
-
-//     imu_sub = nh.subscribe( "/imu/data", 1024, &ImuProcessor::imu_callback, this );
-// }
 void
 ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
 {
@@ -34,16 +21,18 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
     tf2_buffer   = std::make_unique<tf2_ros::Buffer>( node->get_clock() );
     tf2_listener = std::make_shared<tf2_ros::TransformListener>( *tf2_buffer );
 
-    // imu_time_offset              = private_nh->param<double>( "imu_time_offset", 0.0 );
-    // enable_imu_orientation       = private_nh->param<bool>( "enable_imu_orientation", false );
-    // enable_imu_acceleration      = private_nh->param<bool>( "enable_imu_acceleration", false );
-    // imu_orientation_edge_stddev  = private_nh->param<double>( "imu_orientation_edge_stddev", 0.1 );
-    // imu_acceleration_edge_stddev = private_nh->param<double>( "imu_acceleration_edge_stddev", 3.0 );
-    imu_time_offset              = node->declare_parameter<double>( "imu_time_offset", 0.0 );
-    enable_imu_orientation       = node->declare_parameter<bool>( "enable_imu_orientation", false );
-    enable_imu_acceleration      = node->declare_parameter<bool>( "enable_imu_acceleration", false );
-    imu_orientation_edge_stddev  = node->declare_parameter<double>( "imu_orientation_edge_stddev", 0.1 );
-    imu_acceleration_edge_stddev = node->declare_parameter<double>( "imu_acceleration_edge_stddev", 3.0 );
+    imu_time_offset         = node->get_parameter( "imu_time_offset" ).as_double();
+    enable_imu_orientation  = node->get_parameter( "enable_imu_orientation" ).as_bool();
+    enable_imu_acceleration = node->get_parameter( "enable_imu_acceleration" ).as_bool();
+
+    imu_orientation_edge_stddev  = node->get_parameter( "imu_orientation_edge_stddev" ).as_double();
+    imu_acceleration_edge_stddev = node->get_parameter( "imu_acceleration_edge_stddev" ).as_double();
+
+    imu_orientation_edge_robust_kernel  = node->get_parameter( "imu_orientation_edge_robust_kernel" ).as_string();
+    imu_acceleration_edge_robust_kernel = node->get_parameter( "imu_acceleration_edge_robust_kernel" ).as_string();
+
+    imu_orientation_edge_robust_kernel_size  = node->get_parameter( "imu_orientation_edge_robust_kernel_size" ).as_double();
+    imu_acceleration_edge_robust_kernel_size = node->get_parameter( "imu_acceleration_edge_robust_kernel_size" ).as_double();
 
     imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
                                                                 std::bind( &ImuProcessor::imu_callback, this, std::placeholders::_1 ) );
@@ -147,16 +136,6 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             auto            edge = graph_slam->add_se3_prior_quat_edge( keyframe->node, *keyframe->orientation, info );
             // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_orientation_edge_robust_kernel", "NONE" ),
             //                                private_nh->param<double>( "imu_orientation_edge_robust_kernel_size", 1.0 ) );
-            // TODO: Use member variables if imu_orientation_edge_robust_kernel and imu_orientation_edge_robust_kernel_size do not change
-            // during runtime?
-            std::string imu_orientation_edge_robust_kernel =
-                node->has_parameter( "imu_orientation_edge_robust_kernel" )
-                    ? node->get_parameter( "imu_orientation_edge_robust_kernel" ).as_string()
-                    : node->declare_parameter<std::string>( "imu_orientation_edge_robust_kernel", "NONE" );
-            double imu_orientation_edge_robust_kernel_size =
-                node->has_parameter( "imu_orientation_edge_robust_kernel_size" )
-                    ? node->get_parameter( "imu_orientation_edge_robust_kernel_size" ).as_double()
-                    : node->declare_parameter<double>( "imu_orientation_edge_robust_kernel_size", 1.0 );
             graph_slam->add_robust_kernel( edge, imu_orientation_edge_robust_kernel, imu_orientation_edge_robust_kernel_size );
         }
 
@@ -165,16 +144,6 @@ ImuProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             auto edge = graph_slam->add_se3_prior_vec_edge( keyframe->node, -Eigen::Vector3d::UnitZ(), *keyframe->acceleration, info );
             // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" ),
             //                                private_nh->param<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 ) );
-            // TODO: Use member variables if imu_acceleration_edge_robust_kernel, and imu_acceleration_edge_robust_kernel_size does not
-            // change during runtime?
-            std::string imu_acceleration_edge_robust_kernel =
-                node->has_parameter( "imu_acceleration_edge_robust_kernel" )
-                    ? node->get_parameter( "imu_acceleration_edge_robust_kernel" ).as_string()
-                    : node->declare_parameter<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" );
-            double imu_acceleration_edge_robust_kernel_size =
-                node->has_parameter( "imu_acceleration_edge_robust_kernel_size" )
-                    ? node->get_parameter( "imu_acceleration_edge_robust_kernel_size" ).as_double()
-                    : node->declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
             graph_slam->add_robust_kernel( edge, imu_acceleration_edge_robust_kernel, imu_acceleration_edge_robust_kernel_size );
         }
         updated = true;

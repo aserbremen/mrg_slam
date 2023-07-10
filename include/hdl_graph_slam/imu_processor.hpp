@@ -42,12 +42,17 @@ private:
     std::unique_ptr<tf2_ros::Buffer>            tf2_buffer;
     std::shared_ptr<tf2_ros::TransformListener> tf2_listener;
 
-    double                                      imu_time_offset;
-    bool                                        enable_imu_orientation;
-    double                                      imu_orientation_edge_stddev;
-    bool                                        enable_imu_acceleration;
-    double                                      imu_acceleration_edge_stddev;
-    std::mutex                                  imu_queue_mutex;
+    double      imu_time_offset;
+    bool        enable_imu_orientation;
+    double      imu_orientation_edge_stddev;
+    bool        enable_imu_acceleration;
+    double      imu_acceleration_edge_stddev;
+    std::string imu_orientation_edge_robust_kernel;
+    double      imu_orientation_edge_robust_kernel_size;
+    std::string imu_acceleration_edge_robust_kernel;
+    double      imu_acceleration_edge_robust_kernel_size;
+
+    std::mutex                                        imu_queue_mutex;
     std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_queue;
 };
 
