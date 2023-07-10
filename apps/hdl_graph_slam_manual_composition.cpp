@@ -3,7 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "floor_detection_component.cpp"
-// #include "hdl_graph_slam_component.cpp"
+#include "hdl_graph_slam_component.cpp"
 #include "prefiltering_component.cpp"
 #include "scan_matching_odometry_component.cpp"
 
@@ -84,8 +84,8 @@ main( int argc, char const *argv[] )
     auto scan_matching_odometry_component =
         std::make_shared<hdl_graph_slam::ScanMatchingOdometryComponent>( options, params_scan_matching_odometry );
     exec.add_node( scan_matching_odometry_component );
-    // auto hdl_graph_slam_component = std::make_shared<hdl_graph_slam::HdlGraphSlamComponent>( options );
-    // exec.add_node( hdl_graph_slam_component );
+    auto hdl_graph_slam_component = std::make_shared<hdl_graph_slam::HdlGraphSlamComponent>( options, params_hdl_graph_slam );
+    exec.add_node( hdl_graph_slam_component );
 
     exec.spin();
 

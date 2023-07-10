@@ -240,7 +240,7 @@ if (BUILD_MANUAL_COMPOSITION)
     prefiltering_component
     scan_matching_odometry_component
     floor_detection_component
-    # hdl_graph_slam_component
+    hdl_graph_slam_component
   )
   ament_target_dependencies(hdl_graph_slam_manual_composition
     rclcpp
