@@ -9,6 +9,43 @@ from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
+'''  
+This launch file can be used to debug the hdl_graph_slam multi robot setup. 
+For More information checkout https://gist.github.com/JADC362/a4425c2d05cdaadaaa71b697b674425f
+The debugging is limited to single node or the component container of a single robot with this approach
+To debug one of the nodes for a single robot for the two robot setup with a single computer, proceed as follows:
+We are going to debug the component container for the bestla robot, atlas is going to be run without debugging
+1.  colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+2.  Launch the the full version of the multi robot launch file for robot atlas in one terminal with the following command:
+    ros2 launch hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=atlas odom_frame_id:=atlas/odom map_frame_id:=atlas/map robot_odom_frame_id:=atlas/robot_odom x:=10.0 y:=-13 z:=-2.15 start_rviz2:=false
+3.  Launch the full version of multi robot launch file for robot bestla in another terminal. We are going to debug the component container in this example.
+    We setup a gdbserver at localhost:3000 for the component_container only. This is achieved by adding the following two launch-prefix arguments to the launch command:
+    ros2 launch --launch-prefix 'gdbserver localhost:3000' --launch-prefix-filter \b\w+component_container\b hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=bestla odom_frame_id:=bestla/odom map_frame_id:=bestla/map robot_odom_frame_id:=bestla/robot_odom start_rviz2:=false x:=8.0 y:=-20 z:=-2.05 use_sim_time:=true debug:=yes
+    Note the debug:=yes argument at the end of the launch command. For now debug just needs to be set. Set the prefix argument in the respective full launch file (step 2)
+4.  In vscode setup your launch.json to launch the debug version of this multi robot launch file, where you comment out all nodes except the component container
+    launch.json:
+    {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Launch hdl_graph_slam",
+                "type": "ros",
+                "target": "/home/serov/code/cpp/ros2_hdl_graph_slam/src/hdl_graph_slam/launch/hdl_multi_robot_graph_slam_only_component_container.launch.py",
+                "request": "launch",
+                "arguments": ["model_namespace:=bestla", "odom_frame_id:=bestla/odom", "map_frame_id:=bestla/map", "robot_odom_frame_id:=bestla/robot_odom", "start_rviz2:=false", "x:=8.0", "y:=-20", "z:=-2.05", "use_sim_time:=true"],
+                "launch": [
+                    // "put nodes in here that should be launched but not debugged",
+                ]
+            }
+        ]
+    }
+5. 
+6.  Press F5 to start debugging
+
+If you want to debug another node, you need to move the prefix in the full launch file to the respective python Node(). Also you need to comment in the correct Node in this launch file.
+'''
+
+
 # Parameter type mapping to infer the correct data type from the cli string
 PARAM_MAPPING = {
     'model_namespace': str,
@@ -99,77 +136,70 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(multi_robot_communicator_params, 'multi_robot_communicator_params')
 
     # Create the static transform publisher node
-    frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
-    child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
-    static_transform_publisher = Node(
-        # name=model_namespace + '_lidar2base_publisher',
-        name='lidar2base_publisher',
-        namespace=model_namespace,
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        # arguments has to be a list of strings
-        arguments=[str(static_transform_params['lidar2base_x']),
-                   str(static_transform_params['lidar2base_y']),
-                   str(static_transform_params['lidar2base_z']),
-                   str(static_transform_params['lidar2base_roll']),
-                   str(static_transform_params['lidar2base_pitch']),
-                   str(static_transform_params['lidar2base_yaw']),
-                   frame_id,
-                   child_frame_id],
-        parameters=[shared_params],
-        output='both'
-    )
+    # frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
+    # child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
+    # static_transform_publisher = Node(
+    #     # name=model_namespace + '_lidar2base_publisher',
+    #     name='lidar2base_publisher',
+    #     namespace=model_namespace,
+    #     package='tf2_ros',
+    #     executable='static_transform_publisher',
+    #     # arguments has to be a list of strings
+    #     arguments=[str(static_transform_params['lidar2base_x']),
+    #                str(static_transform_params['lidar2base_y']),
+    #                str(static_transform_params['lidar2base_z']),
+    #                str(static_transform_params['lidar2base_roll']),
+    #                str(static_transform_params['lidar2base_pitch']),
+    #                str(static_transform_params['lidar2base_yaw']),
+    #                frame_id,
+    #                child_frame_id],
+    #     parameters=[shared_params],
+    #     output='both'
+    # )
 
-    # Start rviz2 from this launch file if set to true
-    if shared_params['start_rviz2']:
-        rviz2 = Node(
-            name='rviz2',
-            package='rviz2',
-            executable='rviz2',
-            arguments=['-d', os.path.join(get_package_share_directory(
-                'hdl_graph_slam'), 'rviz', 'hdl_multi_robot_graph_slam_ros2.rviz')],
-            parameters=[shared_params],
-            output='both'
-        )
+    # # Start rviz2 from this launch file if set to true
+    # if shared_params['start_rviz2']:
+    #     rviz2 = Node(
+    #         name='rviz2',
+    #         package='rviz2',
+    #         executable='rviz2',
+    #         arguments=['-d', os.path.join(get_package_share_directory(
+    #             'hdl_graph_slam'), 'rviz', 'hdl_multi_robot_graph_slam_ros2.rviz')],
+    #         parameters=[shared_params],
+    #         output='both'
+    #     )
 
-    # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
-    if os.path.expandvars('$ROS_DISTRO') != 'humble':
-        clock_publisher_ros2 = Node(
-            package='hdl_graph_slam',
-            executable='clock_publisher_ros2.py',
-            name=model_namespace + '_clock_publisher_ros2',
-            parameters=[clock_publisher_ros2_params, shared_params],
-            output='both'
-        )
+    # # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
+    # if os.path.expandvars('$ROS_DISTRO') != 'humble':
+    #     clock_publisher_ros2 = Node(
+    #         package='hdl_graph_slam',
+    #         executable='clock_publisher_ros2.py',
+    #         name=model_namespace + '_clock_publisher_ros2',
+    #         parameters=[clock_publisher_ros2_params, shared_params],
+    #         output='both'
+    #     )
 
-    # Create the map2odom publisher node
-    map2odom_publisher_ros2 = Node(
-        package='hdl_graph_slam',
-        executable='map2odom_publisher_ros2.py',
-        name='map2odom_publisher_ros2',
-        namespace=model_namespace,
-        output='both',
-        parameters=[hdl_graph_slam_params, shared_params],
-        remappings=[('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
-    )
+    # # Create the map2odom publisher node
+    # map2odom_publisher_ros2 = Node(
+    #     package='hdl_graph_slam',
+    #     executable='map2odom_publisher_ros2.py',
+    #     name='map2odom_publisher_ros2',
+    #     namespace=model_namespace,
+    #     output='both',
+    #     parameters=[hdl_graph_slam_params, shared_params],
+    #     remappings=[('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
+    # )
 
     # Create the container node
     # container_name = model_namespace + '_hdl_graph_slam_container'
-    # If the launch command provides the debug argument we add the prefix to start gdbserver (move this to the node you need to debug)
-    # More information can be found in hdl_multi_robot_graph_slam_debug.launch.py and at https://gist.github.com/JADC362/a4425c2d05cdaadaaa71b697b674425f
-    if 'debug' in context.launch_configurations:
-        prefix = ['gdbserver localhost:3000']
-    else:
-        prefix = []
     container_name = model_namespace + '/hdl_graph_slam_container'  # used in composable nodes
     container = Node(
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',
         name="hdl_graph_slam_container",
         namespace=model_namespace,
         output='both',
-        parameters=[shared_params],
-        prefix=prefix
+        parameters=[shared_params]
     )
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
@@ -272,30 +302,31 @@ def launch_setup(context, *args, **kwargs):
         composable_node_descriptions=composable_nodes
     )
 
-    multi_robot_communicator_params['own_name'] = model_namespace
-    multi_robot_communicator = Node(
-        package='hdl_graph_slam',
-        executable='multi_robot_communicator',
-        name='multi_robot_communicator',
-        namespace=model_namespace,
-        parameters=[multi_robot_communicator_params, shared_params],
-        remappings=[
-            ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
-        ],
-        output='screen'
-    )
+    # multi_robot_communicator_params['own_name'] = model_namespace
+    # multi_robot_communicator = Node(
+    #     package='hdl_graph_slam',
+    #     executable='multi_robot_communicator',
+    #     name='multi_robot_communicator',
+    #     namespace=model_namespace,
+    #     parameters=[multi_robot_communicator_params, shared_params],
+    #     remappings=[
+    #         ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
+    #     ],
+    #     output='screen'
+    # )
 
-    launch_description_list = [static_transform_publisher]
-    if shared_params['start_rviz2']:
-        launch_description_list.append(rviz2)
-    # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
-    if os.path.expandvars('$ROS_DISTRO') != 'humble':
-        launch_description_list.append(clock_publisher_ros2)
-    launch_description_list.append(map2odom_publisher_ros2)
-    launch_description_list.append(container)
-    launch_description_list.append(load_composable_nodes)
-    if multi_robot_communicator_params['enable_multi_robot_communicator']:
-        launch_description_list.append(multi_robot_communicator)
+    # launch_description_list = []
+    # if shared_params['start_rviz2']:
+    #     launch_description_list.append(rviz2)
+    # # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
+    # if os.path.expandvars('$ROS_DISTRO') != 'humble':
+    #     launch_description_list.append(clock_publisher_ros2)
+    # launch_description_list.append(map2odom_publisher_ros2)
+    # launch_description_list.append(container)
+    # launch_description_list.append(load_composable_nodes)
+    launch_description_list = [container, load_composable_nodes]
+    # if multi_robot_communicator_params['enable_multi_robot_communicator']:
+    #     launch_description_list.append(multi_robot_communicator)
 
     # Return nodes
     return launch_description_list

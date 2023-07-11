@@ -291,6 +291,7 @@ install(PROGRAMS
   launch/hdl_graph_slam_400.launch.py
   launch/hdl_graph_slam_501.launch.py
   launch/hdl_multi_robot_graph_slam.launch.py
+  launch/hdl_multi_robot_graph_slam_debug.launch.py
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
