@@ -204,11 +204,18 @@ KeyFrame::estimate() const
 
 
 bool
-KeyFrame::edge_exists( const KeyFrame& other ) const
+KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const
 {
     const auto& from_node = node;
     const auto& to_node   = other.node;
     bool        exist     = false;
+
+    if( from_node == nullptr ) {
+        RCLCPP_WARN_STREAM( logger, "from_node is nullptr!!" );
+    }
+    if( to_node == nullptr ) {
+        RCLCPP_WARN_STREAM( logger, "to_node is nullptr!!" );
+    }
 
     // check if both nodes are connected by an edge already
     for( const auto& node_edge : from_node->edges() ) {

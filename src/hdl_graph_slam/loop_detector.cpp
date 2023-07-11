@@ -70,7 +70,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
         }
 
         // there is already an edge
-        if( new_keyframe->edge_exists( *k ) ) {
+        if( new_keyframe->edge_exists( *k, node_ros->get_logger() ) ) {
             continue;
         }
 

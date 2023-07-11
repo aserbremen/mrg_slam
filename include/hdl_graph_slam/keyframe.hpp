@@ -48,7 +48,7 @@ public:
     long              id() const;
     Eigen::Isometry3d estimate() const;
 
-    bool edge_exists( const KeyFrame& other ) const;
+    bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
 public:
     builtin_interfaces::msg::Time     stamp;                     // timestamp

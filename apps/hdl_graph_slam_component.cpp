@@ -683,7 +683,15 @@ private:
         // ROS_INFO_STREAM( "Unique keyframes: " << unique_keyframes.size() );
         // ROS_INFO_STREAM( "Unique edges:     " << unique_edges.size() );
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique keyframes: " << unique_keyframes.size() );
+        for( auto const &kf : unique_keyframes ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Keyframe ID: " << kf.first );
+        }
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique edges:     " << unique_edges.size() );
+        for( auto const &edge : unique_edges ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Edge ID: " << static_cast<uint64_t>( edge.first ) << " from ID "
+                                                                << edge.second->from_gid << " to ID " << edge.second->to_gid );
+        }
+
         if( unique_keyframes.empty() || unique_edges.empty() ) {
             graph_queue.clear();
             return false;
@@ -719,7 +727,7 @@ private:
             const auto &from_keyframe = keyframe_gids[edge_ros.from_gid];
             const auto &to_keyframe   = keyframe_gids[edge_ros.to_gid];
 
-            if( from_keyframe->edge_exists( *to_keyframe ) ) {
+            if( from_keyframe->edge_exists( *to_keyframe, this->get_logger() ) ) {
                 edge_ignore_gids.insert( edge_ros.gid );
                 continue;
             }
@@ -1311,8 +1319,12 @@ private:
             // tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
             msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed gids: " );
-            for( auto gid : req->processed_gids ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
+            for( auto gid : req->processed_keyframe_gids ) {
+                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+            }
+            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
+            for( auto gid : req->processed_edge_gids ) {
                 RCLCPP_INFO_STREAM( this->get_logger(), gid );
             }
 
@@ -1321,8 +1333,8 @@ private:
             for( size_t i = 0; i < keyframes.size(); i++ ) {
                 auto &src = keyframes[i];
                 // Skip adding keyframes that have already been processed by the other robot
-                auto it_processed_gids = std::find( req->processed_gids.begin(), req->processed_gids.end(), src->gid );
-                if( it_processed_gids != req->processed_gids.end() ) {
+                auto it_processed_gids = std::find( req->processed_keyframe_gids.begin(), req->processed_keyframe_gids.end(), src->gid );
+                if( it_processed_gids != req->processed_keyframe_gids.end() ) {
                     RCLCPP_INFO_STREAM( this->get_logger(),
                                         "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
                     continue;
@@ -1346,8 +1358,8 @@ private:
             for( size_t i = 0; i < edges.size(); i++ ) {
                 auto &src = edges[i];
                 // Skip adding edges that have already been processed by the other robot
-                auto it_processed_gids = std::find( req->processed_gids.begin(), req->processed_gids.end(), src->gid );
-                if( it_processed_gids != req->processed_gids.end() ) {
+                auto it_processed_gids = std::find( req->processed_edge_gids.begin(), req->processed_edge_gids.end(), src->gid );
+                if( it_processed_gids != req->processed_edge_gids.end() ) {
                     RCLCPP_INFO_STREAM( this->get_logger(),
                                         "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
                     continue;
@@ -1391,12 +1403,13 @@ private:
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
-        res->gids.reserve( keyframes.size() + edges.size() );
+        res->keyframe_gids.reserve( keyframes.size() );
         for( const auto &keyframe : keyframes ) {
-            res->gids.push_back( keyframe->gid );
+            res->keyframe_gids.push_back( keyframe->gid );
         }
+        res->edge_gids.reserve( edges.size() );
         for( const auto &edge : edges ) {
-            res->gids.push_back( edge->gid );
+            res->edge_gids.push_back( edge->gid );
         }
     }
 

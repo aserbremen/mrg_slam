@@ -320,7 +320,10 @@ public:
             RCLCPP_INFO_STREAM( this->get_logger(), "Sucessfully got own gids" );
         }
 
-        auto own_gids = gid_result_future.get()->gids;
+        auto result_gids = gid_result_future.get();
+
+        const auto& own_keyframe_gids = result_gids->keyframe_gids;
+        const auto& own_edge_gids     = result_gids->edge_gids;
 
         // check if the service server is available
         while( publish_graph_clients_[robot_name]->wait_for_service( std::chrono::seconds( 1 ) ) == false ) {
@@ -334,7 +337,8 @@ public:
         }
 
         vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr request = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
-        request->processed_gids                                        = own_gids;
+        request->processed_keyframe_gids                               = own_keyframe_gids;
+        request->processed_edge_gids                                   = own_edge_gids;
         RCLCPP_INFO_STREAM( this->get_logger(),
                             "Distance from " << own_name_ << " to " << robot_name << " is " << robot_distances_[robot_name].first << " m" );
         RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from " << robot_name );
