@@ -64,9 +64,12 @@ def launch_setup(context, *args, **kwargs):
         'config',
         'hdl_multi_robot_graph_slam.yaml'
     )
+    if 'config' in context.launch_configurations:
+        config_file_path = context.launch_configurations['config']
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
+        print('Loaded config file: ' + config_file_path)
         # # Print all parameters from the yaml file for convenience when launching the nodes
         # print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params['/**']['ros__parameters']
@@ -174,38 +177,41 @@ def launch_setup(context, *args, **kwargs):
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
     prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
-    prefiltering_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::PrefilteringComponent',
-        name='prefiltering_component',
-        namespace=model_namespace,
-        parameters=[prefiltering_params, shared_params],
-        remappings=[
-            ('/imu/data', shared_params['imu_topic']),
-            ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
-            ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points'),
-        ],
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    if prefiltering_params['enable_prefiltering']:
+        prefiltering_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::PrefilteringComponent',
+            name='prefiltering_component',
+            namespace=model_namespace,
+            parameters=[prefiltering_params, shared_params],
+            remappings=[
+                ('/imu/data', shared_params['imu_topic']),
+                ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
+                ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points'),
+                # (prefiltering_params['keyed_scan_topic'], '/' + model_namespace + prefiltering_params['keyed_scan_topic']),
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
-    scan_matching_odometry_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::ScanMatchingOdometryComponent',
-        name='scan_matching_odometry_component',
-        namespace=model_namespace,
-        parameters=[scan_matching_odometry_params, shared_params],
-        remappings=[
-            ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-            ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
-            ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
-            ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
-            ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-            ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),
-        ],
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    if scan_matching_odometry_params['enable_scan_matching_odometry']:
+        scan_matching_odometry_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::ScanMatchingOdometryComponent',
+            name='scan_matching_odometry_component',
+            namespace=model_namespace,
+            parameters=[scan_matching_odometry_params, shared_params],
+            remappings=[
+                ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+                ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
+                ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
+                ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
+                ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+                ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
     # TODO somehwere simple "/floor_coeffs" topic is either subscribed or published to even with namespace and remappings, but not sure where
     if floor_detection_params['enable_floor_detection']:
@@ -261,7 +267,11 @@ def launch_setup(context, *args, **kwargs):
         extra_arguments=[{'use_intra_process_comms': True}]
     )
 
-    composable_nodes = [prefiltering_node, scan_matching_odometry_node]
+    composable_nodes = []
+    if prefiltering_params['enable_prefiltering']:
+        composable_nodes.append(prefiltering_node)
+    if scan_matching_odometry_params['enable_scan_matching_odometry']:
+        composable_nodes.append(scan_matching_odometry_node)
     if floor_detection_params['enable_floor_detection']:
         composable_nodes.append(floor_detection_node)
     composable_nodes.append(hdl_graph_slam_node)
