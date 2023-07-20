@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "spot1"
+    model_namespace: "husky1"
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -27,8 +27,9 @@ clock_publisher_ros2:
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
+    enable_prefiltering: false
+    
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
-    keyed_scan_topic: "/keyed_scans"
     downsample_method: "NONE"
     downsample_resolution: 0.1
     
@@ -55,6 +56,8 @@ prefiltering_component:
 # Scan matching component parameters
 scan_matching_odometry_component:
   ros__parameters:
+    enable_scan_matching_odometry: false
+
     points_topic: "/velodyne_points"
     odom_frame_id: "odom"
     robot_odom_frame_id: "robot_odom"
@@ -105,8 +108,8 @@ floor_detection_component:
 # HDL graph slam component parameters
 hdl_graph_slam_component:
   ros__parameters:
-    own_name: "spot1"
-    /properties/scenario/rovers/names: ["spot1"]
+    own_name: "husky1"
+    /properties/scenario/rovers/names: ["husky1"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
