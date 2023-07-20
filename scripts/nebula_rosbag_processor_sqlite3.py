@@ -7,6 +7,7 @@ import sqlite3
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
 
+from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import Odometry
 
@@ -47,7 +48,7 @@ class RosbagProcessor(Node):
         self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
 
         if self.dataset_dir == '':
-            print('Please specify the dataset directory parameter <dataset_dir>')
+            print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
             exit(1)
 
         self.keyed_scan_bag_path = os.path.join(self.dataset_dir, 'rosbag', self.robot_name, self.robot_name + '.db3')
@@ -75,8 +76,16 @@ class RosbagProcessor(Node):
         self.keyed_scan_counter = 0
         self.odometry_counter = 0
 
-        self.point_cloud2_publisher = self.create_publisher(PointCloud2, '/velodyne_points', 10)
-        self.odometry_publisher = self.create_publisher(Odometry, '/odometry', 10)
+        point_cloud2_topic_name = '/' + self.robot_name + '/prefiltering/filtered_points'
+        self.point_cloud2_publisher = self.create_publisher(PointCloud2, point_cloud2_topic_name, 10)
+        print('Publishing PointCloud2 messages on topic {}'.format(point_cloud2_topic_name))
+
+        odometry_topic_name = '/' + self.robot_name + '/scan_matching_odometry/odom'
+        self.odometry_publisher = self.create_publisher(Odometry,  odometry_topic_name, 10)
+        print('Publishing Odometry messages on topic {}'.format(odometry_topic_name))
+
+        self.clock_publisher = self.create_publisher(Clock, '/clock', 10)
+        print('Publishing Clock messages on topic /clock')
 
         print('Starting playback with rate {}'.format(self.playback_rate))
         self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags)
@@ -92,10 +101,22 @@ class RosbagProcessor(Node):
 
         pointcloud = self.keyed_scans_msgs[self.keyed_scan_counter][1].scan
         odometry = self.odometry_msgs[closest_odometry_index][1]
-
         # Publish the corresponding pointcloud and odometry message
         if pointcloud.header.frame_id == '':
             pointcloud.header.frame_id = self.robot_name + '/velodyne'
+        odometry.child_frame_id = self.robot_name + '/base_link'
+
+        # Set the header stamp of pointcloud message
+        pointcloud.header.stamp.sec = int(str(pointcloud_stamp)[:len(str(pointcloud_stamp))-9])
+        pointcloud.header.stamp.nanosec = int(str(pointcloud_stamp)[len(str(pointcloud_stamp))-9:])
+
+        # Since we are not using a rosbag2 player, we need to publish the clock message ourselves
+        clock_msg = Clock()
+        clock_msg.clock.sec = pointcloud.header.stamp.sec
+        clock_msg.clock.nanosec = pointcloud.header.stamp.nanosec
+        self.clock_publisher.publish(clock_msg)
+
+        # Publish the matching pointcloud and odometry message
         self.point_cloud2_publisher.publish(pointcloud)
         self.odometry_publisher.publish(odometry)
 
