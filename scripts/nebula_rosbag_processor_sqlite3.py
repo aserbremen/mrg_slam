@@ -43,7 +43,7 @@ class RosbagProcessor(Node):
     def __init__(self) -> None:
         super().__init__('rosbag_processor')
 
-        self.playback_rate = self.declare_parameter('playback_rate', 1).get_parameter_value().integer_value
+        self.playback_rate = self.declare_parameter('rate', 1).get_parameter_value().integer_value
         self.robot_name = self.declare_parameter('robot_name', 'husky1').get_parameter_value().string_value
         self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
 
@@ -121,6 +121,10 @@ class RosbagProcessor(Node):
         self.odometry_publisher.publish(odometry)
 
         self.keyed_scan_counter += 1
+
+        if self.keyed_scan_counter == len(self.keyed_scans_msgs):
+            print('Finished processing all messages from the rosbag')
+            exit(0)
 
 
 def main(args=None):
