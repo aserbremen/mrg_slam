@@ -19,6 +19,18 @@ lidar2base_publisher:
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
 
+map2robotmap_publisher:
+  ros__parameters:
+    enable_map2robotmap_publisher: false
+    map2robotmap_x: 0.0
+    map2robotmap_y: 0.0
+    map2robotmap_z: 0.0
+    map2robotmap_roll: 0.0
+    map2robotmap_pitch: 0.0 
+    map2robotmap_yaw: 0.0
+    map2robotmap_frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
+    map2robotmap_child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
+
 # In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
 clock_publisher_ros2:
   ros__parameters:

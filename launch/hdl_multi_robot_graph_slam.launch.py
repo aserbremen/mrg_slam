@@ -74,6 +74,7 @@ def launch_setup(context, *args, **kwargs):
         # print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params['/**']['ros__parameters']
         static_transform_params = config_params['lidar2base_publisher']['ros__parameters']
+        map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
         clock_publisher_ros2_params = config_params['clock_publisher_ros2']['ros__parameters']
         prefiltering_params = config_params['prefiltering_component']['ros__parameters']
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
@@ -84,6 +85,7 @@ def launch_setup(context, *args, **kwargs):
     # Overwrite the parameters from the yaml file with the ones from the cli
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
     static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
+    map2robotmap_publisher_params = overwrite_yaml_params_from_cli(map2robotmap_publisher_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
@@ -94,6 +96,7 @@ def launch_setup(context, *args, **kwargs):
 
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(static_transform_params, 'static_transform_params')
+    print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
     print_yaml_params(clock_publisher_ros2_params, 'clock_publisher_ros2_params')
     print_yaml_params(prefiltering_params, 'prefiltering_params')
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
@@ -122,6 +125,27 @@ def launch_setup(context, *args, **kwargs):
         parameters=[shared_params],
         output='both'
     )
+
+    # Create the map2robotmap publisher node
+    if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
+        map2robotmap_child_frame_id = model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
+        map2robotmap_publisher = Node(
+            name='map2robotmap_publisher',
+            namespace=model_namespace,
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            # arguments has to be a list of strings
+            arguments=[str(map2robotmap_publisher_params['map2robotmap_x']),
+                       str(map2robotmap_publisher_params['map2robotmap_y']),
+                       str(map2robotmap_publisher_params['map2robotmap_z']),
+                       str(map2robotmap_publisher_params['map2robotmap_roll']),
+                       str(map2robotmap_publisher_params['map2robotmap_pitch']),
+                       str(map2robotmap_publisher_params['map2robotmap_yaw']),
+                       map2robotmap_publisher_params['map2robotmap_frame_id'],
+                       map2robotmap_child_frame_id],
+            parameters=[shared_params],
+            output='both'
+        )
 
     # Start rviz2 from this launch file if set to true
     if shared_params['start_rviz2']:
@@ -296,6 +320,8 @@ def launch_setup(context, *args, **kwargs):
     )
 
     launch_description_list = [static_transform_publisher]
+    if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
+        launch_description_list.append(map2robotmap_publisher)
     if shared_params['start_rviz2']:
         launch_description_list.append(rviz2)
     # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock

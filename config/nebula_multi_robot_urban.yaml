@@ -19,6 +19,18 @@ lidar2base_publisher:
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
 
+map2robotmap_publisher:
+  ros__parameters:
+    enable_map2robotmap_publisher: true
+    map2robotmap_x: 0.0
+    map2robotmap_y: 0.0
+    map2robotmap_z: 0.0
+    map2robotmap_roll: 0.0
+    map2robotmap_pitch: 0.0 
+    map2robotmap_yaw: 0.0
+    map2robotmap_frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
+    map2robotmap_child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
+
 # In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
 clock_publisher_ros2:
   ros__parameters:
@@ -109,7 +121,7 @@ floor_detection_component:
 hdl_graph_slam_component:
   ros__parameters:
     own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1"]
+    /properties/scenario/rovers/names: ["husky1", "husky4"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -198,9 +210,9 @@ hdl_graph_slam_component:
 # Multi robot communicator
 multi_robot_communicator:
   ros__parameters:
-    enable_multi_robot_communicator: false
-    own_name: "spot1"
-    robot_names: ["atlas"]
+    enable_multi_robot_communicator: true
+    own_name: "husky1"
+    robot_names: ["husky1", "husky4"]
     publish_graph_trigger_mode: "slam"
     graph_request_min_accum_dist: 3.0
     graph_request_max_robot_dist: 10.0
