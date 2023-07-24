@@ -1,5 +1,6 @@
 import os
 
+import fire
 import rclpy
 from rclpy.node import Node
 
@@ -12,6 +13,30 @@ from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import Odometry
 
 import numpy as np
+import math
+
+
+def euler_from_quaternion(x, y, z, w):
+    """
+    Convert a quaternion into euler angles (roll, pitch, yaw)
+    roll is rotation around x in radians (counterclockwise)
+    pitch is rotation around y in radians (counterclockwise)
+    yaw is rotation around z in radians (counterclockwise)
+    """
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll_x = math.atan2(t0, t1)
+
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch_y = math.asin(t2)
+
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw_z = math.atan2(t3, t4)
+
+    return roll_x, pitch_y, yaw_z  # in radians
 
 
 # https://answers.ros.org/question/358686/how-to-read-a-bag-file-in-ros2/
@@ -78,17 +103,35 @@ class RosbagProcessor(Node):
 
         point_cloud2_topic_name = '/' + self.robot_name + '/prefiltering/filtered_points'
         self.point_cloud2_publisher = self.create_publisher(PointCloud2, point_cloud2_topic_name, 10)
-        print('Publishing PointCloud2 messages on topic {}'.format(point_cloud2_topic_name))
+        print('Setting up PointCloud2 publisher on topic {}'.format(point_cloud2_topic_name))
 
         odometry_topic_name = '/' + self.robot_name + '/scan_matching_odometry/odom'
         self.odometry_publisher = self.create_publisher(Odometry,  odometry_topic_name, 10)
-        print('Publishing Odometry messages on topic {}'.format(odometry_topic_name))
+        print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
 
         self.clock_publisher = self.create_publisher(Clock, '/clock', 10)
-        print('Publishing Clock messages on topic /clock')
+        print('Setting up Clock pubilsher on topic /clock')
 
+    def start_playback(self):
         print('Starting playback with rate {}'.format(self.playback_rate))
         self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags)
+
+    def print_initial_pose(self):
+        pointcloud_stamp = self.keyed_scans_msgs[self.keyed_scan_counter][0]
+        closest_odometry_index = np.argmin(np.abs(self.odometry_stamps - pointcloud_stamp))
+
+        initial_odom = self.odometry_msgs[closest_odometry_index][1]
+        position = initial_odom.pose.pose.position
+        print('position    {} {} {}'.format(position.x, position.y, position.y))
+        orientation = initial_odom.pose.pose.orientation
+        print('orientation {} {} {} {}'.format(orientation.x, orientation.y, orientation.z, orientation.w))
+        euler = euler_from_quaternion(orientation.x, orientation.y, orientation.z, orientation.w)
+        print('euler rpy   {} {} {}'.format(euler[0], euler[1], euler[2]))
+        print("Convenient format:")
+        print('x: {}\ny: {}\nz: {}\n'.format(position.x, position.y, position.z))
+        print('qx: {}\nqy: {}\nqz: {}\nqw: {}\n'.format(orientation.x, orientation.y, orientation.z, orientation.w))
+        print('roll: {}\npitch: {}\nyaw: {}\n'.format(euler[0], euler[1], euler[2]))
+        exit(0)
 
     def process_rosbags(self):
         # Get the pointcloud and the corresponding odometry message with the closest timestamp
@@ -127,17 +170,35 @@ class RosbagProcessor(Node):
             exit(0)
 
 
-def main(args=None):
+def play_rosbag(args=None):
     rclpy.init(args=args)
 
     ros_bag_processor = RosbagProcessor()
+    ros_bag_processor.start_playback()
+    spin(ros_bag_processor)
+
+
+def print_initial_pose(args=None):
+
+    rclpy.init(args=args)
+
+    ros_bag_processor = RosbagProcessor()
+    ros_bag_processor.print_initial_pose()
+    spin(ros_bag_processor)
+
+
+def spin(node):
     try:
-        rclpy.spin(ros_bag_processor)
+        rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
         rclpy.shutdown()
-        ros_bag_processor.destroy_node()
+        node.destroy_node()
+
+
+def main(args=None):
+    fire.Fire()
 
 
 if __name__ == '__main__':
