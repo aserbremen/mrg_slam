@@ -14,6 +14,7 @@ from nav_msgs.msg import Odometry
 
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -196,6 +197,29 @@ class RosbagProcessor(Node):
             print('Finished processing all messages from the rosbag')
             exit(0)
 
+    def plot_trajectories(self):
+
+        # Create a 3D plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_xlabel('x (m)')
+        ax.set_ylabel('y (m)')
+        ax.set_zlabel('z (m)')
+        ax.set_title('Trajectories')
+
+        for robot_name in self.robot_names:
+            # Set the color according to tableau palette
+            color = 'C' + str(self.robot_names.index(robot_name))
+            odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
+                                for stamp, odom in self.data_dict[robot_name]['odometry_msgs']])
+
+            ax.plot(odom_xyz[:, 0], odom_xyz[:, 1], odom_xyz[:, 2], color=color, label=robot_name)
+
+        plt.legend()
+        plt.show()
+
+        exit(0)
+
 
 def play_rosbag(args=None):
     rclpy.init(args=args)
@@ -210,6 +234,14 @@ def print_initial_poses(args=None):
 
     ros_bag_processor = RosbagProcessor()
     ros_bag_processor.print_initial_poses()
+    spin(ros_bag_processor)
+
+
+def plot_trajectories(args=None):
+    rclpy.init(args=args)
+
+    ros_bag_processor = RosbagProcessor()
+    ros_bag_processor.plot_trajectories()
     spin(ros_bag_processor)
 
 
