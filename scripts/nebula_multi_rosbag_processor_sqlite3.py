@@ -214,6 +214,11 @@ class RosbagProcessor(Node):
                                 for stamp, odom in self.data_dict[robot_name]['odometry_msgs']])
 
             ax.plot(odom_xyz[:, 0], odom_xyz[:, 1], odom_xyz[:, 2], color=color, label=robot_name)
+            # Plot text 'start' and 'end' at the start and end of the trajectory
+            z_text_offset = 0.05
+            text_size = 15
+            ax.text(odom_xyz[0, 0], odom_xyz[0, 1], odom_xyz[0, 2]+z_text_offset, 'start', color=color, size=text_size)
+            ax.text(odom_xyz[-1, 0], odom_xyz[-1, 1], odom_xyz[-1, 2]+z_text_offset, 'end', color=color, size=text_size)
 
         plt.legend()
         plt.show()
@@ -234,7 +239,7 @@ class RosbagProcessor(Node):
         exit(0)
 
 
-def play_rosbag(args=None):
+def play_rosbags(args=None):
     rclpy.init(args=args)
 
     ros_bag_processor = RosbagProcessor()
