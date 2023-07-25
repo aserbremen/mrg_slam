@@ -1,6 +1,7 @@
 import os
-
 import fire
+import time
+
 import rclpy
 from rclpy.node import Node
 
@@ -15,6 +16,7 @@ from nav_msgs.msg import Odometry
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+from pyquaternion import Quaternion
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -69,9 +71,10 @@ class RosbagProcessor(Node):
     def __init__(self) -> None:
         super().__init__('rosbag_processor')
 
-        self.playback_rate = self.declare_parameter('rate', 1).get_parameter_value().integer_value
+        self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
         self.robot_names = self.declare_parameter('robot_names', ['husky1']).get_parameter_value().string_array_value
         self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
+        self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
 
         if self.dataset_dir == '':
             print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
@@ -84,6 +87,9 @@ class RosbagProcessor(Node):
         print('Setting up playback for robots: {}'.format(self.robot_names))
         for robot_name in self.robot_names:
             self.setup_robot(robot_name)
+
+        self.clock_publisher = self.create_publisher(Clock, '/clock', 10)
+        print('Setting up Clock pubilsher on topic /clock')
 
     def setup_robot(self, robot_name):
 
@@ -110,7 +116,7 @@ class RosbagProcessor(Node):
         print("Trying to get all messages from ros2 bag {} with topic name {}".format(odometry_bag_path,  odometry_topic_name))
         odometry_msgs = odometry_parser.get_messages(odometry_topic_name)
         # odometry msg stamp is given in the header
-        odometry_stamps = np.array([msg[1].header.stamp.sec * 1e9 + msg[1].header.stamp.nanosec for msg in odometry_msgs])
+        odometry_stamps = np.array([int(msg[1].header.stamp.sec * 1e9 + msg[1].header.stamp.nanosec) for msg in odometry_msgs])
         # Add the odometry to the data dict
         self.data_dict[robot_name]['odometry_msgs'] = odometry_msgs
         self.data_dict[robot_name]['odometry_stamps'] = odometry_stamps
@@ -123,8 +129,10 @@ class RosbagProcessor(Node):
         self.data_dict[robot_name]['odometry_publisher'] = self.create_publisher(Odometry,  odometry_topic_name, 10)
         print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
 
-        self.clock_publisher = self.create_publisher(Clock, '/clock', 10)
-        print('Setting up Clock pubilsher on topic /clock')
+        # Setup a filtered_points publisher for floor detection
+        if self.enable_floor_detetction:
+            self.data_dict[robot_name]['filtered_points_publisher'] = self.create_publisher(
+                PointCloud2, '/' + robot_name + '/prefiltering/filtered_points', 10)
 
     def start_playback(self):
         print('Starting playback with rate {}'.format(self.playback_rate))
@@ -187,6 +195,11 @@ class RosbagProcessor(Node):
         self.clock_publisher.publish(clock_msg)
 
         # Publish the matching pointcloud and odometry message
+        if self.enable_floor_detetction:
+            self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
+            # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
+            time.sleep(0.5)
+
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
 
@@ -233,8 +246,27 @@ class RosbagProcessor(Node):
 
             num_points_per_scan = np.array([keyed_scan.scan.height * keyed_scan.scan.row_step / 16 for stamp,
                                             keyed_scan in self.data_dict[robot_name]['scans_msgs']])
-
             print('Average number of points per pointcloud: {}'.format(np.mean(num_points_per_scan)))
+
+            keyframe_odom_indices = [np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pcl_stamp))
+                                     for pcl_stamp in self.data_dict[robot_name]['scans_stamps']]
+            odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
+                                for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'], keyframe_odom_indices, axis=0)])
+            odom_xyz_norms = np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1)
+            print('Average keyframe distance {}'.format(np.mean(odom_xyz_norms)))
+            print('Max keyframe distance {}'.format(np.max(odom_xyz_norms)))
+            print('Min keyframe distance {}'.format(np.min(odom_xyz_norms)))
+
+            # Need w, x, y, z for pyquaternion
+            odom_orientations = np.array([
+                [odom.pose.pose.orientation.w, odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z]
+                for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'],
+                                           keyframe_odom_indices, axis=0)])
+            delta_rots = np.array([Quaternion.absolute_distance(Quaternion(q1[0], q1[1], q1[2], q1[3]), Quaternion(
+                q2[0], q2[1], q2[2], q2[3])) for q1, q2 in zip(odom_orientations[:-1, :], odom_orientations[1:, :])])
+            print('Average keyframe rotation {}°'.format(np.rad2deg(np.mean(delta_rots))))
+            print('Max keyframe rotation {}°'.format(np.rad2deg(np.max(delta_rots))))
+            print('Min keyframe rotation {}°'.format(np.rad2deg(np.min(delta_rots))))
 
         exit(0)
 
