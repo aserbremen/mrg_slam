@@ -105,7 +105,7 @@ scan_matching_odometry_component:
 # Floor detection component parameters
 floor_detection_component:
   ros__parameters:
-    enable_floor_detection: false
+    enable_floor_detection: true
     tilt_deg: 0.0
     sensor_height: 0.716 # https://app.gazebosim.org/OpenRobotics/fuel/models/COSTAR_HUSKY_SENSOR_CONFIG_1
     height_clip_range: 1.0
