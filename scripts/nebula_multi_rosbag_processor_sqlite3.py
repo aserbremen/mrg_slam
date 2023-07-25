@@ -220,6 +220,19 @@ class RosbagProcessor(Node):
 
         exit(0)
 
+    def print_dataset_info(self):
+        for robot_name in self.robot_names:
+            print('Robot {}'.format(robot_name))
+            print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
+            print('Number of odometry messages: {}'.format(len(self.data_dict[robot_name]['odometry_stamps'])))
+
+            scan = self.data_dict[robot_name]['scans_msgs'][0][1].scan
+            # Get the number of points in the pointcloud
+            num_points = scan.height * scan.row_step / 16
+            print('Average number of points per pointcloud: {}'.format(num_points))
+
+        exit(0)
+
 
 def play_rosbag(args=None):
     rclpy.init(args=args)
@@ -242,6 +255,14 @@ def plot_trajectories(args=None):
 
     ros_bag_processor = RosbagProcessor()
     ros_bag_processor.plot_trajectories()
+    spin(ros_bag_processor)
+
+
+def print_dataset_info(args=None):
+    rclpy.init(args=args)
+
+    ros_bag_processor = RosbagProcessor()
+    ros_bag_processor.print_dataset_info()
     spin(ros_bag_processor)
 
 
