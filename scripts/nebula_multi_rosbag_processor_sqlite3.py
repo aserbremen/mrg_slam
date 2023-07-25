@@ -231,10 +231,10 @@ class RosbagProcessor(Node):
             print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
             print('Number of odometry messages: {}'.format(len(self.data_dict[robot_name]['odometry_stamps'])))
 
-            scan = self.data_dict[robot_name]['scans_msgs'][0][1].scan
-            # Get the number of points in the pointcloud
-            num_points = scan.height * scan.row_step / 16
-            print('Average number of points per pointcloud: {}'.format(num_points))
+            num_points_per_scan = np.array([keyed_scan.scan.height * keyed_scan.scan.row_step / 16 for stamp,
+                                            keyed_scan in self.data_dict[robot_name]['scans_msgs']])
+
+            print('Average number of points per pointcloud: {}'.format(np.mean(num_points_per_scan)))
 
         exit(0)
 
