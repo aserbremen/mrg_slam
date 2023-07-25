@@ -88,6 +88,8 @@ private:
     double fitness_score_max_range;  // maximum allowable distance between corresponding points
     double fitness_score_thresh;     // threshold for scan matching
 
+    bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
+
     double last_edge_accum_distance;
 
     pcl::Registration<PointT, PointT>::Ptr registration;

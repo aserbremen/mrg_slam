@@ -285,6 +285,7 @@ private:
         this->declare_parameter<double>( "min_edge_interval", 5.0 );
         this->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
         this->declare_parameter<double>( "fitness_score_thresh", 0.5 );
+        this->declare_parameter<bool>( "use_planar_registration_guess", false );
 
         // Loop closure (scan matching regisration LoopDetector) parameters (not directly used by this class)
         this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );

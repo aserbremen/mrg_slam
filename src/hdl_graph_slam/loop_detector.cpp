@@ -16,6 +16,8 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
     fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
 
+    use_planar_registration_guess = node_ros->get_parameter( "use_planar_registration_guess" ).as_bool();
+
     registration = select_registration_method( node_ros.get() );
 
     last_edge_accum_distance = 0.0;
@@ -119,7 +121,9 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         Eigen::Isometry3d candidate_estimate    = candidate->node->estimate();
         candidate_estimate.linear()             = Eigen::Quaterniond( candidate_estimate.linear() ).normalized().toRotationMatrix();
         Eigen::Matrix4f guess                   = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
-        guess( 2, 3 )                           = 0.0;
+        if( use_planar_registration_guess ) {
+            guess( 2, 3 ) = 0.0;
+        }
         registration->align( *aligned, guess );
         std::cout << "." << std::flush;
 

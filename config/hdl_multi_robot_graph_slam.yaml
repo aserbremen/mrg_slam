@@ -158,7 +158,9 @@ hdl_graph_slam_component:
     distance_thresh: 15.0
     accum_distance_thresh: 25.0
     min_edge_interval: 15.0
+    fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
+    use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
     # scan matching params
