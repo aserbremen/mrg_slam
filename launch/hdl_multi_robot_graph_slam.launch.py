@@ -274,7 +274,7 @@ def launch_setup(context, *args, **kwargs):
             ('/imu/data', shared_params['imu_topic']),
             ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
             ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-            ('floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+            ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
             ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
             ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
             ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
