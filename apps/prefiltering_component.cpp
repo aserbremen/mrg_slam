@@ -238,6 +238,10 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr distance_filter( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
+        if( !use_distance_filter ) {
+            return cloud;
+        }
+
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         filtered->reserve( cloud->size() );
 
