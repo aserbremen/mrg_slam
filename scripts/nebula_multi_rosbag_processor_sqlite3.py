@@ -4,6 +4,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
+import rclpy.logging
 
 import sqlite3
 from rosidl_runtime_py.utilities import get_message
@@ -17,6 +18,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
+from sensor_msgs_py.point_cloud2 import read_points
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -75,6 +77,9 @@ class RosbagProcessor(Node):
         self.robot_names = self.declare_parameter('robot_names', ['husky1']).get_parameter_value().string_array_value
         self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
         self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
+        # For analysing pointcloud data
+        self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
+        self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
 
         if self.dataset_dir == '':
             print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
@@ -166,16 +171,15 @@ class RosbagProcessor(Node):
         robot_name = min(
             self.data_dict, key=lambda k: self.data_dict[k]['scans_stamps'][self.data_dict[k]['scan_counter']]
             if self.data_dict[k]['scan_counter'] < len(self.data_dict[k]['scans_stamps']) else float('inf'))
-        print(robot_name, self.data_dict[robot_name]['scan_counter'], self.data_dict[robot_name]
-              ['scans_stamps'][self.data_dict[robot_name]['scan_counter']])
 
         # Get the pointcloud and the corresponding odometry message with the closest timestamp
         pointcloud_stamp = self.data_dict[robot_name]['scans_stamps'][self.data_dict[robot_name]['scan_counter']]
         closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
         odometry_stamp = self.data_dict[robot_name]['odometry_stamps'][closest_odometry_index]
 
-        print('Pointcloud stamp {} closest odometry stamp {}: delta t {}s'.format(
-            pointcloud_stamp, int(odometry_stamp), (odometry_stamp - pointcloud_stamp) / 1e9))
+        print('{} scan #{} stamp {} closest odom stamp {}: delta t {}s'.format(
+            robot_name, self.data_dict[robot_name]['scan_counter'],
+            pointcloud_stamp, odometry_stamp, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         pointcloud = self.data_dict[robot_name]['scans_msgs'][self.data_dict[robot_name]['scan_counter']][1].scan
         odometry = self.data_dict[robot_name]['odometry_msgs'][closest_odometry_index][1]
@@ -240,22 +244,41 @@ class RosbagProcessor(Node):
 
     def print_dataset_info(self):
         for robot_name in self.robot_names:
-            print('Robot {}'.format(robot_name))
+            print('\nRobot {}'.format(robot_name))
             print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
             print('Number of odometry messages: {}'.format(len(self.data_dict[robot_name]['odometry_stamps'])))
 
-            num_points_per_scan = np.array([keyed_scan.scan.height * keyed_scan.scan.row_step / 16 for stamp,
-                                            keyed_scan in self.data_dict[robot_name]['scans_msgs']])
-            print('Average number of points per pointcloud: {}'.format(np.mean(num_points_per_scan)))
+            # Print some points statistics
+            points_dict = {index: read_points(scans_msg[1].scan, field_names=['x', 'y', 'z'], reshape_organized_cloud=True)
+                           for index, scans_msg in enumerate(self.data_dict[robot_name]['scans_msgs'])}
+            # Reorganize the points into a numpy array
+            for index, points_tuple in points_dict.items():
+                points_dict[index] = np.array([np.array([point[0], point[1], point[2]]) for point in points_tuple])
+            num_points_per_scan = np.array([points.shape[0] for index, points in points_dict.items()])
+            print('Average number of points per pointcloud: {:.2f}'.format(np.mean(num_points_per_scan)))
+            print('Std deviation of number of points per pointcloud: {:.2f}'.format(np.std(num_points_per_scan)))
 
+            # Print height range statistics
+            if len(self.robot_names) != len(self.sensor_heights):
+                rclpy.logging.get_logger('rosbag_processor').warn(
+                    'Number of robot names and sensor heights do not match, taking first sensor height for all robots')
+                sensor_height = self.sensor_heights[0]
+            else:
+                sensor_height = self.sensor_heights[self.robot_names.index(robot_name)]
+            z_min = sensor_height - self.sensor_clip_range
+            z_max = sensor_height + self.sensor_clip_range
+            num_points_in_range = [np.sum((points[:, 2] > z_min) & (points[:, 2] < z_max)) for index, points in points_dict.items()]
+            print('Average nummber of points in height range {:.2f}m to {:.2f}m: {:.2f}'.format(z_min, z_max, np.mean(num_points_in_range)))
+
+            # Print some keyframe statistics
             keyframe_odom_indices = [np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pcl_stamp))
                                      for pcl_stamp in self.data_dict[robot_name]['scans_stamps']]
             odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
                                 for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'], keyframe_odom_indices, axis=0)])
             odom_xyz_norms = np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1)
-            print('Average keyframe distance {}'.format(np.mean(odom_xyz_norms)))
-            print('Max keyframe distance {}'.format(np.max(odom_xyz_norms)))
-            print('Min keyframe distance {}'.format(np.min(odom_xyz_norms)))
+            print('Average keyframe distance {:.2f}'.format(np.mean(odom_xyz_norms)))
+            print('Max keyframe distance {:.2f}'.format(np.max(odom_xyz_norms)))
+            print('Min keyframe distance {:.2f}'.format(np.min(odom_xyz_norms)))
 
             # Need w, x, y, z for pyquaternion
             odom_orientations = np.array([
@@ -264,9 +287,9 @@ class RosbagProcessor(Node):
                                            keyframe_odom_indices, axis=0)])
             delta_rots = np.array([Quaternion.absolute_distance(Quaternion(q1[0], q1[1], q1[2], q1[3]), Quaternion(
                 q2[0], q2[1], q2[2], q2[3])) for q1, q2 in zip(odom_orientations[:-1, :], odom_orientations[1:, :])])
-            print('Average keyframe rotation {}°'.format(np.rad2deg(np.mean(delta_rots))))
-            print('Max keyframe rotation {}°'.format(np.rad2deg(np.max(delta_rots))))
-            print('Min keyframe rotation {}°'.format(np.rad2deg(np.min(delta_rots))))
+            print('Average keyframe rotation {:.2f}°'.format(np.rad2deg(np.mean(delta_rots))))
+            print('Max keyframe rotation {:.2f}°'.format(np.rad2deg(np.max(delta_rots))))
+            print('Min keyframe rotation {:.2f}°'.format(np.rad2deg(np.min(delta_rots))))
 
         exit(0)
 
