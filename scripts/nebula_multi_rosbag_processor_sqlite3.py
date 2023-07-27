@@ -5,6 +5,7 @@ import time
 import rclpy
 from rclpy.node import Node
 import rclpy.logging
+from tf2_ros import TransformBroadcaster
 
 import sqlite3
 from rosidl_runtime_py.utilities import get_message
@@ -12,13 +13,14 @@ from rclpy.serialization import deserialize_message
 
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py.point_cloud2 import read_points
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import TransformStamped
 
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
-from sensor_msgs_py.point_cloud2 import read_points
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -80,6 +82,8 @@ class RosbagProcessor(Node):
         # For analysing pointcloud data
         self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
         self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
+
+        self.tf_broadcaster = TransformBroadcaster(self)
 
         if self.dataset_dir == '':
             print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
@@ -177,7 +181,7 @@ class RosbagProcessor(Node):
         closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
         odometry_stamp = self.data_dict[robot_name]['odometry_stamps'][closest_odometry_index]
 
-        print('{} scan #{} stamp {} closest odom stamp {}: delta t {}s'.format(
+        print('{} scan #{} stamp {} odom stamp {}: delta t {}s, publishing scan, odom'.format(
             robot_name, self.data_dict[robot_name]['scan_counter'],
             pointcloud_stamp, odometry_stamp, (pointcloud_stamp - odometry_stamp) / 1e9))
 
@@ -204,8 +208,24 @@ class RosbagProcessor(Node):
             # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
             time.sleep(0.5)
 
+        # Publish the tf2 transform between model_namespace/odom and model_namespace/velodyne (aka model_namespace/base_link) as both conincide
+        # This is needed for the floor detection output visulization
+        t = TransformStamped()
+        t.header.stamp = pointcloud.header.stamp
+        t.header.frame_id = robot_name + '/odom'
+        t.child_frame_id = robot_name + '/base_link'
+        t.transform.translation.x = odometry.pose.pose.position.x
+        t.transform.translation.y = odometry.pose.pose.position.y
+        t.transform.translation.z = odometry.pose.pose.position.z
+        t.transform.rotation.x = odometry.pose.pose.orientation.x
+        t.transform.rotation.y = odometry.pose.pose.orientation.y
+        t.transform.rotation.z = odometry.pose.pose.orientation.z
+        t.transform.rotation.w = odometry.pose.pose.orientation.w
+        self.tf_broadcaster.sendTransform(t)
+
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
+        time.sleep(0.2)
 
         self.data_dict[robot_name]['scan_counter'] += 1
 
