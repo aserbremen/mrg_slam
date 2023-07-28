@@ -150,8 +150,6 @@ class RosbagProcessor(Node):
     def print_initial_poses(self):
 
         for robot_name in self.robot_names:
-
-            # pointcloud_stamp = self.scans_msgs[self.scan_counter][0]
             pointcloud_stamp = self.data_dict[robot_name]['scans_stamps'][0]
             closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
 
@@ -160,13 +158,13 @@ class RosbagProcessor(Node):
             orientation = initial_odom.pose.pose.orientation
             euler = euler_from_quaternion(orientation.x, orientation.y, orientation.z, orientation.w)
             print('Robot {} initial pose:'.format(robot_name))
-            print('position    {} {} {}'.format(position.x, position.y, position.y))
-            print('orientation {} {} {} {}'.format(orientation.x, orientation.y, orientation.z, orientation.w))
-            print('euler rpy   {} {} {}'.format(euler[0], euler[1], euler[2]))
+            print('position    {:.3f} {:.3f} {:.3f}'.format(position.x, position.y, position.y))
+            print('orientation {:.3f} {:.3f} {:.3f} {:.3f}'.format(orientation.x, orientation.y, orientation.z, orientation.w))
+            print('euler rpy   {:.3f} {:.3f} {:.3f}'.format(euler[0], euler[1], euler[2]))
             print("Convenient format:")
-            print('x: {}\ny: {}\nz: {}\n'.format(position.x, position.y, position.z))
-            print('qx: {}\nqy: {}\nqz: {}\nqw: {}\n'.format(orientation.x, orientation.y, orientation.z, orientation.w))
-            print('roll: {}\npitch: {}\nyaw: {}\n'.format(euler[0], euler[1], euler[2]))
+            print('x: {:.3f}\ny: {:.3f}\nz: {:.3f}\n'.format(position.x, position.y, position.z))
+            print('qx: {:.3f}\nqy: {:.3f}\nqz: {:.3f}\nqw: {:.3f}\n'.format(orientation.x, orientation.y, orientation.z, orientation.w))
+            print('roll: {:.3f}\npitch: {:.3f}\nyaw: {:.3f}\n'.format(euler[0], euler[1], euler[2]))
 
         exit(0)
 
@@ -202,13 +200,7 @@ class RosbagProcessor(Node):
         clock_msg.clock.nanosec = pointcloud.header.stamp.nanosec
         self.clock_publisher.publish(clock_msg)
 
-        # Publish the matching pointcloud and odometry message
-        if self.enable_floor_detetction:
-            self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
-            # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
-            time.sleep(0.5)
-
-        # Publish the tf2 transform between model_namespace/odom and model_namespace/velodyne (aka model_namespace/base_link) as both conincide
+        # Publish the tf2 transform between model_namespace/odom and model_namespace/base_link (model_namespace/velodyne) as both conincide
         # This is needed for the floor detection output visulization
         t = TransformStamped()
         t.header.stamp = pointcloud.header.stamp
@@ -223,6 +215,12 @@ class RosbagProcessor(Node):
         t.transform.rotation.w = odometry.pose.pose.orientation.w
         self.tf_broadcaster.sendTransform(t)
 
+        if self.enable_floor_detetction:
+            self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
+            # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
+            time.sleep(0.5)
+
+        # Publish the matching pointcloud and odometry message
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
         time.sleep(0.2)
@@ -268,7 +266,7 @@ class RosbagProcessor(Node):
             print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
             print('Number of odometry messages: {}'.format(len(self.data_dict[robot_name]['odometry_stamps'])))
 
-            # Print some points statistics
+            # Print some point cloud statistics
             points_dict = {index: read_points(scans_msg[1].scan, field_names=['x', 'y', 'z'], reshape_organized_cloud=True)
                            for index, scans_msg in enumerate(self.data_dict[robot_name]['scans_msgs'])}
             # Reorganize the points into a numpy array
@@ -313,6 +311,20 @@ class RosbagProcessor(Node):
 
         exit(0)
 
+    def write_odom_groundtruth(self):
+        for robot_name in self.robot_names:
+            gt_filepath = os.path.join(self.dataset_dir, 'ground_truth', robot_name + '_odom', 'stamped_groundtruth.txt')
+            print('Writing ground truth odometry to {}'.format(gt_filepath))
+            with open(gt_filepath, 'w') as f:
+                for stamp, msg in self.data_dict[robot_name]['odometry_msgs']:
+                    # we need to use the stamp from the header
+                    original_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+                    f.write('{} {} {} {} {} {} {} {}\n'.format(
+                        original_stamp, msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
+                        msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
+
+        exit(0)
+
 
 def play_rosbags(args=None):
     rclpy.init(args=args)
@@ -343,6 +355,14 @@ def print_dataset_info(args=None):
 
     ros_bag_processor = RosbagProcessor()
     ros_bag_processor.print_dataset_info()
+    spin(ros_bag_processor)
+
+
+def write_odom_groundtruth(args=None):
+    rclpy.init(args=args)
+
+    ros_bag_processor = RosbagProcessor()
+    ros_bag_processor.write_odom_groundtruth()
     spin(ros_bag_processor)
 
 
