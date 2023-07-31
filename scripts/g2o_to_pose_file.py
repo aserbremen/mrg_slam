@@ -7,7 +7,7 @@ TX, TY, TZ, QX, QY, QZ, QW = range(7)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--g2o_folder', type=str, help='path to g2o folder containing folders for every vertex', required=True)
+    parser.add_argument('--g2o_folder', type=str, help='path to g2o folder containing result with folders for every vertex', required=True)
     parser.add_argument('--output_file', type=str, help='absolute path to output file, if not set a file', required=False)
 
     args = parser.parse_args()
@@ -31,15 +31,19 @@ def main():
                 stamp_nanosecs = stamp_str.split(' ')[2]
                 stamp = float(stamp_secs + '.' + stamp_nanosecs)
 
+                accum_dist_str = next((line for line in lines if line.startswith('accum_distance')), None)
+                accum_dist = float(accum_dist_str.split(' ')[1])
+                # We have to skip poses with negative accummulated distance indicating loop closure constraints
+                if accum_dist < 0:
+                    continue
+
             # Get the pose estimates from the .g2o file according to the gathered ids
             vertex_line = next((line for line in vertices if line.split(' ')[1] == str(id)), None)
             if not vertex_line:
                 print('No vertex found for id: {}'.format(id))
                 continue
             pose_str = vertex_line.split(' ')[2:]
-            # print(pose_str)
             pose = [pose_str[TX], pose_str[TY], pose_str[TZ], pose_str[QX], pose_str[QY], pose_str[QZ], pose_str[QW]]
-            print(folder, id, pose)
             id_stamp_pose.append([id, stamp, pose])
 
     # Write the gathered data to a file
@@ -48,6 +52,8 @@ def main():
     else:
         output_file = args.output_file
     print('Writing poses to file: {}'.format(os.path.abspath(output_file)))
+    if not os.path.exists(output_file):
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w') as f:
         for id, stamp, pose in id_stamp_pose:
             f.write('{} {} {} {} {} {} {} {}\n'.format(
