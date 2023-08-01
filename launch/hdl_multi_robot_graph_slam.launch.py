@@ -200,7 +200,7 @@ def launch_setup(context, *args, **kwargs):
     container_name = model_namespace + '/hdl_graph_slam_container'  # used in composable nodes
     container = Node(
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',
         name="hdl_graph_slam_container",
         namespace=model_namespace,
         output='both',
