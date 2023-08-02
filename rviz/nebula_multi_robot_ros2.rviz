@@ -14,10 +14,10 @@ Panels:
         - /atlas/hdl_graph_slam/markers_covariance1/Namespaces1
         - /spot1/hdl_graph_slam/markers1/Topic1
         - /spot1/hdl_graph_slam/markers1/Namespaces1
-        - /husky4/velodyne_points1
-        - /husky4/prefiltering/filtered_points1
-        - /husky4/hdl_graph_slam/map_points1
-        - /husky4/hdl_graph_slam/markers1
+        - /husky1/hdl_graph_slam/markers1/Namespaces1
+        - /husky2/hdl_graph_slam/markers1/Namespaces1
+        - /husky3/hdl_graph_slam/markers1/Namespaces1
+        - /husky4/hdl_graph_slam/markers1/Namespaces1
       Splitter Ratio: 0.6344339847564697
     Tree Height: 1147
   - Class: rviz_common/Selection
@@ -852,7 +852,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 1
@@ -873,9 +873,9 @@ Visualization Manager:
         Value: /spot1/hdl_graph_slam/map_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
+      Enabled: true
       Name: spot1/hdl_graph_slam/markers
       Namespaces:
         {}
@@ -885,7 +885,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /spot1/hdl_graph_slam/markers
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
       Name: spot1/hdl_graph_slam/markers_covariance
@@ -1005,7 +1005,7 @@ Visualization Manager:
       Name: husky1/hdl_graph_slam/markers
       Namespaces:
         last_nodes: true
-        loop_close_radius: true
+        loop_close_radius: false
         main_edges: true
         nodes: true
       Topic:
@@ -1039,7 +1039,265 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 115
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: husky2/velodyne_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/velodyne_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 123.66666412353516
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: husky2/prefiltering/filtered_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.029999999329447746
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/prefiltering/filtered_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 16.814380645751953
+        Min Value: -4.369710922241211
+        Value: true
+      Axis: Z
+      Channel Name: z
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
       Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1
+      Min Color: 0; 0; 0
+      Min Intensity: -4
+      Name: husky2/hdl_graph_slam/map_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/hdl_graph_slam/map_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: husky2/hdl_graph_slam/markers
+      Namespaces:
+        last_nodes: true
+        loop_close_radius: false
+        main_edges: true
+        nodes: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/hdl_graph_slam/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: husky2/hdl_graph_slam/markers_covariance
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/hdl_graph_slam/markers_covariance
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1.3542025089263916
+        Min Value: -8.981712341308594
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 115
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: husky3/velodyne_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky3/velodyne_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 123.66666412353516
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: husky3/prefiltering/filtered_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.029999999329447746
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky3/prefiltering/filtered_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 16.814380645751953
+        Min Value: -4.369710922241211
+        Value: true
+      Axis: Z
+      Channel Name: z
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1
+      Min Color: 0; 0; 0
+      Min Intensity: -4
+      Name: husky3/hdl_graph_slam/map_points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky3/hdl_graph_slam/map_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: husky3/hdl_graph_slam/markers
+      Namespaces:
+        last_nodes: true
+        loop_close_radius: false
+        main_edges: true
+        nodes: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky3/hdl_graph_slam/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: husky2/hdl_graph_slam/markers_covariance
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /husky2/hdl_graph_slam/markers_covariance
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1.3542025089263916
+        Min Value: -8.981712341308594
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 115
@@ -1060,7 +1318,7 @@ Visualization Manager:
         Value: /husky4/velodyne_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -1073,7 +1331,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 123.66666412353516
@@ -1094,7 +1352,7 @@ Visualization Manager:
         Value: /husky4/prefiltering/filtered_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
@@ -1134,7 +1392,7 @@ Visualization Manager:
       Name: husky4/hdl_graph_slam/markers
       Namespaces:
         last_nodes: true
-        loop_close_radius: true
+        loop_close_radius: false
         main_edges: true
         nodes: true
       Topic:
@@ -1202,25 +1460,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 116.67266082763672
+      Distance: 89.18890380859375
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 11.606183052062988
-        Y: -1.100582480430603
-        Z: 5.909704685211182
+        X: 31.23600959777832
+        Y: -5.8552656173706055
+        Z: 1.6761256456375122
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9147968292236328
+      Pitch: 0.8647972345352173
       Target Frame: map
       Value: Orbit (rviz)
-      Yaw: 3.4304986000061035
+      Yaw: 3.3123762607574463
     Saved: ~
 Window Geometry:
   Displays:
@@ -1237,4 +1495,4 @@ Window Geometry:
     collapsed: true
   Width: 2506
   X: 54
-  Y: 27
+  Y: 507
