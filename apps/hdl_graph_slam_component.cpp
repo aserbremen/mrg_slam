@@ -147,7 +147,7 @@ public:
         sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
         odom_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
-            "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 16 ),
+            "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 100 ),
             std::bind( &HdlGraphSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
 
         // Use a reentrant callbackgroup for odom_broadcast_sub to avoid deadlock, enabling the publish graph service to be called from the
@@ -1375,7 +1375,10 @@ private:
 
         // int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
         // res.success = ret == 0;
-        // TODO check if directory exists, create if it doesnt
+        auto dir = boost::filesystem::path( req->destination ).remove_filename();
+        if( !boost::filesystem::is_directory( dir ) ) {
+            boost::filesystem::create_directory( dir );
+        }
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
 
@@ -1409,13 +1412,13 @@ private:
             // tf::poseEigenToMsg( prev_robot_keyframe->odom, res->graph.latest_keyframe_odom );
             res->graph.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
             for( auto gid : req->processed_keyframe_gids ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
             }
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
             for( auto gid : req->processed_edge_gids ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
             }
 
             res->graph.keyframes.reserve( keyframes.size() );
@@ -1425,8 +1428,8 @@ private:
                 // Skip adding keyframes that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_keyframe_gids.begin(), req->processed_keyframe_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_keyframe_gids.end() ) {
-                    RCLCPP_INFO_STREAM( this->get_logger(),
-                                        "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                         "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
                     continue;
                 }
 
@@ -1450,8 +1453,8 @@ private:
                 // Skip adding edges that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_edge_gids.begin(), req->processed_edge_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_edge_gids.end() ) {
-                    RCLCPP_INFO_STREAM( this->get_logger(),
-                                        "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                         "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
                     continue;
                 }
 
@@ -1477,7 +1480,7 @@ private:
         for( auto keyframe : res->graph.keyframes ) {
             RCLCPP_DEBUG_STREAM( this->get_logger(), keyframe.gid );
         }
-        RCLCPP_DEBUG_STREAM( this->get_logger(), "Response hasthe following edge gids: " );
+        RCLCPP_DEBUG_STREAM( this->get_logger(), "Response has the following edge gids: " );
         for( auto edge : res->graph.edges ) {
             RCLCPP_DEBUG_STREAM( this->get_logger(), edge.gid );
         }
