@@ -212,7 +212,7 @@ hdl_graph_slam_component:
 # Multi robot communicator
 multi_robot_communicator:
   ros__parameters:
-    enable_multi_robot_communicator: true
+    enable_multi_robot_communicator: false
     own_name: "husky1"
     robot_names: ["husky1", "husky4"]
     publish_graph_trigger_mode: "slam"

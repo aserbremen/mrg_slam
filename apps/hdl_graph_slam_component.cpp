@@ -18,6 +18,7 @@
 #include <vamex_slam_msgs/srv/get_graph_gids.hpp>
 #include <vamex_slam_msgs/srv/get_map.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
+#include <vamex_slam_msgs/srv/request_graphs.hpp>
 #include <vamex_slam_msgs/srv/save_map.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
@@ -219,6 +220,13 @@ public:
                                                         std::placeholders::_2 );
         publish_graph_service_server       = this->create_service<vamex_slam_msgs::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
                                                                                                  publish_graph_service_callback );
+        // Request graph service
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::RequestGraphs::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::RequestGraphs::Response>      res )>
+            request_graph_service_callback = std::bind( &HdlGraphSlamComponent::request_graph_service, this, std::placeholders::_1,
+                                                        std::placeholders::_2 );
+        request_graph_service_server       = this->create_service<vamex_slam_msgs::srv::RequestGraphs>( "/hdl_graph_slam/request_graph",
+                                                                                                  request_graph_service_callback );
         // Get graph IDs (gids) service
         std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Request> req,
                             std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Response>      res )>
@@ -820,6 +828,7 @@ private:
         const auto     &robot_name      = slam_pose_msg->robot_name;
         double          accum_dist      = slam_pose_msg->accum_dist;
         double         &last_accum_dist = others_last_accum_dist[robot_name];
+        others_slam_poses[robot_name]   = *slam_pose_msg;
         if( last_accum_dist >= 0 && fabs( accum_dist - last_accum_dist ) < graph_request_min_accum_dist ) {
             return;
         }
@@ -831,7 +840,17 @@ private:
             return;
         }
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << robot_name << " with accum dist " << accum_dist << "m" );
+        while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
+            if( !rclcpp::ok() ) {
+                return;
+            }
+            RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+                                         "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
+                                                                << " to appear..." );
+        }
+
+        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << robot_name << " with new accum dist "
+                                                                               << accum_dist - last_accum_dist << "m" );
         vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
 
         req->robot_name = own_name;
@@ -850,12 +869,11 @@ private:
         std::future_status status        = result_future.wait_for( std::chrono::seconds( 5 ) );
 
         if( status == std::future_status::timeout ) {
-            RCLCPP_ERROR_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+            RCLCPP_WARN_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
             return;
         }
-        if( status != std::future_status::ready ) {
+        if( status == std::future_status::ready ) {
             RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
-            return;
         }
         auto result = result_future.get();
         // Fill the graph queue with the received graph
@@ -1357,6 +1375,7 @@ private:
 
         // int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
         // res.success = ret == 0;
+        // TODO check if directory exists, create if it doesnt
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
 
@@ -1464,6 +1483,62 @@ private:
         }
     }
 
+
+    void request_graph_service( vamex_slam_msgs::srv::RequestGraphs::Request::ConstSharedPtr req,
+                                vamex_slam_msgs::srv::RequestGraphs::Response::SharedPtr     res )
+    {
+        std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
+
+        vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr pub_req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
+
+        pub_req->robot_name = own_name;
+        pub_req->processed_keyframe_gids.reserve( keyframes.size() );
+        for( const auto &keyframe : keyframes ) {
+            pub_req->processed_keyframe_gids.push_back( keyframe->gid );
+        }
+        pub_req->processed_edge_gids.reserve( edges.size() );
+        for( const auto &edge : edges ) {
+            pub_req->processed_edge_gids.push_back( edge->gid );
+        }
+
+        unique_lck.unlock();
+
+        for( const auto &robot_name : req->robot_names ) {
+            if( robot_name == own_name ) {
+                continue;
+            }
+            auto it = std::find( robot_names.begin(), robot_names.end(), robot_name );
+            if( it == robot_names.end() ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Robot " << robot_name << " is not in the list of known robots to request graph" );
+                continue;
+            }
+            while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
+                if( !rclcpp::ok() ) {
+                    return;
+                }
+                RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+                                             "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
+                                                                    << " to appear..." );
+            }
+
+            auto               result_future = request_graph_service_clients[robot_name]->async_send_request( pub_req );
+            std::future_status status        = result_future.wait_for( std::chrono::seconds( 1 ) );
+            if( status == std::future_status::timeout ) {
+                RCLCPP_ERROR_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+                return;
+            }
+            if( status == std::future_status::ready ) {
+                RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
+            }
+            auto result = result_future.get();
+            // Fill the graph queue with the received graph
+            std::lock_guard<std::mutex> lock( graph_queue_mutex );
+            graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
+
+            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].accum_dist;
+        }
+    }
+
     void get_graph_gids_service( vamex_slam_msgs::srv::GetGraphGids::Request::ConstSharedPtr req,
                                  vamex_slam_msgs::srv::GetGraphGids::Response::SharedPtr     res )
     {
@@ -1503,6 +1578,7 @@ private:
     // ros::Publisher  graph_broadcast_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                               slam_pose_broadcast_pub;
     std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+    std::unordered_map<std::string, vamex_slam_msgs::msg::PoseWithName>                            others_slam_poses;
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                            slam_pose_broadcast_sub;
     // other robot name -> accumulated dist when last graph update was requested from that robot
     std::unordered_map<std::string, double> others_last_accum_dist;
@@ -1544,6 +1620,7 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
 
     ImuProcessor         imu_processor;
