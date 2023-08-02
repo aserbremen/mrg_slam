@@ -179,9 +179,9 @@ class RosbagProcessor(Node):
         closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
         odometry_stamp = self.data_dict[robot_name]['odometry_stamps'][closest_odometry_index]
 
-        print('{} scan #{} stamp {} odom stamp {}: delta t {}s, publishing scan, odom'.format(
-            robot_name, self.data_dict[robot_name]['scan_counter'],
-            pointcloud_stamp, odometry_stamp, (pointcloud_stamp - odometry_stamp) / 1e9))
+        print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
+            robot_name, self.data_dict[robot_name]['scan_counter'], len(self.data_dict[robot_name]['scans_stamps']) - 1,
+            pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         pointcloud = self.data_dict[robot_name]['scans_msgs'][self.data_dict[robot_name]['scan_counter']][1].scan
         odometry = self.data_dict[robot_name]['odometry_msgs'][closest_odometry_index][1]
@@ -223,7 +223,7 @@ class RosbagProcessor(Node):
         # Publish the matching pointcloud and odometry message
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
-        time.sleep(0.2)
+        time.sleep(0.1)
 
         self.data_dict[robot_name]['scan_counter'] += 1
 
@@ -313,7 +313,12 @@ class RosbagProcessor(Node):
 
     def write_odom_groundtruth(self):
         for robot_name in self.robot_names:
-            gt_filepath = os.path.join(self.dataset_dir, 'ground_truth', robot_name + '_odom', 'stamped_groundtruth.txt')
+            nebula_dir = os.path.dirname(self.dataset_dir)
+            if os.path.exists(os.path.join(nebula_dir, 'groundtruth')):
+                dataset_name = os.path.basename(os.path.normpath(self.dataset_dir))
+                gt_filepath = os.path.join(nebula_dir, 'groundtruth', dataset_name + '_' + robot_name + '.txt')
+            else:
+                gt_filepath = os.path.join(self.dataset_dir, 'groundtruth', robot_name + '_odom', 'stamped_groundtruth.txt')
             print('Writing ground truth odometry to {}'.format(gt_filepath))
             with open(gt_filepath, 'w') as f:
                 for stamp, msg in self.data_dict[robot_name]['odometry_msgs']:
