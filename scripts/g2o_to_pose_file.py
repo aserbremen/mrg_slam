@@ -31,15 +31,19 @@ def main():
                 stamp_nanosecs = stamp_str.split(' ')[2]
                 stamp = float(stamp_secs + '.' + stamp_nanosecs)
 
+                # Skip the vertices with negative accum_dist indicating loop closure vertices leading to jumps in the estimated trajectory file
+                accum_dist_str = next((line for line in lines if line.startswith('accum_dist')), None)
+                accum_dist = float(accum_dist_str.split(' ')[1])
+                if accum_dist < 0:
+                    continue
+
             # Get the pose estimates from the .g2o file according to the gathered ids
             vertex_line = next((line for line in vertices if line.split(' ')[1] == str(id)), None)
             if not vertex_line:
                 print('No vertex found for id: {}'.format(id))
                 continue
             pose_str = vertex_line.split(' ')[2:]
-            # print(pose_str)
             pose = [pose_str[TX], pose_str[TY], pose_str[TZ], pose_str[QX], pose_str[QY], pose_str[QZ], pose_str[QW]]
-            print(folder, id, pose)
             id_stamp_pose.append([id, stamp, pose])
 
     # Write the gathered data to a file
