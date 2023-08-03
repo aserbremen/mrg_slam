@@ -282,6 +282,7 @@ def launch_setup(context, *args, **kwargs):
               ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
               ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
               ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
+              ('/hdl_graph_slam/slam_status', '/' + model_namespace + '/hdl_graph_slam/slam_status'),
               ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
               ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
               ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),

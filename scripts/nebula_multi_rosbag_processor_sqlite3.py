@@ -6,6 +6,7 @@ import rclpy
 from rclpy.node import Node
 import rclpy.logging
 from tf2_ros import TransformBroadcaster
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 import sqlite3
 from rosidl_runtime_py.utilities import get_message
@@ -16,6 +17,8 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py.point_cloud2 import read_points
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
+from vamex_slam_msgs.msg import SlamStatus
+
 
 import numpy as np
 import math
@@ -83,6 +86,8 @@ class RosbagProcessor(Node):
         self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
         self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
 
+        self.reentrant_callback_group = ReentrantCallbackGroup()
+
         self.tf_broadcaster = TransformBroadcaster(self)
 
         if self.dataset_dir == '':
@@ -137,6 +142,11 @@ class RosbagProcessor(Node):
         odometry_topic_name = '/' + robot_name + '/scan_matching_odometry/odom'
         self.data_dict[robot_name]['odometry_publisher'] = self.create_publisher(Odometry,  odometry_topic_name, 10)
         print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
+
+        # Create the subscription to the slam status in order to stop playback when the algorithms are optimizing or loop closing
+        slam_status_topic_name = '/' + robot_name + '/hdl_graph_slam/slam_status'
+        self.data_dict[robot_name]['slam_status_subscription'] = self.create_subscription(
+            SlamStatus, slam_status_topic_name, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
 
         # Setup a filtered_points publisher for floor detection
         if self.enable_floor_detetction:
@@ -215,6 +225,12 @@ class RosbagProcessor(Node):
         t.transform.rotation.w = odometry.pose.pose.orientation.w
         self.tf_broadcaster.sendTransform(t)
 
+        # TODO self.data_dict[robot_name]['slam_status'] is not updated in this while loop, find a way to update it
+        if 'slam_status' in self.data_dict[robot_name]:
+            while self.data_dict[robot_name]['slam_status'].in_optimization or self.data_dict[robot_name]['slam_status'].in_loop_closure:
+                self.get_logger().info('Waiting for slam to finish optimizing or loop closing')
+                time.sleep(0.1)
+
         if self.enable_floor_detetction:
             self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
             # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
@@ -231,6 +247,9 @@ class RosbagProcessor(Node):
         if all(self.data_dict[k]['scan_counter'] == len(self.data_dict[k]['scans_stamps']) for k in self.data_dict):
             print('Finished processing all messages from the rosbag')
             exit(0)
+
+    def slam_status_callback(self, msg):
+        self.data_dict[msg.robot_name]['slam_status'] = msg
 
     def plot_trajectories(self):
 

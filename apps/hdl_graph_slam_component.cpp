@@ -13,6 +13,7 @@
 #include <vamex_slam_msgs/msg/graph_ros.hpp>
 #include <vamex_slam_msgs/msg/pose_with_name.hpp>
 #include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
+#include <vamex_slam_msgs/msg/slam_status.hpp>
 #include <vamex_slam_msgs/srv/dump_graph.hpp>
 #include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
 #include <vamex_slam_msgs/srv/get_graph_gids.hpp>
@@ -183,10 +184,18 @@ public:
                                                                                               rclcpp::QoS( 16 ) );
         others_poses_pub        = this->create_publisher<vamex_slam_msgs::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
                                                                                             rclcpp::QoS( 16 ) );
+        // Create another reentrant callback group for the slam_status_publisher and all callbacks it publishes from
+        rclcpp::PublisherOptions         pub_options;
+        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
+        pub_options.callback_group                                 = reentrant_callback_group2;
+        slam_status_publisher = this->create_publisher<vamex_slam_msgs::msg::SlamStatus>( "/hdl_graph_slam/slam_status", rclcpp::QoS( 16 ),
+                                                                                          pub_options );
 
-        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when the callback is a class
-        // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
-        // If these service callbacks dont work during runtime, try using lambda functions as in
+
+        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
+        // the callback is a class member function, see
+        // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
+        // work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Dumb service
         std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::DumpGraph::Request> req,
@@ -238,7 +247,8 @@ public:
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
         optimization_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( graph_update_interval, 0 ),
-                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ) );
+                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ),
+                                                   reentrant_callback_group2 );
         map_publish_timer  = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
                                                    std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
 
@@ -246,6 +256,10 @@ public:
         imu_processor.onInit( node_ros );
         floor_coeffs_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
+
+        slam_status_msg.initialized = true;
+        slam_status_msg.robot_name  = own_name;
+        slam_status_publisher->publish( slam_status_msg );
 
         // Print the all parameters declared in this node so far
         print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
@@ -1181,6 +1195,8 @@ private:
         }
 
         // loop detection
+        slam_status_msg.in_loop_closure = true;
+        slam_status_publisher->publish( slam_status_msg );
         std::vector<Loop::Ptr> loops = loop_detector->detect( keyframes, new_keyframes, *graph_slam );
         for( const auto &loop : loops ) {
             Eigen::Isometry3d relpose( loop->relative_pose.cast<double>() );
@@ -1211,6 +1227,9 @@ private:
 
         // optimize the pose graph
         // int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
+        slam_status_msg.in_loop_closure = false;
+        slam_status_msg.in_optimization = true;
+        slam_status_publisher->publish( slam_status_msg );
         graph_slam->optimize( g2o_solver_num_iterations );
 
         // get transformations between map and robots
@@ -1272,6 +1291,9 @@ private:
         if( markers_pub.getNumMarginalsSubscribers() ) {
             markers_pub.publishMarginals( keyframes, marginals, *gid_generator );
         }
+
+        slam_status_msg.in_optimization = false;
+        slam_status_publisher->publish( slam_status_msg );
     }
 
     // /**
@@ -1583,6 +1605,8 @@ private:
     std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
     std::unordered_map<std::string, vamex_slam_msgs::msg::PoseWithName>                            others_slam_poses;
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                            slam_pose_broadcast_sub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::SlamStatus>::SharedPtr                                 slam_status_publisher;
+    vamex_slam_msgs::msg::SlamStatus                                                               slam_status_msg;
     // other robot name -> accumulated dist when last graph update was requested from that robot
     std::unordered_map<std::string, double> others_last_accum_dist;
     double                                  graph_request_min_accum_dist;
