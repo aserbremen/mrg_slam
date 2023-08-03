@@ -254,6 +254,17 @@ class RosbagProcessor(Node):
             text_size = 15
             ax.text(odom_xyz[0, 0], odom_xyz[0, 1], odom_xyz[0, 2]+z_text_offset, 'start', color=color, size=text_size)
             ax.text(odom_xyz[-1, 0], odom_xyz[-1, 1], odom_xyz[-1, 2]+z_text_offset, 'end', color=color, size=text_size)
+            # Plot text at regular intervals along the trajectory
+            accum_distances = np.cumsum(np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1))
+            interval_percent = 0.05
+            interval_distances = np.arange(0, accum_distances[-1], interval_percent * accum_distances[-1])
+            # Find the indices of the odom_xyz array that are closest to the interval_distances
+            closest_odom_indices = np.argmin(np.abs(accum_distances[:, np.newaxis] - interval_distances), axis=0)
+            for i, odom_idx in enumerate(closest_odom_indices):
+                if i == 0:
+                    continue
+                ax.text(odom_xyz[odom_idx, 0], odom_xyz[odom_idx, 1], odom_xyz[odom_idx, 2]+z_text_offset,
+                        '{:.0f}%'.format(i * interval_percent*100), color=color, size=text_size)
 
         plt.legend()
         plt.show()
