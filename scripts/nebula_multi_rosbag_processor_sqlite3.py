@@ -19,7 +19,6 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
 from vamex_slam_msgs.msg import SlamStatus
 
-
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -86,6 +85,7 @@ class RosbagProcessor(Node):
         self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
         self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
 
+        # The slam status callback and the timer callback need to be reentrant, so that the slam status can be updated while the timer is processed
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -147,6 +147,7 @@ class RosbagProcessor(Node):
         slam_status_topic_name = '/' + robot_name + '/hdl_graph_slam/slam_status'
         self.data_dict[robot_name]['slam_status_subscription'] = self.create_subscription(
             SlamStatus, slam_status_topic_name, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
+        self.data_dict[robot_name]['slam_status'] = SlamStatus()
 
         # Setup a filtered_points publisher for floor detection
         if self.enable_floor_detetction:
@@ -155,7 +156,7 @@ class RosbagProcessor(Node):
 
     def start_playback(self):
         print('Starting playback with rate {}'.format(self.playback_rate))
-        self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags)
+        self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags, callback_group=self.reentrant_callback_group)
 
     def print_initial_poses(self):
 
@@ -179,6 +180,8 @@ class RosbagProcessor(Node):
         exit(0)
 
     def process_rosbags(self):
+        # Make sure that this timer is only executed once, reset the timer at the end of this function
+        self.timer.cancel()
         # Get the robot name with the lowest timestamp
         robot_name = min(
             self.data_dict, key=lambda k: self.data_dict[k]['scans_stamps'][self.data_dict[k]['scan_counter']]
@@ -188,10 +191,6 @@ class RosbagProcessor(Node):
         pointcloud_stamp = self.data_dict[robot_name]['scans_stamps'][self.data_dict[robot_name]['scan_counter']]
         closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
         odometry_stamp = self.data_dict[robot_name]['odometry_stamps'][closest_odometry_index]
-
-        print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
-            robot_name, self.data_dict[robot_name]['scan_counter'], len(self.data_dict[robot_name]['scans_stamps']) - 1,
-            pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         pointcloud = self.data_dict[robot_name]['scans_msgs'][self.data_dict[robot_name]['scan_counter']][1].scan
         odometry = self.data_dict[robot_name]['odometry_msgs'][closest_odometry_index][1]
@@ -225,27 +224,40 @@ class RosbagProcessor(Node):
         t.transform.rotation.w = odometry.pose.pose.orientation.w
         self.tf_broadcaster.sendTransform(t)
 
-        # TODO self.data_dict[robot_name]['slam_status'] is not updated in this while loop, find a way to update it
-        if 'slam_status' in self.data_dict[robot_name]:
-            while self.data_dict[robot_name]['slam_status'].in_optimization or self.data_dict[robot_name]['slam_status'].in_loop_closure:
-                self.get_logger().info('Waiting for slam to finish optimizing or loop closing')
-                time.sleep(0.1)
+        total_time_waited = 0
+        while any(self.data_dict[k]['slam_status'].in_optimization or self.data_dict[k]['slam_status'].in_loop_closure
+                  for k in self.data_dict):
+            if total_time_waited == 0:
+                print('Waiting for slam to finish optimizing or loop closing')
+            time.sleep(0.1)
+            total_time_waited += 0.1
+            if total_time_waited > 30:
+                print('Slam is taking too long to optimize or close loop, proceeding with next message')
+                break
 
         if self.enable_floor_detetction:
             self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
             # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
-            time.sleep(0.5)
+            time.sleep(0.3)
+
+        print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
+            robot_name, self.data_dict[robot_name]['scan_counter'], len(self.data_dict[robot_name]['scans_stamps']) - 1,
+            pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         # Publish the matching pointcloud and odometry message
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
-        time.sleep(0.1)
+        time.sleep(0.01)
 
         self.data_dict[robot_name]['scan_counter'] += 1
+
+        # Reset the timer so we can proceed processing the next message
+        self.timer.reset()
 
         # Exit if all keyed scans have been processed
         if all(self.data_dict[k]['scan_counter'] == len(self.data_dict[k]['scans_stamps']) for k in self.data_dict):
             print('Finished processing all messages from the rosbag')
+            self.timer.destroy()
             exit(0)
 
     def slam_status_callback(self, msg):
@@ -361,58 +373,57 @@ class RosbagProcessor(Node):
         exit(0)
 
 
-def play_rosbags(args=None):
-    rclpy.init(args=args)
-
-    ros_bag_processor = RosbagProcessor()
+def play_rosbags(executor, ros_bag_processor):
     ros_bag_processor.start_playback()
-    spin(ros_bag_processor)
+    spin(executor, ros_bag_processor)
 
 
-def print_initial_poses(args=None):
-    rclpy.init(args=args)
-
-    ros_bag_processor = RosbagProcessor()
+def print_initial_poses(executor, ros_bag_processor):
     ros_bag_processor.print_initial_poses()
-    spin(ros_bag_processor)
+    spin(executor, ros_bag_processor)
 
 
-def plot_trajectories(args=None):
-    rclpy.init(args=args)
-
-    ros_bag_processor = RosbagProcessor()
+def plot_trajectories(executor, ros_bag_processor):
     ros_bag_processor.plot_trajectories()
-    spin(ros_bag_processor)
+    spin(executor, ros_bag_processor)
 
 
-def print_dataset_info(args=None):
-    rclpy.init(args=args)
-
-    ros_bag_processor = RosbagProcessor()
+def print_dataset_info(executor, ros_bag_processor):
     ros_bag_processor.print_dataset_info()
-    spin(ros_bag_processor)
+    spin(executor, ros_bag_processor)
 
 
-def write_odom_groundtruth(args=None):
-    rclpy.init(args=args)
-
-    ros_bag_processor = RosbagProcessor()
+def write_odom_groundtruth(executor, ros_bag_processor):
     ros_bag_processor.write_odom_groundtruth()
-    spin(ros_bag_processor)
+    spin(executor, ros_bag_processor)
 
 
-def spin(node):
+def spin(executor, node):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        rclpy.shutdown()
+        executor.shutdown()
         node.destroy_node()
+        rclpy.shutdown()
 
 
 def main(args=None):
-    fire.Fire()
+
+    rclpy.init(args=args)
+    # We need a MultiThreadedExecutor to process certain callbacks while within another callback
+    executor = rclpy.executors.MultiThreadedExecutor()
+    rosbag_processor = RosbagProcessor()
+    executor.add_node(rosbag_processor)
+
+    fire.Fire({
+        'play_rosbags': lambda: play_rosbags(executor, rosbag_processor),
+        'print_initial_poses': lambda: print_initial_poses(executor, rosbag_processor),
+        'plot_trajectories': lambda: plot_trajectories(executor, rosbag_processor),
+        'print_dataset_info': lambda: print_dataset_info(executor, rosbag_processor),
+        'write_odom_groundtruth': lambda: write_odom_groundtruth(executor, rosbag_processor)
+    })
 
 
 if __name__ == '__main__':
