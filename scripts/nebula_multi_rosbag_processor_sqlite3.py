@@ -157,6 +157,7 @@ class RosbagProcessor(Node):
     def start_playback(self):
         print('Starting playback with rate {}'.format(self.playback_rate))
         self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags, callback_group=self.reentrant_callback_group)
+        self.print_wait_info_once = True
 
     def print_initial_poses(self):
 
@@ -224,20 +225,17 @@ class RosbagProcessor(Node):
         t.transform.rotation.w = odometry.pose.pose.orientation.w
         self.tf_broadcaster.sendTransform(t)
 
-        total_time_waited = 0
         while any(self.data_dict[k]['slam_status'].in_optimization or self.data_dict[k]['slam_status'].in_loop_closure
                   for k in self.data_dict):
-            if total_time_waited == 0:
-                print('Waiting for slam to finish optimizing or loop closing')
-            time.sleep(0.1)
-            total_time_waited += 0.1
-            if total_time_waited > 30:
-                print('Slam is taking too long to optimize or close loop, proceeding with next message')
-                break
+            print('Waiting for slam to finish optimizing or loop closing')
+            self.timer.reset()
+            self.print_wait_info_once = False
+            return
+        self.print_wait_info_once = True
 
         if self.enable_floor_detetction:
             self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
-            # sleep for 0.5 seconds to give the floor detection node time to process the pointcloud
+            # sleep for some time to give the floor detection node time to process the pointcloud
             time.sleep(0.3)
 
         print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
@@ -247,7 +245,6 @@ class RosbagProcessor(Node):
         # Publish the matching pointcloud and odometry message
         self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
         self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
-        time.sleep(0.01)
 
         self.data_dict[robot_name]['scan_counter'] += 1
 
