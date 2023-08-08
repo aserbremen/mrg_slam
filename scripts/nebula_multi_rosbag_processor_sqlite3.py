@@ -227,7 +227,8 @@ class RosbagProcessor(Node):
 
         while any(self.data_dict[k]['slam_status'].in_optimization or self.data_dict[k]['slam_status'].in_loop_closure
                   for k in self.data_dict):
-            print('Waiting for slam to finish optimizing or loop closing')
+            if self.print_wait_info_once:
+                print('Waiting for slam to finish optimizing or loop closing')
             self.timer.reset()
             self.print_wait_info_once = False
             return
