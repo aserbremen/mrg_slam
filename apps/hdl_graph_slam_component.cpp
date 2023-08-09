@@ -1167,6 +1167,9 @@ private:
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
+        // Cancel the timer and reset it whenever this function returns in order to avoid overlapping callbacks in case of very long
+        // optimizations
+        optimization_timer->cancel();
 
         // add keyframes and floor coeffs in the queues to the pose graph
         bool keyframe_updated = flush_keyframe_queue();
@@ -1190,7 +1193,7 @@ private:
             if( prev_robot_keyframe != nullptr ) {
                 publish_slam_pose_broadcast( prev_robot_keyframe );
             }
-
+            optimization_timer->reset();
             return;
         }
 
@@ -1222,6 +1225,7 @@ private:
         }
 
         if( keyframes.empty() ) {
+            optimization_timer->reset();
             return;
         }
 
@@ -1294,6 +1298,7 @@ private:
 
         slam_status_msg.in_optimization = false;
         slam_status_publisher->publish( slam_status_msg );
+        optimization_timer->reset();
     }
 
     // /**
@@ -1562,6 +1567,8 @@ private:
 
             others_last_accum_dist[robot_name] = others_slam_poses[robot_name].accum_dist;
         }
+        // Call the optimization callback to process the received graphs
+        optimization_timer_callback();
     }
 
     void get_graph_gids_service( vamex_slam_msgs::srv::GetGraphGids::Request::ConstSharedPtr req,
