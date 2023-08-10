@@ -46,6 +46,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
+#include <scancontext_ros2/Scancontext.h>
 
 #include <Eigen/Dense>
 #include <atomic>
