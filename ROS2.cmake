@@ -23,6 +23,7 @@ find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
+find_package(scancontext_ros2 REQUIRED)
 # ROS2 python depencencies
 find_package(ament_cmake_python REQUIRED)
 find_package(rclpy REQUIRED)
@@ -214,6 +215,7 @@ ament_target_dependencies(hdl_graph_slam_component
   vamex_slam_msgs
   fast_gicp
   ndt_omp
+  scancontext_ros2
 )
 # Register the component as part of hdl_graph_slam (project) ComponentManager
 rclcpp_components_register_nodes(hdl_graph_slam_component "hdl_graph_slam::HdlGraphSlamComponent")

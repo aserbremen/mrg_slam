@@ -57,6 +57,7 @@
   <depend condition="$ROS_VERSION == 2">geographic_msgs</depend>
   <depend condition="$ROS_VERSION == 2">visualization_msgs</depend>
   <depend condition="$ROS_VERSION == 2">vamex_slam_msgs</depend>
+  <depend condition="$ROS_VERSION == 2">scancontext_ros2</depend>
   <!-- <depend condition="$ROS_VERSION == 2">libg2o</depend> -->
   <!-- <exec_depend condition="$ROS_VERSION == 2">rosidl_default_runtime</exec_depend> -->
   <!-- <member_of_group condition="$ROS_VERSION == 2">rosidl_interface_packages</member_of_group> -->
