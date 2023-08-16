@@ -174,6 +174,18 @@ hdl_graph_slam_component:
     reg_correspondence_randomness: 20
     reg_resolution: 0.8 # 1.0 
     reg_nn_search_method: "DIRECT7"
+    # scan context ++ params
+    sc_lidar_height: 0.71 # husky 0.71, spot tbd
+    sc_pc_num_ring: 20
+    sc_pc_num_sector: 60
+    sc_pc_max_radius: 80.0
+    # scan context tree params
+    sc_num_exclude_recent: 50
+    sc_num_candidates_from_tree: 10
+    # loop threshold
+    sc_search_ratio: 0.1
+    sc_dist_thres: 0.13
+    sc_tree_making_period: 50
     # edge params
     # GPS
     gps_edge_robust_kernel: "NONE"

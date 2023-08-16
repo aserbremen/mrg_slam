@@ -126,6 +126,7 @@ public:
 
         keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
         loop_detector.reset( new LoopDetector( node_ros ) );
+        sc_manager.reset( new SCManager( node_ros ) );
         map_cloud_generator.reset( new MapCloudGenerator() );
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
 
@@ -334,6 +335,17 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+
+        // Scan context ++ params (used by SCManager)
+        this->declare_parameter<double>( "sc_lidar_height", 0.71 );
+        this->declare_parameter<int>( "sc_pc_num_ring", 20 );
+        this->declare_parameter<int>( "sc_pc_num_sector", 60 );
+        this->declare_parameter<double>( "sc_pc_max_radius", 80.0 );
+        this->declare_parameter<int>( "sc_num_exclude_recent", 50 );
+        this->declare_parameter<int>( "sc_num_candidates_from_tree", 10 );
+        this->declare_parameter<double>( "sc_search_ratio", 0.1 );
+        this->declare_parameter<double>( "sc_dist_thres", 0.13 );
+        this->declare_parameter<int>( "sc_tree_making_period", 50 );
 
         // InformationMatrixCalculator parameters (not directly used by this class)
         this->declare_parameter<bool>( "use_const_inf_matrix", false );
@@ -1754,6 +1766,7 @@ private:
     std::shared_ptr<GraphSLAM>       graph_slam;
     std::unique_ptr<LoopDetector>    loop_detector;
     std::unique_ptr<KeyframeUpdater> keyframe_updater;
+    std::unique_ptr<SCManager>       sc_manager;
 
     std::unique_ptr<InformationMatrixCalculator> inf_calclator;
 };
