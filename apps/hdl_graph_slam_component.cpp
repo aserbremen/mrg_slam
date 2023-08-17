@@ -306,6 +306,7 @@ private:
         this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
         this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
         this->declare_parameter<bool>( "save_graph", true );
+        this->declare_parameter<bool>( "g2o_verbose", false );
         this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
         this->declare_parameter<double>( "graph_update_interval", 3.0 );
         this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
@@ -594,6 +595,9 @@ private:
             keyframe->set_gid( *gid_generator );
             keyframe_gids[keyframe->gid]   = keyframe;
             keyframe_hash[keyframe->stamp] = keyframe;
+
+            // Add the key frame pointcloud to the scan context manager
+            sc_manager->makeAndSaveScancontextAndKeys( *keyframe->cloud, keyframe->gid );
 
             // first keyframe?
             if( keyframes.empty() && new_keyframes.size() == 1 ) {
@@ -1223,6 +1227,7 @@ private:
             edge_gids.insert( edge->gid );
             graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
+        auto loop = sc_manager->detectLoopClosureID();
 
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
@@ -1247,7 +1252,7 @@ private:
         slam_status_msg.in_loop_closure = false;
         slam_status_msg.in_optimization = true;
         slam_status_publisher->publish( slam_status_msg );
-        graph_slam->optimize( g2o_solver_num_iterations );
+        graph_slam->optimize( g2o_solver_num_iterations, this->get_parameter( "g2o_verbose" ).as_bool() );
 
         // get transformations between map and robots
         Eigen::Isometry3d               trans = prev_robot_keyframe->node->estimate() * prev_robot_keyframe->odom.inverse();
