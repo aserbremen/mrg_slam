@@ -21,7 +21,7 @@ lidar2base_publisher:
 
 map2robotmap_publisher:
   ros__parameters:
-    enable_map2robotmap_publisher: false
+    enable_map2robotmap_publisher: true
     map2robotmap_x: 0.0
     map2robotmap_y: 0.0
     map2robotmap_z: 0.0
@@ -142,12 +142,13 @@ hdl_graph_slam_component:
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
     g2o_solver_num_iterations: 512
+    g2o_verbose: false
     # constraint switches
     enable_gps: false
     enable_imu_acceleration: false
     enable_imu_orientation: false
     # keyframe registration params
-    max_keyframes_per_update: 10
+    max_keyframes_per_update: 10000
     keyframe_delta_trans: 2.0
     keyframe_delta_angle: 2.0
     # fix first node for optimization stability
@@ -180,7 +181,7 @@ hdl_graph_slam_component:
     sc_pc_num_sector: 60
     sc_pc_max_radius: 80.0
     # scan context tree params
-    sc_num_exclude_recent: 50
+    sc_num_exclude_recent: 10
     sc_num_candidates_from_tree: 10
     # loop threshold
     sc_search_ratio: 0.1
