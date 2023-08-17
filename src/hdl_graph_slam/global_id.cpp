@@ -81,4 +81,13 @@ GlobalIdGenerator::operator()( int id ) const
     return gid | own_id_shifted;
 }
 
+std::string
+GlobalIdGenerator::getHumanReadableId( GlobalId gid ) const
+{
+    RobotId     rid        = getRobotId( gid );
+    std::string robot_name = getRobotName( rid );
+    int         id         = gid - rid - start_gid;
+    return robot_name + "#" + std::to_string( start_gid ) + "/" + std::to_string( id );
+}
+
 }  // namespace hdl_graph_slam
