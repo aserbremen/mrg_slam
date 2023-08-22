@@ -25,7 +25,7 @@ public:
     RobotId getRobotId( const GlobalId &gid ) const;
 
     const std::string &getRobotName( const RobotId &rid ) const;
-    std::string        getHumanReadableId(  GlobalId gid ) const;
+    std::string        getHumanReadableId( GlobalId gid, bool with_start_gid = false ) const;
 
     GlobalId operator()( int id ) const;
 

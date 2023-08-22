@@ -24,8 +24,8 @@ GlobalIdGenerator::GlobalIdGenerator( rclcpp::Node::SharedPtr _node, const std::
     own_id         = robot_names_mapping[own_name];
     own_id_shifted = ( (GlobalId)own_id ) << 56;  // 8bit for robot id, rest of 64bit for id (56bit)
 
-    // get start gid from time to prevent id clashes if one robot should be restartet, convert to builtin_interfaces::msg::Time to get acces
-    // to sec and nanosec members
+    // get start gid from time to prevent id clashes if one robot should be restartet
+    // convert to builtin_interfaces::msg::Time to get acces to sec and nanosec members
     // auto time = ros::Time::now();  // ROS1
     auto time = _node->now().operator builtin_interfaces::msg::Time();
 
@@ -82,12 +82,19 @@ GlobalIdGenerator::operator()( int id ) const
 }
 
 std::string
-GlobalIdGenerator::getHumanReadableId( GlobalId gid ) const
+GlobalIdGenerator::getHumanReadableId( GlobalId gid, bool with_start_gid ) const
 {
+    if( gid == 0 ) {
+        return "fixed_node-0";
+    }
     RobotId     rid        = getRobotId( gid );
     std::string robot_name = getRobotName( rid );
-    int         id         = gid - rid - start_gid;
-    return robot_name + "#" + std::to_string( start_gid ) + "/" + std::to_string( id );
+    int         id         = gid - start_gid;
+    // TODO start_gid should be used from the corresponding robot
+    if( with_start_gid ) {
+        return robot_name + "#" + std::to_string( start_gid ) + "-" + std::to_string( id );
+    }
+    return robot_name + "-" + std::to_string( id );
 }
 
 }  // namespace hdl_graph_slam
