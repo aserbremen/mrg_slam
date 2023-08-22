@@ -6,6 +6,7 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 
 #include <boost/format.hpp>
+#include <hdl_graph_slam/global_id.hpp>
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <hdl_graph_slam/registrations.hpp>
@@ -45,7 +46,7 @@ public:
      * @brief Construct a new Loop Detector object
      * @param _node Shared pointer to the main node
      */
-    LoopDetector( rclcpp::Node::SharedPtr _node );
+    LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<GlobalIdGenerator> _gid_generator );
 
     /**
      * @brief detect loops and add them to the pose graph
@@ -54,7 +55,8 @@ public:
      * @param graph_slam      pose graph
      */
     std::vector<Loop::Ptr> detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                                   hdl_graph_slam::GraphSLAM& graph_slam );
+                                   hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<Edge::Ptr>& edges,
+                                   const std::unordered_map<GlobalId, KeyFrame::Ptr>& gid_keyframe_map );
 
     double get_distance_thresh() const;
 
@@ -75,10 +77,14 @@ private:
      * @param graph_slam           graph slam
      */
     Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
-                        hdl_graph_slam::GraphSLAM& graph_slam );
+                        hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
+                        const std::vector<Edge::Ptr>& edges, const std::unordered_map<GlobalId, KeyFrame::Ptr>& gid_keyframe_map );
+
+    // Eigen::Matrix4f single_scan_registration( const pcl::PointCloud<PointT>::Ptr source_cloud );
 
 private:
-    rclcpp::Node::SharedPtr node_ros;
+    rclcpp::Node::SharedPtr            node_ros;
+    std::shared_ptr<GlobalIdGenerator> gid_generator;
 
     double distance_thresh,
         distance_thresh_squared;            // estimated distance between keyframes consisting a loop must be less than this distance
