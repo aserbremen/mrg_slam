@@ -124,13 +124,13 @@ public:
         graph_slam.reset( new GraphSLAM( g2o_solver_type ) );
         graph_slam->set_save_graph( save_graph );
 
+        gid_generator = std::make_shared<GlobalIdGenerator>( node_ros, own_name, robot_names );
+
         keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
-        loop_detector.reset( new LoopDetector( node_ros ) );
+        loop_detector.reset( new LoopDetector( node_ros, gid_generator ) );
         sc_manager.reset( new SCManager( node_ros ) );
         map_cloud_generator.reset( new MapCloudGenerator() );
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
-
-        gid_generator = std::unique_ptr<GlobalIdGenerator>( new GlobalIdGenerator( node_ros, own_name, robot_names ) );
 
         // subscribers
         if( !model_namespace.empty() ) {
@@ -593,8 +593,8 @@ private:
             Eigen::Isometry3d odom = odom2map * keyframe->odom;
             keyframe->node         = graph_slam->add_se3_node( odom );
             keyframe->set_gid( *gid_generator );
-            keyframe_gids[keyframe->gid]   = keyframe;
-            keyframe_hash[keyframe->stamp] = keyframe;
+            gid_keyframe_map[keyframe->gid] = keyframe;
+            keyframe_hash[keyframe->stamp]  = keyframe;
 
             // Add the key frame pointcloud to the scan context manager
             sc_manager->makeAndSaveScancontextAndKeys( *keyframe->cloud, keyframe->gid );
@@ -622,13 +622,16 @@ private:
                         anchor_kf->gid = 0;  // if anchor node is not adaptive (i.e. stays at the origin), its GID needs to be 0 for all
                                              // robots
                     }
-                    anchor_kf->node  = anchor_node;
-                    keyframe_gids[0] = anchor_kf;
+                    anchor_kf->node     = anchor_node;
+                    gid_keyframe_map[0] = anchor_kf;
 
                     anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
-                    auto edge   = new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator );
+                    Edge::Ptr edge( new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator ) );
                     edges.emplace_back( edge );
                     edge_gids.insert( edge->gid );
+
+                    // Add the edge to the anchor KeyFrame, TODO find out if the anchor edge is the prev or next in this case
+                    anchor_kf->prev_edge = edge;
                 }
             }
 
@@ -641,10 +644,13 @@ private:
             Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_robot_keyframe->odom;
             Eigen::MatrixXd   information   = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud,
                                                                                       relative_pose );
-            auto graph_edge = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
-            auto edge       = new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator );
+            auto      graph_edge = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
+            Edge::Ptr edge( new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator ) );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
+            // Add the edge to the corresponding keyframes
+            gid_keyframe_map[prev_robot_keyframe->gid]->next_edge = edge;
+            keyframe->prev_edge                                   = edge;
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
             //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
             graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
@@ -720,7 +726,7 @@ private:
             }
 
             for( const auto &keyframe_ros : graph_msg->keyframes ) {
-                if( keyframe_gids.find( keyframe_ros.gid ) != keyframe_gids.end() ) {
+                if( gid_keyframe_map.find( keyframe_ros.gid ) != gid_keyframe_map.end() ) {
                     continue;
                 }
                 auto iter = unique_keyframes.find( keyframe_ros.gid );
@@ -739,12 +745,13 @@ private:
         // ROS_INFO_STREAM( "Unique edges:     " << unique_edges.size() );
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique keyframes: " << unique_keyframes.size() );
         for( auto const &kf : unique_keyframes ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Keyframe ID: " << kf.first );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Keyframe ID: " << gid_generator->getHumanReadableId( kf.first ) );
         }
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique edges:     " << unique_edges.size() );
         for( auto const &edge : unique_edges ) {
             RCLCPP_INFO_STREAM( this->get_logger(), "Edge ID: " << static_cast<uint64_t>( edge.first ) << " from ID "
-                                                                << edge.second->from_gid << " to ID " << edge.second->to_gid );
+                                                                << gid_generator->getHumanReadableId( edge.second->from_gid ) << " to ID "
+                                                                << gid_generator->getHumanReadableId( edge.second->to_gid ) );
         }
 
         if( unique_keyframes.empty() || unique_edges.empty() ) {
@@ -756,7 +763,7 @@ private:
             const auto &keyframe_ros = *kf.second;
 
             // ROS_INFO_STREAM( "Adding keyframe: " << keyframe_ros.gid );
-            RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe: " << keyframe_ros.gid );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding keyframe: " << gid_generator->getHumanReadableId( keyframe_ros.gid ) );
 
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
@@ -768,10 +775,10 @@ private:
             Eigen::Isometry3d pose;
             // tf::poseMsgToEigen( keyframe_ros.estimate, pose );
             tf2::fromMsg( keyframe_ros.estimate, pose );
-            keyframe->node               = graph_slam->add_se3_node( pose );
-            keyframe->gid                = keyframe_ros.gid;
-            keyframe->exclude_from_map   = keyframe_ros.exclude_from_map;
-            keyframe_gids[keyframe->gid] = keyframe;
+            keyframe->node                  = graph_slam->add_se3_node( pose );
+            keyframe->gid                   = keyframe_ros.gid;
+            keyframe->exclude_from_map      = keyframe_ros.exclude_from_map;
+            gid_keyframe_map[keyframe->gid] = keyframe;
             new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure
                                                   // don't add it to keyframe_hash, which is only used for floor_coeffs
                                                   // keyframe_hash[keyframe->stamp] = keyframe;
@@ -779,8 +786,8 @@ private:
 
         for( const auto &e : unique_edges ) {
             const auto &edge_ros      = *e.second;
-            const auto &from_keyframe = keyframe_gids[edge_ros.from_gid];
-            const auto &to_keyframe   = keyframe_gids[edge_ros.to_gid];
+            const auto &from_keyframe = gid_keyframe_map[edge_ros.from_gid];
+            const auto &to_keyframe   = gid_keyframe_map[edge_ros.to_gid];
 
             if( from_keyframe->edge_exists( *to_keyframe, this->get_logger() ) ) {
                 edge_ignore_gids.insert( edge_ros.gid );
@@ -788,8 +795,9 @@ private:
             }
 
             // ROS_INFO_STREAM( "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
-            RCLCPP_INFO_STREAM( this->get_logger(),
-                                "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding edge: " << gid_generator->getHumanReadableId( edge_ros.gid ) << " ("
+                                                                    << gid_generator->getHumanReadableId( edge_ros.from_gid ) << " -> "
+                                                                    << gid_generator->getHumanReadableId( edge_ros.to_gid ) << ")" );
 
             Eigen::Isometry3d relpose;
             // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
@@ -816,7 +824,7 @@ private:
 
         for( const auto &latest_keyframe : latest_robot_keyframes ) {
             auto &kf = others_prev_robot_keyframes[latest_keyframe.first];
-            kf.first = keyframe_gids[*latest_keyframe.second.first];  // pointer to keyframe
+            kf.first = gid_keyframe_map[*latest_keyframe.second.first];  // pointer to keyframe
             // tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
             tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
         }
@@ -1217,7 +1225,7 @@ private:
         // loop detection
         slam_status_msg.in_loop_closure = true;
         slam_status_publisher->publish( slam_status_msg );
-        std::vector<Loop::Ptr> loops = loop_detector->detect( keyframes, new_keyframes, *graph_slam );
+        std::vector<Loop::Ptr> loops = loop_detector->detect( keyframes, new_keyframes, *graph_slam, edges, gid_keyframe_map );
         for( const auto &loop : loops ) {
             Eigen::Isometry3d relpose( loop->relative_pose.cast<double>() );
             Eigen::MatrixXd   information_matrix = inf_calclator->calc_information_matrix( loop->key1->cloud, loop->key2->cloud, relpose );
@@ -1459,11 +1467,11 @@ private:
 
             RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
             for( auto gid : req->processed_keyframe_gids ) {
-                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid_generator->getHumanReadableId( gid ) );
             }
             RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
             for( auto gid : req->processed_edge_gids ) {
-                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid_generator->getHumanReadableId( gid ) );
             }
 
             res->graph.keyframes.reserve( keyframes.size() );
@@ -1473,8 +1481,8 @@ private:
                 // Skip adding keyframes that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_keyframe_gids.begin(), req->processed_keyframe_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_keyframe_gids.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(),
-                                         "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), "Skipping keyframe " << gid_generator->getHumanReadableId(
+                                                                 src->gid ) << " as it has already been processed by the other robot" );
                     continue;
                 }
 
@@ -1498,8 +1506,8 @@ private:
                 // Skip adding edges that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_edge_gids.begin(), req->processed_edge_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_edge_gids.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(),
-                                         "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), "Skipping edge " << gid_generator->getHumanReadableId( src->gid )
+                                                                              << " as it has already been processed by the other robot" );
                     continue;
                 }
 
@@ -1523,11 +1531,11 @@ private:
                                                                              << " keyframes and " << res->graph.edges.size() << " edges." );
         RCLCPP_DEBUG_STREAM( this->get_logger(), "Response has the following keyframe gids: " );
         for( auto keyframe : res->graph.keyframes ) {
-            RCLCPP_DEBUG_STREAM( this->get_logger(), keyframe.gid );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), gid_generator->getHumanReadableId( keyframe.gid ) );
         }
         RCLCPP_DEBUG_STREAM( this->get_logger(), "Response has the following edge gids: " );
         for( auto edge : res->graph.edges ) {
-            RCLCPP_DEBUG_STREAM( this->get_logger(), edge.gid );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), gid_generator->getHumanReadableId( edge.gid ) );
         }
     }
 
@@ -1721,7 +1729,7 @@ private:
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;
 
     // global id
-    std::unique_ptr<GlobalIdGenerator> gid_generator;
+    std::shared_ptr<GlobalIdGenerator> gid_generator;
 
     // More parameters
     std::vector<rclcpp::Parameter> param_vec;  // Externally provided by manual composition (debugging)
@@ -1764,7 +1772,7 @@ private:
     // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used
     std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
     std::vector<Edge::Ptr>                                                        edges;
-    std::unordered_map<GlobalId, KeyFrame::Ptr>                                   keyframe_gids;
+    std::unordered_map<GlobalId, KeyFrame::Ptr>                                   gid_keyframe_map;
     std::unordered_set<GlobalId>                                                  edge_gids;
     std::unordered_set<GlobalId>                                                  edge_ignore_gids;
 

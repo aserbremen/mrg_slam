@@ -8,9 +8,9 @@
 #include <pcl/point_types.h>
 
 #include <boost/optional.hpp>
-#include <hdl_graph_slam/global_id.hpp>
-// ROS2 migration
 #include <builtin_interfaces/msg/time.hpp>
+#include <hdl_graph_slam/edge.hpp>
+#include <hdl_graph_slam/global_id.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
@@ -65,6 +65,9 @@ public:
     boost::optional<Eigen::Quaterniond> orientation;   //
 
     g2o::VertexSE3* node;  // node instance
+
+    Edge::Ptr prev_edge = nullptr;  // previous edge TYPE_ODOM
+    Edge::Ptr next_edge = nullptr;  // next edge TYPE_ODOM
 };
 
 /**
