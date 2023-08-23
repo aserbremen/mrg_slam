@@ -94,6 +94,10 @@ private:
     double fitness_score_max_range;  // maximum allowable distance between corresponding points
     double fitness_score_thresh;     // threshold for scan matching
 
+    bool   use_loop_closure_consistency_check;        // whether to check
+    double loop_closure_consistency_max_delta_trans;  // maximum allowed translation distance for loop closure graph consistency check (m)
+    double loop_closure_consistency_max_delta_angle;  // maximum allowed rotation angle for loop closure graph consistency check (deg)
+
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
     double last_edge_accum_distance;

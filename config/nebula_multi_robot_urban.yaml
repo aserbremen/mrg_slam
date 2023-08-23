@@ -121,7 +121,7 @@ floor_detection_component:
 hdl_graph_slam_component:
   ros__parameters:
     own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1", "husky4"]
+    /properties/scenario/rovers/names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -164,6 +164,9 @@ hdl_graph_slam_component:
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Cauchy" # "NONE"
     loop_closure_edge_robust_kernel_size: 0.1 # 1.0
+    use_loop_closure_consistency_check: true
+    loop_closure_consistency_max_delta_trans: 0.1  # meter
+    loop_closure_consistency_max_delta_angle: 3.0  # degree
     # scan matching params, registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
     registration_method: "FAST_GICP"
     reg_num_threads: 0
@@ -218,7 +221,7 @@ hdl_graph_slam_component:
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
-    map_cloud_resolution: 0.05
+    map_cloud_resolution: 0.5
     save_graph: false
     # remappings are handled in the python respective launch file
 

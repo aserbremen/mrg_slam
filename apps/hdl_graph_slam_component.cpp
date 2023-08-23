@@ -336,6 +336,10 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+        this->declare_parameter<bool>( "use_loop_closure_consistency_check", true );
+        this->declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
+        this->declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
+
 
         // Scan context ++ params (used by SCManager)
         this->declare_parameter<double>( "sc_lidar_height", 0.71 );
@@ -803,13 +807,20 @@ private:
             // tf::poseMsgToEigen( edge_ros.relative_pose, relpose );
             tf2::fromMsg( edge_ros.relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros.information.data() );
-            auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
-            auto edge       = new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP );
-            edge->gid       = edge_ros.gid;
-            edge->from_gid  = edge_ros.from_gid;
-            edge->to_gid    = edge_ros.to_gid;
+            auto      graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
+            Edge::Ptr edge( new Edge( graph_edge, edge_ros.type == 0 ? Edge::TYPE_ODOM : Edge::TYPE_LOOP ) );
+            edge->gid      = edge_ros.gid;
+            edge->from_gid = edge_ros.from_gid;
+            edge->to_gid   = edge_ros.to_gid;
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
+
+            // Add the edge to the corresponding keyframes, TODO check if right
+            gid_keyframe_map[edge->from_gid]->prev_edge = edge;
+            gid_keyframe_map[edge->to_gid]->next_edge   = edge;
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding prev edge to keyframe " << gid_generator->getHumanReadableId( edge->from_gid )
+                                                                                    << " next edge to keyframe "
+                                                                                    << gid_generator->getHumanReadableId( edge->to_gid ) );
 
             if( edge->type == Edge::TYPE_ODOM ) {
                 // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
@@ -1235,7 +1246,7 @@ private:
             edge_gids.insert( edge->gid );
             graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
-        auto loop = sc_manager->detectLoopClosureID();
+        // auto loop = sc_manager->detectLoopClosureID();
 
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
@@ -1593,7 +1604,7 @@ private:
 
             others_last_accum_dist[robot_name] = others_slam_poses[robot_name].accum_dist;
         }
-        // Call the optimization callback to process the received graphs
+        // Call the optimization callback to process the received graphs needed when working with use_sim_time true
         optimization_timer_callback();
     }
 

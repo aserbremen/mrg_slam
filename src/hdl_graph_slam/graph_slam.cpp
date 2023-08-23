@@ -366,7 +366,6 @@ GraphSLAM::optimize( int num_iterations, bool verbose )
     optimizer->setVerbose( verbose );
 
     double chi2 = optimizer->chi2();
-    std::cout << "chi2 " << chi2 << std::endl;
 
     if( save_graph_at_each_optimization ) {
         std::stringstream ss;

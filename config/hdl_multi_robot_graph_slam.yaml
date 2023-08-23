@@ -164,6 +164,9 @@ hdl_graph_slam_component:
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
+    use_loop_closure_consistency_check: true
+    loop_closure_consistency_max_delta_trans: 0.1  # meter
+    loop_closure_consistency_max_delta_angle: 3.0  # degree
     # scan matching params
     registration_method: "FAST_GICP"
     reg_num_threads: 0

@@ -18,6 +18,12 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<Globa
     fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
     fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
 
+    use_loop_closure_consistency_check       = node_ros->get_parameter( "use_loop_closure_consistency_check" ).as_bool();
+    loop_closure_consistency_max_delta_trans = node_ros->get_parameter( "loop_closure_consistency_max_delta_trans" ).as_double();
+    loop_closure_consistency_max_delta_angle = node_ros->get_parameter( "loop_closure_consistency_max_delta_angle" ).as_double();
+    // Convert to rad
+    loop_closure_consistency_max_delta_angle = loop_closure_consistency_max_delta_angle * M_PI / 180.0;
+
     use_planar_registration_guess = node_ros->get_parameter( "use_planar_registration_guess" ).as_bool();
 
     registration = select_registration_method( node_ros.get() );
@@ -106,30 +112,31 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     registration->setInputTarget( new_keyframe->cloud );
 
-    double          best_score = std::numeric_limits<double>::max();
+    bool            consistency_check_passed = false;
+    double          best_score               = std::numeric_limits<double>::max();
     KeyFrame::Ptr   best_matched;
     Eigen::Matrix4f relative_pose;
 
     std::cout << std::endl;
     std::cout << "--- loop detection ---" << std::endl;
-    std::cout << "num_candidates: " << candidate_keyframes.size() << std::endl;
+    std::cout << "keyframe " << gid_generator->getHumanReadableId( new_keyframe->gid ) << " has " << candidate_keyframes.size()
+              << " candidates" << std::endl;
     for( const auto& cand : candidate_keyframes ) {
-        std::cout << " " << gid_generator->getHumanReadableId( cand->gid ) << std::endl;
+        std::cout << gid_generator->getHumanReadableId( cand->gid ) << std::endl;
     }
     std::cout << "matching" << std::endl;
     auto t1 = std::chrono::system_clock::now();
 
-    std::map<uint64_t, std::pair<uint64_t, Eigen::Matrix4f>> relative_poses;
-
     pcl::PointCloud<PointT>::Ptr aligned( new pcl::PointCloud<PointT>() );
+    Eigen::Isometry3d            new_keyframe_estimate = new_keyframe->node->estimate();
+    new_keyframe_estimate.linear() = Eigen::Quaterniond( new_keyframe_estimate.linear() ).normalized().toRotationMatrix();
     for( const auto& candidate : candidate_keyframes ) {
         RCLCPP_INFO_STREAM( node_ros->get_logger(), "candidate: " << gid_generator->getHumanReadableId( candidate->gid ) );
         registration->setInputSource( candidate->cloud );
-        Eigen::Isometry3d new_keyframe_estimate = new_keyframe->node->estimate();
-        new_keyframe_estimate.linear()          = Eigen::Quaterniond( new_keyframe_estimate.linear() ).normalized().toRotationMatrix();
-        Eigen::Isometry3d candidate_estimate    = candidate->node->estimate();
-        candidate_estimate.linear()             = Eigen::Quaterniond( candidate_estimate.linear() ).normalized().toRotationMatrix();
-        Eigen::Matrix4f guess                   = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
+
+        Eigen::Isometry3d candidate_estimate = candidate->node->estimate();
+        candidate_estimate.linear()          = Eigen::Quaterniond( candidate_estimate.linear() ).normalized().toRotationMatrix();
+        Eigen::Matrix4f guess                = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
         if( use_planar_registration_guess ) {
             guess( 2, 3 ) = 0.0;
         }
@@ -145,57 +152,118 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         best_score    = score;
         best_matched  = candidate;
         relative_pose = registration->getFinalTransformation();  // New to candidate
+    }
 
-
+    if( use_loop_closure_consistency_check ) {
         // Save the relative pose and check previous keyframe
         // loop closure hypothesis check. Calculate relative transformation from candidate to its previous keyframe and calculate
         // transformation from new keyframe to candidate to previous keyframe which should be the identity transformation if the loop
         // closure hypothesis is correct.
 
-        // Identity transform consistency check, maybe only done for best score?
-        // TODO handle the anchor node case??
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
         Eigen::Matrix4f              rel_pose_candidate_to_prev;
-        if( candidate->prev_edge != nullptr ) {
-            rel_pose_candidate_to_prev = candidate->prev_edge->relative_pose().matrix().cast<float>();
+        if( best_matched->prev_edge != nullptr ) {
+            rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
+            RCLCPP_INFO_STREAM( node_ros->get_logger(), "prev edge " << gid_generator->getHumanReadableId( best_matched->prev_edge->gid )
+                                                                     << " to "
+                                                                     << gid_generator->getHumanReadableId( best_matched->prev_edge->to_gid )
+                                                                     << " has relative pose\n"
+                                                                     << rel_pose_candidate_to_prev );
+
+            Eigen::Matrix4f rel_pose_new_to_prev;
+            const auto&     prev_kf = gid_keyframe_map.at( best_matched->prev_edge->to_gid );
+            registration->setInputSource( prev_kf->cloud );
+            Eigen::Isometry3d prev_kf_estimate = prev_kf->node->estimate();
+            prev_kf_estimate.linear()          = Eigen::Quaterniond( prev_kf_estimate.linear() ).normalized().toRotationMatrix();
+            Eigen::Matrix4f prev_guess         = ( new_keyframe_estimate.inverse() * prev_kf_estimate ).matrix().cast<float>();
+            if( use_planar_registration_guess ) {
+                prev_guess( 2, 3 ) = 0.0;
+            }
+            registration->align( *prev_aligned, prev_guess );
+            if( !registration->hasConverged() ) {
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for prev" );
+            }
+            rel_pose_new_to_prev = registration->getFinalTransformation();
+            // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
+            auto rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * relative_pose * rel_pose_candidate_to_prev;
+            RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for prev\n" << rel_pose_identity_check_prev );
+            float delta_trans_prev = rel_pose_identity_check_prev.block<3, 1>( 0, 3 ).norm();
+            float delta_angle_prev =
+                Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
+            if( delta_trans_prev < loop_closure_consistency_max_delta_trans
+                && delta_angle_prev < loop_closure_consistency_max_delta_angle ) {
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "Consistent with prev keyframe "
+                                                                << gid_generator->getHumanReadableId( prev_kf->gid ) << " delta trans "
+                                                                << delta_trans_prev << " delta angle " << delta_angle_prev * 180.0 / M_PI );
+                consistency_check_passed = true;
+            } else {
+                RCLCPP_WARN_STREAM( node_ros->get_logger(), "Inconsistent with prev keyframe "
+                                                                << gid_generator->getHumanReadableId( prev_kf->gid ) << " delta trans "
+                                                                << delta_trans_prev << " delta angle " << delta_angle_prev * 180.0 / M_PI );
+            }
         } else {
             RCLCPP_WARN_STREAM( node_ros->get_logger(),
-                                "candidate " << gid_generator->getHumanReadableId( candidate->gid ) << " has no previous edge" );
-            rel_pose_candidate_to_prev = Eigen::Matrix4f::Identity();
-            continue;
+                                "candidate " << gid_generator->getHumanReadableId( best_matched->gid ) << " has no previous edge" );
         }
-        RCLCPP_INFO_STREAM( node_ros->get_logger(), "prev edge " << gid_generator->getHumanReadableId( candidate->prev_edge->gid ) << " to "
-                                                                 << gid_generator->getHumanReadableId( candidate->prev_edge->to_gid )
-                                                                 << " has relative pose\n"
-                                                                 << rel_pose_candidate_to_prev );
+        // Identity transform consistency check with next keyframe, maybe only done for best score?
+        pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
+        Eigen::Matrix4f              rel_pose_next_to_candidate;
+        if( best_matched->next_edge != nullptr ) {
+            rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
+            RCLCPP_INFO_STREAM( node_ros->get_logger(), "next edge "
+                                                            << gid_generator->getHumanReadableId( best_matched->next_edge->gid ) << " from "
+                                                            << gid_generator->getHumanReadableId( best_matched->next_edge->from_gid )
+                                                            << " has relative pose\n"
+                                                            << rel_pose_next_to_candidate );
 
-        Eigen::Matrix4f rel_pose_new_to_prev;
-        const auto&     prev_kf = gid_keyframe_map.at( candidate->prev_edge->to_gid );
-        registration->setInputSource( prev_kf->cloud );
-        Eigen::Isometry3d prev_kf_estimate = prev_kf->node->estimate();
-        prev_kf_estimate.linear()          = Eigen::Quaterniond( prev_kf_estimate.linear() ).normalized().toRotationMatrix();
-        Eigen::Matrix4f prev_guess         = ( new_keyframe_estimate.inverse() * prev_kf_estimate ).matrix().cast<float>();
-        if( use_planar_registration_guess ) {
-            prev_guess( 2, 3 ) = 0.0;
+            Eigen::Matrix4f rel_pose_new_to_next;
+            const auto&     next_kf = gid_keyframe_map.at( best_matched->next_edge->from_gid );
+            registration->setInputSource( next_kf->cloud );
+            Eigen::Isometry3d next_kf_estimate = next_kf->node->estimate();
+            next_kf_estimate.linear()          = Eigen::Quaterniond( next_kf_estimate.linear() ).normalized().toRotationMatrix();
+            Eigen::Matrix4f next_guess         = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
+            if( use_planar_registration_guess ) {
+                next_guess( 2, 3 ) = 0.0;
+            }
+            registration->align( *next_aligned, next_guess );
+            if( !registration->hasConverged() ) {
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for next" );
+            }
+            rel_pose_new_to_next = registration->getFinalTransformation();
+            // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
+            auto rel_pose_identity_check_next = relative_pose.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
+            RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for next\n" << rel_pose_identity_check_next );
+            float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
+            float delta_angle_next =
+                Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
+            if( delta_trans_next < loop_closure_consistency_max_delta_trans
+                && delta_angle_next < loop_closure_consistency_max_delta_angle ) {
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "Consistent with next keyframe "
+                                                                << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
+                                                                << delta_trans_next << " delta angle " << delta_angle_next * 180.0 / M_PI );
+                consistency_check_passed = true;
+            } else {
+                RCLCPP_WARN_STREAM( node_ros->get_logger(), "Inconsistent with next keyframe "
+                                                                << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
+                                                                << delta_trans_next << " delta angle " << delta_angle_next * 180.0 / M_PI );
+            }
+        } else {
+            RCLCPP_WARN_STREAM( node_ros->get_logger(),
+                                "candidate " << gid_generator->getHumanReadableId( best_matched->gid ) << " has no next edge" );
         }
-        registration->align( *prev_aligned, prev_guess );
-        if( !registration->hasConverged() ) {
-            RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for prev" );
-            continue;
-        }
-        rel_pose_new_to_prev = registration->getFinalTransformation();
-        // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
-        auto rel_pose_identity_check = rel_pose_new_to_prev.inverse() * relative_pose * rel_pose_candidate_to_prev;
-        RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for prev\n" << rel_pose_identity_check );
     }
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
-    std::cout << " done" << std::endl;
     std::cout << "best_score: " << boost::format( "%.3f" ) % best_score << " time: " << boost::format( "%.3f" ) % elapsed_ms.count()
               << "[msec]" << std::endl;
 
     if( best_score > fitness_score_thresh ) {
         std::cout << "loop not found..." << std::endl;
+        return nullptr;
+    }
+
+    if( use_loop_closure_consistency_check && !consistency_check_passed ) {
+        std::cout << "didnt pass either consistency check" << std::endl;
         return nullptr;
     }
 
