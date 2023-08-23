@@ -64,7 +64,7 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
     voxelGridFilter.filter( *filtered );
 
-    std::cout << filtered->size() << std::endl;
+    std::cout << "Generating map with resoluation " << resolution << " and size " << filtered->size() << std::endl;
 
     return filtered;
 }
