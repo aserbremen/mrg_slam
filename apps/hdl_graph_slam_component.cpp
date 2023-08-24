@@ -652,9 +652,13 @@ private:
             Edge::Ptr edge( new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator ) );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
+            // TODO add the correct edge to the very first keyframe!!!
             // Add the edge to the corresponding keyframes
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "added next edge to keyframe " << gid_generator->getHumanReadableId( prev_robot_keyframe->gid ) );
             gid_keyframe_map[prev_robot_keyframe->gid]->next_edge = edge;
-            keyframe->prev_edge                                   = edge;
+            RCLCPP_INFO_STREAM( this->get_logger(), "added prev edge to keyframe " << gid_generator->getHumanReadableId( keyframe->gid ) );
+            keyframe->prev_edge = edge;
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
             //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
             graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
@@ -703,11 +707,8 @@ private:
             return false;
         }
 
-        // ROS_INFO_STREAM( "Received graph msgs: " << graph_queue.size() );
         RCLCPP_INFO_STREAM( this->get_logger(), "Received graph msgs: " << graph_queue.size() );
 
-        // std::unordered_map<GlobalId, const KeyFrameRos *> unique_keyframes;
-        // std::unordered_map<GlobalId, const EdgeRos *>     unique_edges;
         std::unordered_map<GlobalId, const vamex_slam_msgs::msg::KeyFrameRos *> unique_keyframes;
         std::unordered_map<GlobalId, const vamex_slam_msgs::msg::EdgeRos *>     unique_edges;
 
@@ -745,8 +746,6 @@ private:
                 &graph_msg->latest_keyframe_gid, &graph_msg->latest_keyframe_odom );
         }
 
-        // ROS_INFO_STREAM( "Unique keyframes: " << unique_keyframes.size() );
-        // ROS_INFO_STREAM( "Unique edges:     " << unique_edges.size() );
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique keyframes: " << unique_keyframes.size() );
         for( auto const &kf : unique_keyframes ) {
             RCLCPP_INFO_STREAM( this->get_logger(), "Keyframe ID: " << gid_generator->getHumanReadableId( kf.first ) );
@@ -816,11 +815,12 @@ private:
             edge_gids.insert( edge->gid );
 
             // Add the edge to the corresponding keyframes, TODO check if right
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Adding edge " << gid_generator->getHumanReadableId( edge->gid ) << " as prev edge to keyframe "
+                                               << gid_generator->getHumanReadableId( edge->from_gid ) << " and as next edge to keyframe "
+                                               << gid_generator->getHumanReadableId( edge->to_gid ) );
             gid_keyframe_map[edge->from_gid]->prev_edge = edge;
             gid_keyframe_map[edge->to_gid]->next_edge   = edge;
-            RCLCPP_INFO_STREAM( this->get_logger(), "Adding prev edge to keyframe " << gid_generator->getHumanReadableId( edge->from_gid )
-                                                                                    << " next edge to keyframe "
-                                                                                    << gid_generator->getHumanReadableId( edge->to_gid ) );
 
             if( edge->type == Edge::TYPE_ODOM ) {
                 // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
