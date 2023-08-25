@@ -15,6 +15,8 @@ namespace hdl_graph_slam {
 typedef uint64_t GlobalId;
 typedef uint8_t  RobotId;
 
+// TODO: refactor this class to be more generic and easier to use
+
 class GlobalIdGenerator {
 public:
     // ROS2 migration, also pass the node ptr to get ROS2 time
@@ -26,12 +28,17 @@ public:
 
     const std::string &getRobotName( const RobotId &rid ) const;
     std::string        getHumanReadableId( GlobalId gid, bool with_start_gid = false ) const;
+    GlobalId           getStartGid( const std::string &robot_name ) const;
+    void               addStartGid( const std::string &robot_name, GlobalId other_start_gid );
+    // Returns the id without the start_gid, e.g. 0, 2, 3, ...
+    int getUptimeId( GlobalId gid ) const;
 
     GlobalId operator()( int id ) const;
 
 protected:
-    std::vector<std::string>                 robot_names_sorted;
-    std::unordered_map<std::string, RobotId> robot_names_mapping;
+    std::vector<std::string>                  robot_names_sorted;
+    std::unordered_map<std::string, RobotId>  robot_names_mapping;
+    std::unordered_map<std::string, GlobalId> robot_names_start_gid_mapping;
 
     RobotId  own_id;
     GlobalId own_id_shifted;

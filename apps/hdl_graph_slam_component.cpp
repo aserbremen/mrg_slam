@@ -20,6 +20,7 @@
 #include <vamex_slam_msgs/srv/get_map.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
 #include <vamex_slam_msgs/srv/request_graphs.hpp>
+#include <vamex_slam_msgs/srv/save_gids.hpp>
 #include <vamex_slam_msgs/srv/save_map.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
@@ -245,6 +246,13 @@ public:
                                                          std::placeholders::_2 );
         get_graph_gids_service_server       = this->create_service<vamex_slam_msgs::srv::GetGraphGids>( "/hdl_graph_slam/get_graph_gids",
                                                                                                   get_graph_gids_service_callback );
+        // Save keyframes and edges service
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::SaveGids::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::SaveGids::Response>      res )>
+            save_gids_service_callback = std::bind( &HdlGraphSlamComponent::save_gids_service, this, std::placeholders::_1,
+                                                    std::placeholders::_2 );
+        save_gids_service_server       = this->create_service<vamex_slam_msgs::srv::SaveGids>( "/hdl_graph_slam/save_keyframes_edges",
+                                                                                         save_gids_service_callback );
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
@@ -744,6 +752,9 @@ private:
 
             latest_robot_keyframes[graph_msg->robot_name] = std::make_pair<const GlobalId *, const geometry_msgs::msg::Pose *>(
                 &graph_msg->latest_keyframe_gid, &graph_msg->latest_keyframe_odom );
+
+            // Add the start_gid of the other robot to the gid_generator
+            gid_generator->addStartGid( graph_msg->robot_name, graph_msg->start_gid );
         }
 
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique keyframes: " << unique_keyframes.size() );
@@ -904,6 +915,7 @@ private:
         vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
 
         req->robot_name = own_name;
+        req->start_gid  = gid_generator->getStartGid( own_name );
         req->processed_keyframe_gids.reserve( keyframes.size() );
         for( const auto &keyframe : keyframes ) {
             req->processed_keyframe_gids.push_back( keyframe->gid );
@@ -999,6 +1011,7 @@ private:
      * @brief Receive robot name from topic, used to request graph from other robots
      * @param msg Containing the robot name, which is used to request the graph from the robot with the same name
      */
+    // TODO this can be removed in the future
     void request_robot_graph_callback( const std_msgs::msg::String::SharedPtr msg )
     {
         // call the publish graph function from within this class if the robot name is the own robot name
@@ -1471,9 +1484,12 @@ private:
                 return;
             }
 
-            res->graph.robot_name          = own_name;
-            res->graph.latest_keyframe_gid = prev_robot_keyframe->gid;
-            // tf::poseEigenToMsg( prev_robot_keyframe->odom, res->graph.latest_keyframe_odom );
+            // TODO refactor gid handling
+            gid_generator->addStartGid( req->robot_name, req->start_gid );
+
+            res->graph.robot_name           = own_name;
+            res->graph.start_gid            = gid_generator->getStartGid( own_name );
+            res->graph.latest_keyframe_gid  = prev_robot_keyframe->gid;
             res->graph.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
             RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
@@ -1623,6 +1639,41 @@ private:
         }
     }
 
+    void save_gids_service( vamex_slam_msgs::srv::SaveGids::Request::ConstSharedPtr req,
+                            vamex_slam_msgs::srv::SaveGids::Response::SharedPtr     res )
+    {
+        auto dir = boost::filesystem::path( req->destination ).remove_filename();
+        if( !boost::filesystem::is_directory( dir ) ) {
+            boost::filesystem::create_directory( dir );
+        }
+
+        std::lock_guard<std::mutex> lock( main_thread_mutex );
+
+        std::ofstream ofs( req->destination );
+        ofs << "# keyframes " << keyframes.size() << std::endl;
+        for( const auto &keyframe : keyframes ) {
+            ofs << gid_generator->getHumanReadableId( keyframe->gid, req->with_start_gid ) << std::endl;
+            if( keyframe->prev_edge != nullptr ) {
+                ofs << "    prev edge " << gid_generator->getHumanReadableId( keyframe->prev_edge->gid, req->with_start_gid ) << std::endl;
+            } else {
+                ofs << "    prev edge N/A" << std::endl;
+            }
+
+            if( keyframe->next_edge != nullptr ) {
+                ofs << "    next edge " << gid_generator->getHumanReadableId( keyframe->next_edge->gid, req->with_start_gid ) << std::endl;
+            } else {
+                ofs << "    next edge N/A" << std::endl;
+            }
+        }
+        ofs << std::endl;
+        ofs << "# edges " << edges.size() << std::endl;
+        for( const auto &edge : edges ) {
+            ofs << gid_generator->getHumanReadableId( edge->gid ) << std::endl;
+            ofs << "    from " << gid_generator->getHumanReadableId( edge->from_gid, req->with_start_gid ) << std::endl;
+            ofs << "    to   " << gid_generator->getHumanReadableId( edge->to_gid, req->with_start_gid ) << std::endl;
+        }
+    }
+
 private:
     // ROS
     // ros::NodeHandle nh;
@@ -1693,6 +1744,8 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
+
+    rclcpp::Service<vamex_slam_msgs::srv::SaveGids>::SharedPtr save_gids_service_server;
 
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
