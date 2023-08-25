@@ -763,7 +763,7 @@ private:
         }
         RCLCPP_INFO_STREAM( this->get_logger(), "Unique edges:     " << unique_edges.size() );
         for( auto const &edge : unique_edges ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Edge ID: " << static_cast<uint64_t>( edge.first ) << " from ID "
+            RCLCPP_INFO_STREAM( this->get_logger(), "Edge ID: " << gid_generator->getHumanReadableId( edge.first ) << " from ID "
                                                                 << gid_generator->getHumanReadableId( edge.second->from_gid ) << " to ID "
                                                                 << gid_generator->getHumanReadableId( edge.second->to_gid ) );
         }

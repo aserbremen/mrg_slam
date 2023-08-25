@@ -288,7 +288,7 @@ def launch_setup(context, *args, **kwargs):
               ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
               ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
               ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
-              ('/hdl_graph_slam/save_keyframes_edges', '/' + model_namespace + '/hdl_graph_slam/save_keyframes_edges'),
+              ('/hdl_graph_slam/save_gids', '/' + model_namespace + '/hdl_graph_slam/save_gids'),
               ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
     print_remappings(remaps, 'hdl_graph_slam_component')
     hdl_graph_slam_node = ComposableNode(

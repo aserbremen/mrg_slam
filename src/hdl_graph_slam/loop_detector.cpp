@@ -274,8 +274,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         return nullptr;
     }
 
-    std::cout << "loop found! from " << gid_generator->getHumanReadableId( best_matched->gid ) << " to "
-              << gid_generator->getHumanReadableId( new_keyframe->gid ) << std::endl;
+    std::cout << "loop found! from " << gid_generator->getHumanReadableId( new_keyframe->gid ) << " to "
+              << gid_generator->getHumanReadableId( best_matched->gid ) << std::endl;
     std::cout << "relpose: " << relative_pose.block<3, 1>( 0, 3 ).transpose() << " - "
               << Eigen::Quaternionf( relative_pose.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 
