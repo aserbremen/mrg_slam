@@ -105,7 +105,7 @@ GlobalIdGenerator::getStartGid( const std::string &robot_name ) const
 }
 
 int
-GlobalIdGenerator::getUptimeId( GlobalId gid ) const
+GlobalIdGenerator::getIdWithoutStartGid( GlobalId gid ) const
 {
     if( gid == 0 ) {
         // GlobalId 0 is reserved for fixed nodes which is 1 in our case

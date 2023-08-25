@@ -159,7 +159,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which might
     // not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
     bool consistency_check_passed = false;
-    if( use_loop_closure_consistency_check && gid_generator->getUptimeId( best_matched->gid ) != 0 ) {
+    if( use_loop_closure_consistency_check && gid_generator->getIdWithoutStartGid( best_matched->gid ) != 0 ) {
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
         Eigen::Matrix4f              rel_pose_candidate_to_prev;
         if( best_matched->prev_edge != nullptr ) {
@@ -269,7 +269,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         return nullptr;
     }
 
-    if( use_loop_closure_consistency_check && gid_generator->getUptimeId( best_matched->gid ) != 0 && !consistency_check_passed ) {
+    if( use_loop_closure_consistency_check && gid_generator->getIdWithoutStartGid( best_matched->gid ) != 0 && !consistency_check_passed ) {
         std::cout << "didnt pass either consistency check" << std::endl;
         return nullptr;
     }

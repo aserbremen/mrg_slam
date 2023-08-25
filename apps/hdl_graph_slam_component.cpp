@@ -251,7 +251,7 @@ public:
                             std::shared_ptr<vamex_slam_msgs::srv::SaveGids::Response>      res )>
             save_gids_service_callback = std::bind( &HdlGraphSlamComponent::save_gids_service, this, std::placeholders::_1,
                                                     std::placeholders::_2 );
-        save_gids_service_server       = this->create_service<vamex_slam_msgs::srv::SaveGids>( "/hdl_graph_slam/save_keyframes_edges",
+        save_gids_service_server       = this->create_service<vamex_slam_msgs::srv::SaveGids>( "/hdl_graph_slam/save_gids",
                                                                                          save_gids_service_callback );
 
         cloud_msg_update_required          = false;
@@ -825,13 +825,19 @@ private:
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
 
-            // Add the edge to the corresponding keyframes, TODO check if right
-            RCLCPP_INFO_STREAM( this->get_logger(),
-                                "Adding edge " << gid_generator->getHumanReadableId( edge->gid ) << " as prev edge to keyframe "
-                                               << gid_generator->getHumanReadableId( edge->from_gid ) << " and as next edge to keyframe "
-                                               << gid_generator->getHumanReadableId( edge->to_gid ) );
-            gid_keyframe_map[edge->from_gid]->prev_edge = edge;
-            gid_keyframe_map[edge->to_gid]->next_edge   = edge;
+
+            // This counts only for odom edges, loop closure edges are not added to the keyframes
+            if( edge->type == Edge::TYPE_ODOM && gid_generator->getIdWithoutStartGid( edge->gid ) != 0 ) {
+                // Add the edge to the corresponding keyframes, TODO check if right
+                RCLCPP_INFO_STREAM( this->get_logger(), "Adding edge " << gid_generator->getHumanReadableId( edge->gid )
+                                                                       << " as prev edge to keyframe "
+                                                                       << gid_generator->getHumanReadableId( edge->from_gid )
+                                                                       << " and as next edge to keyframe "
+                                                                       << gid_generator->getHumanReadableId( edge->to_gid ) );
+                gid_keyframe_map[edge->from_gid]->prev_edge = edge;
+                gid_keyframe_map[edge->to_gid]->next_edge   = edge;
+            }
+
 
             if( edge->type == Edge::TYPE_ODOM ) {
                 // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
@@ -1651,16 +1657,33 @@ private:
 
         std::ofstream ofs( req->destination );
         ofs << "# keyframes " << keyframes.size() << std::endl;
+        ofs << gid_generator->getHumanReadableId( gid_keyframe_map[0]->gid, req->with_start_gid ) << " g2o "
+            << std::to_string( gid_keyframe_map[0]->node->id() ) << std::endl;
+        if( gid_keyframe_map[0]->prev_edge != nullptr ) {
+            ofs << "    prev edge " << gid_generator->getHumanReadableId( gid_keyframe_map[0]->prev_edge->gid, req->with_start_gid )
+                << " g2o " << std::to_string( gid_keyframe_map[0]->prev_edge->edge->id() ) << std::endl;
+        } else {
+            ofs << "    prev edge N/A" << std::endl;
+        }
+        if( gid_keyframe_map[0]->next_edge != nullptr ) {
+            ofs << "    next edge " << gid_generator->getHumanReadableId( gid_keyframe_map[0]->next_edge->gid, req->with_start_gid )
+                << " g2o " << std::to_string( gid_keyframe_map[0]->next_edge->edge->id() ) << std::endl;
+        } else {
+            ofs << "    next edge N/A" << std::endl;
+        }
         for( const auto &keyframe : keyframes ) {
-            ofs << gid_generator->getHumanReadableId( keyframe->gid, req->with_start_gid ) << std::endl;
+            ofs << gid_generator->getHumanReadableId( keyframe->gid, req->with_start_gid ) << " g2o "
+                << std::to_string( keyframe->node->id() ) << std::endl;
             if( keyframe->prev_edge != nullptr ) {
-                ofs << "    prev edge " << gid_generator->getHumanReadableId( keyframe->prev_edge->gid, req->with_start_gid ) << std::endl;
+                ofs << "    prev edge " << gid_generator->getHumanReadableId( keyframe->prev_edge->gid, req->with_start_gid ) << " g2o "
+                    << std::to_string( keyframe->prev_edge->edge->id() ) << std::endl;
             } else {
                 ofs << "    prev edge N/A" << std::endl;
             }
 
             if( keyframe->next_edge != nullptr ) {
-                ofs << "    next edge " << gid_generator->getHumanReadableId( keyframe->next_edge->gid, req->with_start_gid ) << std::endl;
+                ofs << "    next edge " << gid_generator->getHumanReadableId( keyframe->next_edge->gid, req->with_start_gid ) << " g2o "
+                    << std::to_string( keyframe->next_edge->edge->id() ) << std::endl;
             } else {
                 ofs << "    next edge N/A" << std::endl;
             }
@@ -1668,7 +1691,8 @@ private:
         ofs << std::endl;
         ofs << "# edges " << edges.size() << std::endl;
         for( const auto &edge : edges ) {
-            ofs << gid_generator->getHumanReadableId( edge->gid ) << std::endl;
+            ofs << gid_generator->getHumanReadableId( edge->gid ) << ( edge->type == Edge::TYPE_ODOM ? " ODOM" : " LOOP" ) << " g2o "
+                << std::to_string( edge->edge->id() ) << std::endl;
             ofs << "    from " << gid_generator->getHumanReadableId( edge->from_gid, req->with_start_gid ) << std::endl;
             ofs << "    to   " << gid_generator->getHumanReadableId( edge->to_gid, req->with_start_gid ) << std::endl;
         }

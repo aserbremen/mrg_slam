@@ -31,7 +31,7 @@ public:
     GlobalId           getStartGid( const std::string &robot_name ) const;
     void               addStartGid( const std::string &robot_name, GlobalId other_start_gid );
     // Returns the id without the start_gid, e.g. 0, 2, 3, ...
-    int getUptimeId( GlobalId gid ) const;
+    int getIdWithoutStartGid( GlobalId gid ) const;
 
     GlobalId operator()( int id ) const;
 
