@@ -71,6 +71,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
     }
 
     std::vector<KeyFrame::Ptr> candidates;
+    // TODO reserve size with random number?
     candidates.reserve( 32 );
 
     for( const auto& k : keyframes ) {
@@ -112,8 +113,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     registration->setInputTarget( new_keyframe->cloud );
 
-    bool            consistency_check_passed = false;
-    double          best_score               = std::numeric_limits<double>::max();
+    double          best_score = std::numeric_limits<double>::max();
     KeyFrame::Ptr   best_matched;
     Eigen::Matrix4f relative_pose;
 
@@ -154,21 +154,22 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         relative_pose = registration->getFinalTransformation();  // New to candidate
     }
 
-    if( use_loop_closure_consistency_check ) {
-        // Save the relative pose and check previous keyframe
-        // loop closure hypothesis check. Calculate relative transformation from candidate to its previous keyframe and calculate
-        // transformation from new keyframe to candidate to previous keyframe which should be the identity transformation if the loop
-        // closure hypothesis is correct.
-
+    // loop closure hypothesis check. Calculate relative transformation from new keyframe to candidate to its previous/next keyframe and
+    // back to new keyframe, which should be the identity transformation if the loop closure hypothesis is correct.
+    // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which might
+    // not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
+    bool consistency_check_passed = false;
+    if( use_loop_closure_consistency_check && gid_generator->getUptimeId( best_matched->gid ) != 0 ) {
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
         Eigen::Matrix4f              rel_pose_candidate_to_prev;
         if( best_matched->prev_edge != nullptr ) {
             rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
-            RCLCPP_INFO_STREAM( node_ros->get_logger(), "prev edge " << gid_generator->getHumanReadableId( best_matched->prev_edge->gid )
-                                                                     << " to "
-                                                                     << gid_generator->getHumanReadableId( best_matched->prev_edge->to_gid )
-                                                                     << " has relative pose\n"
-                                                                     << rel_pose_candidate_to_prev );
+            RCLCPP_INFO_STREAM( node_ros->get_logger(),
+                                "prev edge " << gid_generator->getHumanReadableId( best_matched->prev_edge->gid ) << " from "
+                                             << gid_generator->getHumanReadableId( best_matched->prev_edge->from_gid ) << " to "
+                                             << gid_generator->getHumanReadableId( best_matched->prev_edge->to_gid )
+                                             << " has relative pose\n"
+                                             << rel_pose_candidate_to_prev );
 
             Eigen::Matrix4f rel_pose_new_to_prev;
             const auto&     prev_kf = gid_keyframe_map.at( best_matched->prev_edge->to_gid );
@@ -205,64 +206,70 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
             RCLCPP_WARN_STREAM( node_ros->get_logger(),
                                 "candidate " << gid_generator->getHumanReadableId( best_matched->gid ) << " has no previous edge" );
         }
-        // Identity transform consistency check with next keyframe, maybe only done for best score?
-        pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
-        Eigen::Matrix4f              rel_pose_next_to_candidate;
-        if( best_matched->next_edge != nullptr ) {
-            rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
-            RCLCPP_INFO_STREAM( node_ros->get_logger(), "next edge "
-                                                            << gid_generator->getHumanReadableId( best_matched->next_edge->gid ) << " from "
-                                                            << gid_generator->getHumanReadableId( best_matched->next_edge->from_gid )
-                                                            << " has relative pose\n"
-                                                            << rel_pose_next_to_candidate );
+        // Only perform the identity check with next keyframe if the consistency check with previous keyframe failed
+        if( !consistency_check_passed ) {
+            // Identity transform consistency check with next keyframe, maybe only done for best score?
+            pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
+            Eigen::Matrix4f              rel_pose_next_to_candidate;
+            if( best_matched->next_edge != nullptr ) {
+                rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
+                RCLCPP_INFO_STREAM( node_ros->get_logger(),
+                                    "next edge " << gid_generator->getHumanReadableId( best_matched->next_edge->gid ) << " from "
+                                                 << gid_generator->getHumanReadableId( best_matched->next_edge->from_gid ) << " to "
+                                                 << gid_generator->getHumanReadableId( best_matched->next_edge->to_gid )
+                                                 << " has relative pose\n"
+                                                 << rel_pose_next_to_candidate );
 
-            Eigen::Matrix4f rel_pose_new_to_next;
-            const auto&     next_kf = gid_keyframe_map.at( best_matched->next_edge->from_gid );
-            registration->setInputSource( next_kf->cloud );
-            Eigen::Isometry3d next_kf_estimate = next_kf->node->estimate();
-            next_kf_estimate.linear()          = Eigen::Quaterniond( next_kf_estimate.linear() ).normalized().toRotationMatrix();
-            Eigen::Matrix4f next_guess         = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
-            if( use_planar_registration_guess ) {
-                next_guess( 2, 3 ) = 0.0;
-            }
-            registration->align( *next_aligned, next_guess );
-            if( !registration->hasConverged() ) {
-                RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for next" );
-            }
-            rel_pose_new_to_next = registration->getFinalTransformation();
-            // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
-            auto rel_pose_identity_check_next = relative_pose.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
-            RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for next\n" << rel_pose_identity_check_next );
-            float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
-            float delta_angle_next =
-                Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
-            if( delta_trans_next < loop_closure_consistency_max_delta_trans
-                && delta_angle_next < loop_closure_consistency_max_delta_angle ) {
-                RCLCPP_INFO_STREAM( node_ros->get_logger(), "Consistent with next keyframe "
-                                                                << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
-                                                                << delta_trans_next << " delta angle " << delta_angle_next * 180.0 / M_PI );
-                consistency_check_passed = true;
+                Eigen::Matrix4f rel_pose_new_to_next;
+                const auto&     next_kf = gid_keyframe_map.at( best_matched->next_edge->from_gid );
+                registration->setInputSource( next_kf->cloud );
+                Eigen::Isometry3d next_kf_estimate = next_kf->node->estimate();
+                next_kf_estimate.linear()          = Eigen::Quaterniond( next_kf_estimate.linear() ).normalized().toRotationMatrix();
+                Eigen::Matrix4f next_guess         = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
+                if( use_planar_registration_guess ) {
+                    next_guess( 2, 3 ) = 0.0;
+                }
+                registration->align( *next_aligned, next_guess );
+                if( !registration->hasConverged() ) {
+                    RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for next" );
+                }
+                rel_pose_new_to_next = registration->getFinalTransformation();
+                // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
+                auto rel_pose_identity_check_next = relative_pose.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for next\n" << rel_pose_identity_check_next );
+                float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
+                float delta_angle_next = Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) )
+                                             .angularDistance( Eigen::Quaternionf::Identity() );
+                if( delta_trans_next < loop_closure_consistency_max_delta_trans
+                    && delta_angle_next < loop_closure_consistency_max_delta_angle ) {
+                    RCLCPP_INFO_STREAM( node_ros->get_logger(), "Consistent with next keyframe "
+                                                                    << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
+                                                                    << delta_trans_next << " delta angle "
+                                                                    << delta_angle_next * 180.0 / M_PI );
+                    consistency_check_passed = true;
+                } else {
+                    RCLCPP_WARN_STREAM( node_ros->get_logger(), "Inconsistent with next keyframe "
+                                                                    << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
+                                                                    << delta_trans_next << " delta angle "
+                                                                    << delta_angle_next * 180.0 / M_PI );
+                }
             } else {
-                RCLCPP_WARN_STREAM( node_ros->get_logger(), "Inconsistent with next keyframe "
-                                                                << gid_generator->getHumanReadableId( next_kf->gid ) << " delta trans "
-                                                                << delta_trans_next << " delta angle " << delta_angle_next * 180.0 / M_PI );
+                RCLCPP_WARN_STREAM( node_ros->get_logger(),
+                                    "candidate " << gid_generator->getHumanReadableId( best_matched->gid ) << " has no next edge" );
             }
-        } else {
-            RCLCPP_WARN_STREAM( node_ros->get_logger(),
-                                "candidate " << gid_generator->getHumanReadableId( best_matched->gid ) << " has no next edge" );
         }
     }
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
-    std::cout << "best_score: " << boost::format( "%.3f" ) % best_score << " time: " << boost::format( "%.3f" ) % elapsed_ms.count()
-              << "[msec]" << std::endl;
+    std::cout << gid_generator->getHumanReadableId( best_matched->gid ) << " best_score: " << boost::format( "%.3f" ) % best_score
+              << " time: " << boost::format( "%.3f" ) % elapsed_ms.count() << "[msec]" << std::endl;
 
     if( best_score > fitness_score_thresh ) {
-        std::cout << "loop not found..." << std::endl;
+        std::cout << "loop not found... didnt pass fitness score threshold " << std::endl;
         return nullptr;
     }
 
-    if( use_loop_closure_consistency_check && !consistency_check_passed ) {
+    if( use_loop_closure_consistency_check && gid_generator->getUptimeId( best_matched->gid ) != 0 && !consistency_check_passed ) {
         std::cout << "didnt pass either consistency check" << std::endl;
         return nullptr;
     }
