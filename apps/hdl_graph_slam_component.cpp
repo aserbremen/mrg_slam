@@ -609,7 +609,7 @@ private:
             keyframe_hash[keyframe->stamp]  = keyframe;
 
             // Add the key frame pointcloud to the scan context manager
-            sc_manager->makeAndSaveScancontextAndKeys( *keyframe->cloud, keyframe->gid );
+            sc_manager->makeAndSaveScancontextAndKeys( *keyframe->cloud, gid_generator->getHumanReadableId( keyframe->gid ) );
 
             // first keyframe?
             if( keyframes.empty() && new_keyframes.size() == 1 ) {
@@ -1268,7 +1268,7 @@ private:
             edge_gids.insert( edge->gid );
             graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
-        // auto loop = sc_manager->detectLoopClosureID();
+        auto loop = sc_manager->detectLoopClosureID();
 
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
