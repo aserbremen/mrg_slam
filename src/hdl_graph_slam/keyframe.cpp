@@ -17,7 +17,7 @@ KeyFrame::KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Iso
     odom( odom ),
     accum_distance( accum_distance ),
     gid( 0 ),
-    exclude_from_map( false ),
+    first_keyframe( false ),
     cloud( cloud ),
     cloud_msg( cloud_msg ),
     node( nullptr )
@@ -28,7 +28,7 @@ KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
     stamp(),
     odom( Eigen::Isometry3d::Identity() ),
     accum_distance( -1 ),
-    exclude_from_map( false ),
+    first_keyframe( false ),
     cloud( nullptr ),
     cloud_msg( nullptr ),
     node( nullptr )
@@ -233,8 +233,8 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
 
 /*
 KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                                    bool exclude_from_map, const Eigen::MatrixXd* _covariance ) :
-    id( id ), pose( pose ), exclude_from_map( exclude_from_map ), cloud( cloud )
+                                    bool first_keyframe, const Eigen::MatrixXd* _covariance ) :
+    id( id ), pose( pose ), first_keyframe( first_keyframe ), cloud( cloud )
 {
     if( _covariance ) {
         covariance = *_covariance;
@@ -248,7 +248,7 @@ KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_
     gid( key->gid ),
     pose( key->node->estimate() ),
     cloud( key->cloud ),
-    exclude_from_map( key->exclude_from_map )
+    first_keyframe( key->first_keyframe )
 {
     if( marginals ) {
         covariance = key->covariance( marginals );

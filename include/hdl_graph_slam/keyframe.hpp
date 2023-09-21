@@ -51,12 +51,12 @@ public:
     bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
 public:
-    builtin_interfaces::msg::Time     stamp;                     // timestamp
-    Eigen::Isometry3d                 odom;                      // odometry (estimated by scan_matching_odometry)
-    double                            accum_distance;            // accumulated distance from the first node (by scan_matching_odometry)
-    GlobalId                          gid;                       // global id
-    bool                              exclude_from_map;          // whether the corresponding point cloud should be excluded from the map
-    pcl::PointCloud<PointT>::ConstPtr cloud;                     // point cloud
+    builtin_interfaces::msg::Time stamp;           // timestamp
+    Eigen::Isometry3d             odom;            // odometry (estimated by scan_matching_odometry)
+    double                        accum_distance;  // accumulated distance from the first node (by scan_matching_odometry)
+    GlobalId                      gid;             // global id
+    bool                          first_keyframe;  // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    pcl::PointCloud<PointT>::ConstPtr             cloud;         // point cloud
     sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg;     // point cloud ROS msg
     boost::optional<Eigen::Vector4d>              floor_coeffs;  // detected floor's coefficients
     boost::optional<Eigen::Vector3d>              utm_coord;     // UTM coord obtained by GPS
@@ -82,7 +82,7 @@ public:
 
     KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals = nullptr );
     /*
-    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool exclude_from_map = false,
+    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool first_keyframe = false,
                       const Eigen::MatrixXd* covariance = nullptr );
                       */
 
@@ -91,11 +91,11 @@ public:
 public:
     builtin_interfaces::msg::Time     stamp;  // timestamp
     long                              id;
-    GlobalId                          gid;               // global id
-    Eigen::Isometry3d                 pose;              // pose estimated by graph optimization
-    pcl::PointCloud<PointT>::ConstPtr cloud;             // point cloud
-    bool                              exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
-    Eigen::MatrixXd                   covariance;
+    GlobalId                          gid;    // global id
+    Eigen::Isometry3d                 pose;   // pose estimated by graph optimization
+    pcl::PointCloud<PointT>::ConstPtr cloud;  // point cloud
+    bool            first_keyframe;           // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    Eigen::MatrixXd covariance;
 };
 
 }  // namespace hdl_graph_slam

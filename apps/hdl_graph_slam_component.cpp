@@ -613,8 +613,8 @@ private:
 
             // first keyframe?
             if( keyframes.empty() && new_keyframes.size() == 1 ) {
-                keyframe->exclude_from_map = true;  // exclude point cloud of first keyframe from map, because points corresponding to
-                                                    // other robots have not been filtered for this keyframe
+                keyframe->first_keyframe = true;  // exclude point cloud of first keyframe from map, because points corresponding to
+                                                  // other robots have not been filtered for this keyframe
 
                 // fix the first node
                 // if( private_nh.param<bool>( "fix_first_node", false ) ) {
@@ -791,7 +791,7 @@ private:
             tf2::fromMsg( keyframe_ros.estimate, pose );
             keyframe->node                  = graph_slam->add_se3_node( pose );
             keyframe->gid                   = keyframe_ros.gid;
-            keyframe->exclude_from_map      = keyframe_ros.exclude_from_map;
+            keyframe->first_keyframe        = keyframe_ros.first_keyframe;
             gid_keyframe_map[keyframe->gid] = keyframe;
             new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure
                                                   // don't add it to keyframe_hash, which is only used for floor_coeffs
@@ -827,6 +827,9 @@ private:
 
 
             // This counts only for odom edges, loop closure edges are not added to the keyframes
+            // TODO find a more elegant way that using getidwithoutstartgid. If it is the first edge, edge should be set as next_edge of
+            // gid_keyframe_map[edge->to_gid]. Otherwise the next edge will be only set if the next odometry edge after the first is added
+            // from other robots
             if( edge->type == Edge::TYPE_ODOM && gid_generator->getIdWithoutStartGid( edge->gid ) != 0 ) {
                 // Add the edge to the corresponding keyframes, TODO check if right
                 RCLCPP_INFO_STREAM( this->get_logger(), "Adding edge " << gid_generator->getHumanReadableId( edge->gid )
@@ -1521,9 +1524,9 @@ private:
 
                 // auto &dst = res->graph.keyframes[i];
                 vamex_slam_msgs::msg::KeyFrameRos dst;
-                dst.gid              = src->gid;
-                dst.stamp            = src->stamp;
-                dst.exclude_from_map = src->exclude_from_map;
+                dst.gid            = src->gid;
+                dst.stamp          = src->stamp;
+                dst.first_keyframe = src->first_keyframe;
                 // tf::poseEigenToMsg( src->estimate(), dst.estimate );
                 dst.estimate = tf2::toMsg( src->estimate() );
                 dst.cloud    = *src->cloud_msg;

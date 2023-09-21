@@ -87,7 +87,7 @@ std::string
 GlobalIdGenerator::getHumanReadableId( GlobalId gid, bool with_start_gid ) const
 {
     if( gid == 0 ) {
-        return "fixed_node-0";
+        return "fixed_node-GID(0)";
     }
     RobotId     rid        = getRobotId( gid );
     std::string robot_name = getRobotName( rid );
