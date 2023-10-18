@@ -10,6 +10,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
+from vamex_slam_msgs.msg import SlamStatus
+
 import numpy as np
 
 import pykitti
@@ -34,23 +36,43 @@ class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
 
+        self.robot_name = self.declare_parameter('robot_name', 'atlas').value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti_dataset/data_odometry_velodyne/dataset/').value
         self.sequence = self.declare_parameter('sequence', '00').value
         self.rate = self.declare_parameter('rate', 10.0).value
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
-        self.point_cloud_pub = self.create_publisher(PointCloud2, 'velodyne_points', 10)
+        self.point_cloud_pub = self.create_publisher(PointCloud2, 'velodyne_points', 10, callback_group=self.reentrant_callback_group)
+        self.clock_pub = self.create_publisher(Clock, 'clock', 10)
         self.point_cloud_counter = 0
 
+        slam_status_topic = '/' + self.robot_name + '/hdl_graph_slam/slam_status'
+        self.slam_status_sub = self.create_subscription(
+            SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
+
         self.dataset = pykitti.odometry(self.base_path, self.sequence)
+
+    def slam_status_callback(self, msg: SlamStatus):
+        self.slam_status = msg
 
     def start_playback(self):
         print(f'Starting playback with rate {self.rate:.2f}x')
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-        self.timer = self.create_timer(1.0 / self.rate, self.playback_timer, callback_group=self.reentrant_callback_group)
+        assert (len(self.timestamps) == len(self.dataset.velo))
+        self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
+                                       callback_group=self.reentrant_callback_group)
 
     def playback_timer(self):
-        self.dataset.frames
+        self.timer.cancel()
+
+        if self.slam_status.in_optimization or self.slam_status.in_loop_closure:
+            if self.print_info_once:
+                print('Waiting for optimization to finish')
+            self.timer.reset()
+            self.print_info_once = False
+            return
+        self.print_info_once = True
+
         velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
         ts = self.timestamps[self.point_cloud_counter]
         # create a ROS2 PointCloud2 message
@@ -75,10 +97,25 @@ class KittiMultiRobotProcessor(Node):
 
         ros_pcl.data = velo.tobytes()
 
+        # publish the clock msg
+        clock_msg = Clock()
+        clock_msg.clock = ros_pcl.header.stamp
+        self.clock_pub.publish(clock_msg)
         # publish the point cloud
         self.point_cloud_pub.publish(ros_pcl)
 
         self.point_cloud_counter += 1
+
+        if self.point_cloud_counter >= len(self.timestamps):
+            self.timer.cancel()
+            print('Finished playback')
+            self.finalize_playback()
+        else:
+            self.timer.reset()
+
+    def finalize_playback(self):
+        # call the dumb and save graph service on hdl graph slam
+        pass
 
     def plot_trajectories(self):
         pass
