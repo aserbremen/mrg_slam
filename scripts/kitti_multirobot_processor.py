@@ -12,6 +12,8 @@ from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from vamex_slam_msgs.msg import SlamStatus
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 
 import pykitti
@@ -50,15 +52,15 @@ class KittiMultiRobotProcessor(Node):
         self.slam_status_sub = self.create_subscription(
             SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
 
-        self.dataset = pykitti.odometry(self.base_path, self.sequence)
+        self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
+        self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
+        # assert (len(self.timestamps) == len(list(self.dataset.velo)))
 
     def slam_status_callback(self, msg: SlamStatus):
         self.slam_status = msg
 
     def start_playback(self):
         print(f'Starting playback with rate {self.rate:.2f}x')
-        self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-        assert (len(self.timestamps) == len(self.dataset.velo))
         self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
                                        callback_group=self.reentrant_callback_group)
 
@@ -118,7 +120,39 @@ class KittiMultiRobotProcessor(Node):
         pass
 
     def plot_trajectories(self):
-        pass
+        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
+        self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        tolerance = 0.5
+        ax.plot([pose[0, 3] for pose in self.velo_gt_poses], [pose[1, 3]
+                for pose in self.velo_gt_poses], 'r-', label='velo', picker=tolerance)
+        intervals = 20
+        idxs = np.floor(np.linspace(0, len(self.velo_gt_poses) - 1, intervals)).astype(int)
+        print(f'num poses {len(self.velo_gt_poses)} idxs {idxs}')
+        for i, idx in enumerate(idxs):
+            if i == 0:
+                ax.text(self.velo_gt_poses[0][0, 3], self.velo_gt_poses[0][1, 3], 'start')
+            if i == len(idxs) - 1:
+                ax.text(self.velo_gt_poses[-1][0, 3], self.velo_gt_poses[-1][1, 3], 'end')
+            else:
+                ax.text(self.velo_gt_poses[idx][0, 3], self.velo_gt_poses[idx][1, 3],
+                        f'{i*100/intervals}%')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_aspect('equal')
+        ax.legend()
+        fig.canvas.mpl_connect('pick_event', self.on_pick)
+        plt.show()
+
+    def on_pick(self, event):
+        artist = event.artist
+        xmouse, ymouse = event.mouseevent.xdata, event.mouseevent.ydata
+        print(f'xmouse {xmouse:.2f}, ymouse {ymouse:.2f}')
+        x, y = artist.get_xdata(), artist.get_ydata()
+        index = event.ind
+        print(f'indexes {index}')
+        print(f'timestamp {self.timestamps[index].total_seconds()} pose {self.velo_gt_poses[index]}')
 
 
 def plot_trajectories(executor, kitti_processor):
