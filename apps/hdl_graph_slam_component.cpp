@@ -47,7 +47,6 @@
 #include <message_filters/time_synchronizer.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
-#include <scancontext_ros2/Scancontext.h>
 
 #include <Eigen/Dense>
 #include <atomic>
@@ -129,7 +128,6 @@ public:
 
         keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
         loop_detector.reset( new LoopDetector( node_ros, gid_generator ) );
-        sc_manager.reset( new SCManager( node_ros ) );
         map_cloud_generator.reset( new MapCloudGenerator() );
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
 
@@ -347,18 +345,6 @@ private:
         this->declare_parameter<bool>( "use_loop_closure_consistency_check", true );
         this->declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
         this->declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
-
-
-        // Scan context ++ params (used by SCManager)
-        this->declare_parameter<double>( "sc_lidar_height", 0.71 );
-        this->declare_parameter<int>( "sc_pc_num_ring", 20 );
-        this->declare_parameter<int>( "sc_pc_num_sector", 60 );
-        this->declare_parameter<double>( "sc_pc_max_radius", 80.0 );
-        this->declare_parameter<int>( "sc_num_exclude_recent", 50 );
-        this->declare_parameter<int>( "sc_num_candidates_from_tree", 10 );
-        this->declare_parameter<double>( "sc_search_ratio", 0.1 );
-        this->declare_parameter<double>( "sc_dist_thres", 0.13 );
-        this->declare_parameter<int>( "sc_tree_making_period", 50 );
 
         // InformationMatrixCalculator parameters (not directly used by this class)
         this->declare_parameter<bool>( "use_const_inf_matrix", false );
@@ -607,9 +593,6 @@ private:
             keyframe->set_gid( *gid_generator );
             gid_keyframe_map[keyframe->gid] = keyframe;
             keyframe_hash[keyframe->stamp]  = keyframe;
-
-            // Add the key frame pointcloud to the scan context manager
-            sc_manager->makeAndSaveScancontextAndKeys( *keyframe->cloud, gid_generator->getHumanReadableId( keyframe->gid ) );
 
             // first keyframe?
             if( keyframes.empty() && new_keyframes.size() == 1 ) {
@@ -1268,7 +1251,6 @@ private:
             edge_gids.insert( edge->gid );
             graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
-        auto loop = sc_manager->detectLoopClosureID();
 
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
@@ -1870,7 +1852,6 @@ private:
     std::shared_ptr<GraphSLAM>       graph_slam;
     std::unique_ptr<LoopDetector>    loop_detector;
     std::unique_ptr<KeyframeUpdater> keyframe_updater;
-    std::unique_ptr<SCManager>       sc_manager;
 
     std::unique_ptr<InformationMatrixCalculator> inf_calclator;
 };

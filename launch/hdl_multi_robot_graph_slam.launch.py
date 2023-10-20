@@ -66,13 +66,14 @@ def print_remappings(remappings, header=None):
 
 def launch_setup(context, *args, **kwargs):
 
+    config_file = 'hdl_multi_robot_graph_slam.yaml'
+    if 'config' in context.launch_configurations:
+        config_file = context.launch_configurations['config']
     config_file_path = os.path.join(
         get_package_share_directory('hdl_graph_slam'),
         'config',
-        'hdl_multi_robot_graph_slam.yaml'
+        config_file
     )
-    if 'config' in context.launch_configurations:
-        config_file_path = context.launch_configurations['config']
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
