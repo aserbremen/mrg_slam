@@ -1,21 +1,23 @@
 import os
 import fire
 import datetime
+import time
+from tqdm import tqdm
 
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from pprint import pprint
 
 from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
+from nav_msgs.msg import Path
 from vamex_slam_msgs.msg import SlamStatus
 
 import matplotlib.pyplot as plt
-
 import numpy as np
-
 import pykitti
 # Some information on the odometry dataset
 # dataset.calib:      Calibration data are accessible as a named tuple
@@ -44,13 +46,18 @@ class KittiMultiRobotProcessor(Node):
         self.rate = self.declare_parameter('rate', 10.0).value
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
-        self.point_cloud_pub = self.create_publisher(PointCloud2, 'velodyne_points', 10, callback_group=self.reentrant_callback_group)
+        point_cloud_topic = self.robot_name + '/velodyne_points'
+        self.point_cloud_pub = self.create_publisher(PointCloud2, point_cloud_topic, 10, callback_group=self.reentrant_callback_group)
         self.clock_pub = self.create_publisher(Clock, 'clock', 10)
         self.point_cloud_counter = 0
+
+        gt_path_topic = self.robot_name + '/gt_path'
+        self.gt_path_pub = self.create_publisher(Path, gt_path_topic, 10, callback_group=self.reentrant_callback_group)
 
         slam_status_topic = '/' + self.robot_name + '/hdl_graph_slam/slam_status'
         self.slam_status_sub = self.create_subscription(
             SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
+        self.slam_status = SlamStatus()  # type: SlamStatus
 
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
@@ -60,28 +67,16 @@ class KittiMultiRobotProcessor(Node):
         self.slam_status = msg
 
     def start_playback(self):
+        self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
         print(f'Starting playback with rate {self.rate:.2f}x')
         self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
                                        callback_group=self.reentrant_callback_group)
 
-    def playback_timer(self):
-        self.timer.cancel()
-
-        if self.slam_status.in_optimization or self.slam_status.in_loop_closure:
-            if self.print_info_once:
-                print('Waiting for optimization to finish')
-            self.timer.reset()
-            self.print_info_once = False
-            return
-        self.print_info_once = True
-
-        velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
-        ts = self.timestamps[self.point_cloud_counter]
+    def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
         # create a ROS2 PointCloud2 message
         ros_pcl = PointCloud2()
         ros_pcl.header.stamp = pykitti_ts_to_ros_ts(ts)
-        print(ros_pcl.header.stamp.sec, ros_pcl.header.stamp.nanosec)
-        ros_pcl.header.frame_id = 'velodyne'
+        ros_pcl.header.frame_id = self.robot_name + '/velodyne'
         num_points = velo.shape[0]
         ros_pcl.height = 1
         ros_pcl.width = num_points
@@ -99,11 +94,25 @@ class KittiMultiRobotProcessor(Node):
 
         ros_pcl.data = velo.tobytes()
 
-        # publish the clock msg
+        return ros_pcl
+
+    def publish_clock_msg(self, stamp: Time):
         clock_msg = Clock()
-        clock_msg.clock = ros_pcl.header.stamp
+        clock_msg.clock = stamp
         self.clock_pub.publish(clock_msg)
-        # publish the point cloud
+
+    def playback_timer(self):
+        self.timer.cancel()
+        if self.slam_status.in_optimization or self.slam_status.in_loop_closure:
+            self.timer.reset()
+            return
+
+        velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
+        ts = self.timestamps[self.point_cloud_counter]
+        ros_pcl = self.kitti_to_ros_point_cloud(ts, velo)
+        self.progress_bar.update(1)
+
+        self.publish_clock_msg(ros_pcl.header.stamp)
         self.point_cloud_pub.publish(ros_pcl)
 
         self.point_cloud_counter += 1
@@ -117,7 +126,7 @@ class KittiMultiRobotProcessor(Node):
 
     def finalize_playback(self):
         # call the dumb and save graph service on hdl graph slam
-        pass
+        self.progress_bar.close()
 
     def plot_trajectories(self):
         cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
@@ -142,26 +151,44 @@ class KittiMultiRobotProcessor(Node):
         ax.set_ylabel('y')
         ax.set_aspect('equal')
         ax.legend()
-        fig.canvas.mpl_connect('pick_event', self.on_pick)
+
+        def on_pick(self, event):
+            artist = event.artist
+            xmouse, ymouse = event.mouseevent.xdata, event.mouseevent.ydata
+            print(f'xmouse {xmouse:.2f}, ymouse {ymouse:.2f}')
+            x, y = artist.get_xdata(), artist.get_ydata()
+            index = event.ind
+            print(f'indexes {index}')
+            print(f'timestamp {self.timestamps[index].total_seconds()} pose {self.velo_gt_poses[index]}')
+        fig.canvas.mpl_connect('pick_event', on_pick)
         plt.show()
 
-    def on_pick(self, event):
-        artist = event.artist
-        xmouse, ymouse = event.mouseevent.xdata, event.mouseevent.ydata
-        print(f'xmouse {xmouse:.2f}, ymouse {ymouse:.2f}')
-        x, y = artist.get_xdata(), artist.get_ydata()
-        index = event.ind
-        print(f'indexes {index}')
-        print(f'timestamp {self.timestamps[index].total_seconds()} pose {self.velo_gt_poses[index]}')
+    # print info about all the chosen sequences
+    def print_info(self):
+        print(f'sequences {self.dataset.sequence}')
+        print(f'number of point clouds {len(self.timestamps)}')
+        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
+        velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
+        traveled_distance = 0
+        for i in range(len(velo_gt_poses) - 1):
+            traveled_distance += np.linalg.norm(velo_gt_poses[i][0:3, 3] - velo_gt_poses[i + 1][0:3, 3])
+        print(f'total traveled distance {traveled_distance}')
+        num_pcl_points = [velo.shape[0] for velo in self.dataset.velo]
+        print(f'mean number of points pcl {np.mean(num_pcl_points)} std {np.std(num_pcl_points)}')
 
 
-def plot_trajectories(executor, kitti_processor):
+def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
     kitti_processor.plot_trajectories()
     spin(executor, kitti_processor)
 
 
-def start_playback(executor, kitti_processor):
+def start_playback(executor, kitti_processor: KittiMultiRobotProcessor):
     kitti_processor.start_playback()
+    spin(executor, kitti_processor)
+
+
+def print_info(executor, kitti_processor: KittiMultiRobotProcessor):
+    kitti_processor.print_info()
     spin(executor, kitti_processor)
 
 
@@ -185,7 +212,8 @@ def main(args=None):
 
     fire.Fire({
         'plot_trajectories': lambda: plot_trajectories(executor, kitti_processor),
-        'start_playback': lambda: start_playback(executor, kitti_processor)
+        'start_playback': lambda: start_playback(executor, kitti_processor),
+        'print_info': lambda: print_info(executor, kitti_processor),
     })
 
 
