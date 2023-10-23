@@ -13,11 +13,13 @@
 #include <vamex_slam_msgs/msg/graph_ros.hpp>
 #include <vamex_slam_msgs/msg/pose_with_name.hpp>
 #include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
+#include <vamex_slam_msgs/msg/slam_status.hpp>
 #include <vamex_slam_msgs/srv/dump_graph.hpp>
 #include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
 #include <vamex_slam_msgs/srv/get_graph_gids.hpp>
 #include <vamex_slam_msgs/srv/get_map.hpp>
 #include <vamex_slam_msgs/srv/publish_graph.hpp>
+#include <vamex_slam_msgs/srv/request_graphs.hpp>
 #include <vamex_slam_msgs/srv/save_map.hpp>
 // #include <pcl_ros/point_cloud.h>
 // #include <pluginlib/class_list_macros.h>
@@ -145,13 +147,26 @@ public:
         // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
         sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
-        graph_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
-                                                                                         rclcpp::QoS( 16 ),
-                                                                                         std::bind( &HdlGraphSlamComponent::graph_callback,
-                                                                                                    this, std::placeholders::_1 ) );
-        odom_broadcast_sub  = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
-            "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 16 ),
+        odom_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
+            "/hdl_graph_slam/odom_broadcast", rclcpp::QoS( 100 ),
             std::bind( &HdlGraphSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
+
+        // Use a reentrant callbackgroup for odom_broadcast_sub to avoid deadlock, enabling the publish graph service to be called from the
+        // same thread as the slam_pose_broadcast_callback
+        rclcpp::SubscriptionOptions      sub_options;
+        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
+        sub_options.callback_group                                = reentrant_callback_group;
+        slam_pose_broadcast_sub                                   = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
+            "/hdl_graph_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
+            std::bind( &HdlGraphSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
+        for( const auto &robot_name : robot_names ) {
+            if( robot_name != own_name ) {
+                request_graph_service_clients[robot_name] = this->create_client<vamex_slam_msgs::srv::PublishGraph>(
+                    "/" + robot_name + "/hdl_graph_slam/publish_graph", rmw_qos_profile_services_default, reentrant_callback_group );
+                others_last_accum_dist[robot_name] = -1.0;
+            }
+        }
+
 
         if( init_pose_topic != "NONE" ) {
             init_pose_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_pose_topic, rclcpp::QoS( 32 ),
@@ -163,18 +178,24 @@ public:
         odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/hdl_graph_slam/odom2pub", 16 );
         map_points_pub          = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/hdl_graph_slam/map_points", rclcpp::QoS( 1 ) );
         read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "/hdl_graph_slam/read_until", rclcpp::QoS( 16 ) );
-        graph_broadcast_pub     = this->create_publisher<vamex_slam_msgs::msg::GraphRos>( "/hdl_graph_slam/graph_broadcast",
-                                                                                      rclcpp::QoS( 16 ) );
         odom_broadcast_pub      = this->create_publisher<vamex_slam_msgs::msg::PoseWithName>( "/hdl_graph_slam/odom_broadcast",
                                                                                          rclcpp::QoS( 16 ) );
         slam_pose_broadcast_pub = this->create_publisher<vamex_slam_msgs::msg::PoseWithName>( "/hdl_graph_slam/slam_pose_broadcast",
                                                                                               rclcpp::QoS( 16 ) );
         others_poses_pub        = this->create_publisher<vamex_slam_msgs::msg::PoseWithNameArray>( "/hdl_graph_slam/others_poses",
                                                                                             rclcpp::QoS( 16 ) );
+        // Create another reentrant callback group for the slam_status_publisher and all callbacks it publishes from
+        rclcpp::PublisherOptions         pub_options;
+        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
+        pub_options.callback_group                                 = reentrant_callback_group2;
+        slam_status_publisher = this->create_publisher<vamex_slam_msgs::msg::SlamStatus>( "/hdl_graph_slam/slam_status", rclcpp::QoS( 16 ),
+                                                                                          pub_options );
 
-        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when the callback is a class
-        // member function, see https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
-        // If these service callbacks dont work during runtime, try using lambda functions as in
+
+        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
+        // the callback is a class member function, see
+        // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
+        // work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Dumb service
         std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::DumpGraph::Request> req,
@@ -208,6 +229,13 @@ public:
                                                         std::placeholders::_2 );
         publish_graph_service_server       = this->create_service<vamex_slam_msgs::srv::PublishGraph>( "/hdl_graph_slam/publish_graph",
                                                                                                  publish_graph_service_callback );
+        // Request graph service
+        std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::RequestGraphs::Request> req,
+                            std::shared_ptr<vamex_slam_msgs::srv::RequestGraphs::Response>      res )>
+            request_graph_service_callback = std::bind( &HdlGraphSlamComponent::request_graph_service, this, std::placeholders::_1,
+                                                        std::placeholders::_2 );
+        request_graph_service_server       = this->create_service<vamex_slam_msgs::srv::RequestGraphs>( "/hdl_graph_slam/request_graph",
+                                                                                                  request_graph_service_callback );
         // Get graph IDs (gids) service
         std::function<void( const std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Request> req,
                             std::shared_ptr<vamex_slam_msgs::srv::GetGraphGids::Response>      res )>
@@ -219,7 +247,8 @@ public:
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
         optimization_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( graph_update_interval, 0 ),
-                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ) );
+                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ),
+                                                   reentrant_callback_group2 );
         map_publish_timer  = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
                                                    std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
 
@@ -227,6 +256,10 @@ public:
         imu_processor.onInit( node_ros );
         floor_coeffs_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
+
+        slam_status_msg.initialized = true;
+        slam_status_msg.robot_name  = own_name;
+        slam_status_publisher->publish( slam_status_msg );
 
         // Print the all parameters declared in this node so far
         print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
@@ -274,6 +307,8 @@ private:
         this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
         this->declare_parameter<double>( "graph_update_interval", 3.0 );
         this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
+        this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
+        this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
 
         // KeyframeUpdater parameters (not directly used by this class)
         this->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
@@ -370,6 +405,8 @@ private:
         save_graph                           = this->get_parameter( "save_graph" ).as_bool();
         graph_update_interval                = this->get_parameter( "graph_update_interval" ).as_double();
         map_cloud_update_interval            = this->get_parameter( "map_cloud_update_interval" ).as_double();
+        graph_request_min_accum_dist         = this->get_parameter( "graph_request_min_accum_dist" ).as_double();
+        graph_request_max_robot_dist         = this->get_parameter( "graph_request_max_robot_dist" ).as_double();
     }
 
     /**
@@ -793,6 +830,73 @@ private:
         slam_pose_broadcast_pub->publish( slam_pose_msg );
     }
 
+    void slam_pose_broadcast_callback( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr slam_pose_msg )
+    {
+        if( slam_pose_msg->robot_name == own_name || prev_robot_keyframe == nullptr ) {
+            return;
+        }
+
+        std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
+
+        Eigen::Vector3d own_position    = prev_robot_keyframe->estimate().translation();
+        const auto     &robot_name      = slam_pose_msg->robot_name;
+        double          accum_dist      = slam_pose_msg->accum_dist;
+        double         &last_accum_dist = others_last_accum_dist[robot_name];
+        others_slam_poses[robot_name]   = *slam_pose_msg;
+        if( last_accum_dist >= 0 && fabs( accum_dist - last_accum_dist ) < graph_request_min_accum_dist ) {
+            return;
+        }
+
+        double          max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
+        Eigen::Vector3d other_position     = Eigen::Vector3d( slam_pose_msg->pose.position.x, slam_pose_msg->pose.position.y,
+                                                              slam_pose_msg->pose.position.z );
+        if( ( own_position - other_position ).squaredNorm() > max_robot_dist_sqr ) {
+            return;
+        }
+
+        while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
+            if( !rclcpp::ok() ) {
+                return;
+            }
+            RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+                                         "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
+                                                                << " to appear..." );
+        }
+
+        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << robot_name << " with new accum dist "
+                                                                               << accum_dist - last_accum_dist << "m" );
+        vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
+
+        req->robot_name = own_name;
+        req->processed_keyframe_gids.reserve( keyframes.size() );
+        for( const auto &keyframe : keyframes ) {
+            req->processed_keyframe_gids.push_back( keyframe->gid );
+        }
+        req->processed_edge_gids.reserve( edges.size() );
+        for( const auto &edge : edges ) {
+            req->processed_edge_gids.push_back( edge->gid );
+        }
+
+        unique_lck.unlock();
+
+        auto               result_future = request_graph_service_clients[robot_name]->async_send_request( req );
+        std::future_status status        = result_future.wait_for( std::chrono::seconds( 5 ) );
+
+        if( status == std::future_status::timeout ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+            return;
+        }
+        if( status == std::future_status::ready ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
+        }
+        auto result = result_future.get();
+        // Fill the graph queue with the received graph
+        std::lock_guard<std::mutex> lock( graph_queue_mutex );
+        graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
+
+        last_accum_dist = accum_dist;
+    }
+
     /**
      * @brief received odom msgs from other robots proccessed
      * @param graph_msg
@@ -1063,6 +1167,9 @@ private:
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
+        // Cancel the timer and reset it whenever this function returns in order to avoid overlapping callbacks in case of very long
+        // optimizations
+        optimization_timer->cancel();
 
         // add keyframes and floor coeffs in the queues to the pose graph
         bool keyframe_updated = flush_keyframe_queue();
@@ -1086,11 +1193,13 @@ private:
             if( prev_robot_keyframe != nullptr ) {
                 publish_slam_pose_broadcast( prev_robot_keyframe );
             }
-
+            optimization_timer->reset();
             return;
         }
 
         // loop detection
+        slam_status_msg.in_loop_closure = true;
+        slam_status_publisher->publish( slam_status_msg );
         std::vector<Loop::Ptr> loops = loop_detector->detect( keyframes, new_keyframes, *graph_slam );
         for( const auto &loop : loops ) {
             Eigen::Isometry3d relpose( loop->relative_pose.cast<double>() );
@@ -1116,11 +1225,15 @@ private:
         }
 
         if( keyframes.empty() ) {
+            optimization_timer->reset();
             return;
         }
 
         // optimize the pose graph
         // int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
+        slam_status_msg.in_loop_closure = false;
+        slam_status_msg.in_optimization = true;
+        slam_status_publisher->publish( slam_status_msg );
         graph_slam->optimize( g2o_solver_num_iterations );
 
         // get transformations between map and robots
@@ -1182,6 +1295,10 @@ private:
         if( markers_pub.getNumMarginalsSubscribers() ) {
             markers_pub.publishMarginals( keyframes, marginals, *gid_generator );
         }
+
+        slam_status_msg.in_optimization = false;
+        slam_status_publisher->publish( slam_status_msg );
+        optimization_timer->reset();
     }
 
     // /**
@@ -1285,6 +1402,10 @@ private:
 
         // int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
         // res.success = ret == 0;
+        auto dir = boost::filesystem::path( req->destination ).remove_filename();
+        if( !boost::filesystem::is_directory( dir ) ) {
+            boost::filesystem::create_directory( dir );
+        }
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
 
@@ -1304,8 +1425,6 @@ private:
     void publish_graph_service( vamex_slam_msgs::srv::PublishGraph::Request::ConstSharedPtr req,
                                 vamex_slam_msgs::srv::PublishGraph::Response::SharedPtr     res )
     {
-        // GraphRos msg;
-        vamex_slam_msgs::msg::GraphRos msg;
         {
             std::lock_guard<std::mutex> lock( main_thread_mutex );
 
@@ -1315,33 +1434,33 @@ private:
                 return;
             }
 
-            msg.robot_name          = own_name;
-            msg.latest_keyframe_gid = prev_robot_keyframe->gid;
-            // tf::poseEigenToMsg( prev_robot_keyframe->odom, msg.latest_keyframe_odom );
-            msg.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
+            res->graph.robot_name          = own_name;
+            res->graph.latest_keyframe_gid = prev_robot_keyframe->gid;
+            // tf::poseEigenToMsg( prev_robot_keyframe->odom, res->graph.latest_keyframe_odom );
+            res->graph.latest_keyframe_odom = tf2::toMsg( prev_robot_keyframe->odom );
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed keyframe gids: " );
             for( auto gid : req->processed_keyframe_gids ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
             }
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Received publish graph request with the already processed edge gids: " );
             for( auto gid : req->processed_edge_gids ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), gid );
+                RCLCPP_DEBUG_STREAM( this->get_logger(), gid );
             }
 
-            msg.keyframes.reserve( keyframes.size() );
+            res->graph.keyframes.reserve( keyframes.size() );
             int added_keyframes = 0;
             for( size_t i = 0; i < keyframes.size(); i++ ) {
                 auto &src = keyframes[i];
                 // Skip adding keyframes that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_keyframe_gids.begin(), req->processed_keyframe_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_keyframe_gids.end() ) {
-                    RCLCPP_INFO_STREAM( this->get_logger(),
-                                        "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                         "Skipping keyframe " << src->gid << " as it has already been processed by the other robot" );
                     continue;
                 }
 
-                // auto &dst = msg.keyframes[i];
+                // auto &dst = res->graph.keyframes[i];
                 vamex_slam_msgs::msg::KeyFrameRos dst;
                 dst.gid              = src->gid;
                 dst.stamp            = src->stamp;
@@ -1349,24 +1468,23 @@ private:
                 // tf::poseEigenToMsg( src->estimate(), dst.estimate );
                 dst.estimate = tf2::toMsg( src->estimate() );
                 dst.cloud    = *src->cloud_msg;
-                msg.keyframes.push_back( std::move( dst ) );
+                res->graph.keyframes.push_back( std::move( dst ) );
                 added_keyframes++;
             }
-            msg.keyframes.resize( added_keyframes );
+            res->graph.keyframes.resize( added_keyframes );
 
-            msg.edges.reserve( edges.size() );
+            res->graph.edges.reserve( edges.size() );
             int added_edges = 0;
             for( size_t i = 0; i < edges.size(); i++ ) {
                 auto &src = edges[i];
                 // Skip adding edges that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_edge_gids.begin(), req->processed_edge_gids.end(), src->gid );
                 if( it_processed_gids != req->processed_edge_gids.end() ) {
-                    RCLCPP_INFO_STREAM( this->get_logger(),
-                                        "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                         "Skipping edge " << src->gid << " as it has already been processed by the other robot" );
                     continue;
                 }
 
-                // auto &dst = msg.edges[i];
                 vamex_slam_msgs::msg::EdgeRos dst;
                 dst.type     = src->type == Edge::TYPE_ODOM ? 0 : 1;
                 dst.gid      = src->gid;
@@ -1376,27 +1494,81 @@ private:
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();
-                msg.edges.push_back( std::move( dst ) );
+                res->graph.edges.push_back( std::move( dst ) );
                 added_edges++;
             }
-            msg.edges.resize( added_edges );
+            res->graph.edges.resize( added_edges );
         }
 
         // graph_broadcast_pub.publish( msg );
-        RCLCPP_INFO_STREAM( this->get_logger(),
-                            "Publishing graph with " << msg.keyframes.size() << " keyframes and " << msg.edges.size() << " edges." );
-        RCLCPP_INFO_STREAM( this->get_logger(), "Publishing the following keyframe gids: " );
-        for( auto keyframe : msg.keyframes ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), keyframe.gid );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Sending graph response to " << req->robot_name << " with " << res->graph.keyframes.size()
+                                                                             << " keyframes and " << res->graph.edges.size() << " edges." );
+        RCLCPP_DEBUG_STREAM( this->get_logger(), "Response has the following keyframe gids: " );
+        for( auto keyframe : res->graph.keyframes ) {
+            RCLCPP_DEBUG_STREAM( this->get_logger(), keyframe.gid );
         }
-        RCLCPP_INFO_STREAM( this->get_logger(), "Publishing the following edge gids: " );
-        for( auto edge : msg.edges ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), edge.gid );
+        RCLCPP_DEBUG_STREAM( this->get_logger(), "Response has the following edge gids: " );
+        for( auto edge : res->graph.edges ) {
+            RCLCPP_DEBUG_STREAM( this->get_logger(), edge.gid );
         }
-        graph_broadcast_pub->publish( msg );
+    }
 
-        // ROS2 services are of type void and dont return a bool.
-        // return true;
+
+    void request_graph_service( vamex_slam_msgs::srv::RequestGraphs::Request::ConstSharedPtr req,
+                                vamex_slam_msgs::srv::RequestGraphs::Response::SharedPtr     res )
+    {
+        std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
+
+        vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr pub_req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
+
+        pub_req->robot_name = own_name;
+        pub_req->processed_keyframe_gids.reserve( keyframes.size() );
+        for( const auto &keyframe : keyframes ) {
+            pub_req->processed_keyframe_gids.push_back( keyframe->gid );
+        }
+        pub_req->processed_edge_gids.reserve( edges.size() );
+        for( const auto &edge : edges ) {
+            pub_req->processed_edge_gids.push_back( edge->gid );
+        }
+
+        unique_lck.unlock();
+
+        for( const auto &robot_name : req->robot_names ) {
+            if( robot_name == own_name ) {
+                continue;
+            }
+            auto it = std::find( robot_names.begin(), robot_names.end(), robot_name );
+            if( it == robot_names.end() ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Robot " << robot_name << " is not in the list of known robots to request graph" );
+                continue;
+            }
+            while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
+                if( !rclcpp::ok() ) {
+                    return;
+                }
+                RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+                                             "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
+                                                                    << " to appear..." );
+            }
+
+            auto               result_future = request_graph_service_clients[robot_name]->async_send_request( pub_req );
+            std::future_status status        = result_future.wait_for( std::chrono::seconds( 1 ) );
+            if( status == std::future_status::timeout ) {
+                RCLCPP_ERROR_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+                return;
+            }
+            if( status == std::future_status::ready ) {
+                RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
+            }
+            auto result = result_future.get();
+            // Fill the graph queue with the received graph
+            std::lock_guard<std::mutex> lock( graph_queue_mutex );
+            graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
+
+            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].accum_dist;
+        }
+        // Call the optimization callback to process the received graphs
+        optimization_timer_callback();
     }
 
     void get_graph_gids_service( vamex_slam_msgs::srv::GetGraphGids::Request::ConstSharedPtr req,
@@ -1436,9 +1608,16 @@ private:
 
     // ros::Subscriber graph_broadcast_sub;
     // ros::Publisher  graph_broadcast_pub;
-    rclcpp::Subscription<vamex_slam_msgs::msg::GraphRos>::SharedPtr  graph_broadcast_sub;
-    rclcpp::Publisher<vamex_slam_msgs::msg::GraphRos>::SharedPtr     graph_broadcast_pub;
-    rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr slam_pose_broadcast_pub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                               slam_pose_broadcast_pub;
+    std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+    std::unordered_map<std::string, vamex_slam_msgs::msg::PoseWithName>                            others_slam_poses;
+    rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                            slam_pose_broadcast_sub;
+    rclcpp::Publisher<vamex_slam_msgs::msg::SlamStatus>::SharedPtr                                 slam_status_publisher;
+    vamex_slam_msgs::msg::SlamStatus                                                               slam_status_msg;
+    // other robot name -> accumulated dist when last graph update was requested from that robot
+    std::unordered_map<std::string, double> others_last_accum_dist;
+    double                                  graph_request_min_accum_dist;
+    double                                  graph_request_max_robot_dist;
 
     // ros::Subscriber odom_broadcast_sub;
     // ros::Publisher  odom_broadcast_pub;
@@ -1455,6 +1634,7 @@ private:
     // std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::Pose>> others_odom_poses;
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
 
+
     // ros::Publisher read_until_pub;
     // ros::Publisher map_points_pub;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
@@ -1466,7 +1646,7 @@ private:
     // ros::ServiceServer                                  get_map_service_server;
     // ros::ServiceServer                                  get_graph_estimate_service_server;
     // ros::ServiceServer                                  publish_graph_service_server;
-    // std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
+
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr             request_robot_graph_sub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr                request_robot_graph_pub;
     rclcpp::Service<vamex_slam_msgs::srv::DumpGraph>::SharedPtr        dump_service_server;
@@ -1474,6 +1654,7 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
 
     ImuProcessor         imu_processor;

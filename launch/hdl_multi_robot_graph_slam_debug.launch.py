@@ -30,7 +30,7 @@ We are going to debug the component container for the bestla robot, atlas is goi
             {
                 "name": "Launch hdl_graph_slam",
                 "type": "ros",
-                "target": "/home/serov/code/cpp/ros2_hdl_graph_slam/src/hdl_graph_slam/launch/hdl_multi_robot_graph_slam_only_component_container.launch.py",
+                "target": "/home/serov/code/cpp/ros2_hdl_graph_slam/src/hdl_graph_slam/launch/hdl_multi_robot_graph_slam_debug.launch.py",
                 "request": "launch",
                 "arguments": ["model_namespace:=bestla", "odom_frame_id:=bestla/odom", "map_frame_id:=bestla/map", "robot_odom_frame_id:=bestla/robot_odom", "start_rviz2:=false", "x:=8.0", "y:=-20", "z:=-2.05", "use_sim_time:=true"],
                 "launch": [
@@ -94,6 +94,13 @@ def print_yaml_params(yaml_params, header=None):
     print(yaml.dump(yaml_params, sort_keys=False, default_flow_style=False))
 
 
+def print_remappings(remappings, header=None):
+    if header is not None:
+        print('######## ' + header + ' remappings ########')
+    [print(remapping[0] + ' -> ' + remapping[1]) for remapping in remappings]
+    print('')
+
+
 def launch_setup(context, *args, **kwargs):
 
     config_file_path = os.path.join(
@@ -101,13 +108,17 @@ def launch_setup(context, *args, **kwargs):
         'config',
         'hdl_multi_robot_graph_slam.yaml'
     )
+    if 'config' in context.launch_configurations:
+        config_file_path = context.launch_configurations['config']
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
+        print('Loaded config file: ' + config_file_path)
         # # Print all parameters from the yaml file for convenience when launching the nodes
         # print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params['/**']['ros__parameters']
         static_transform_params = config_params['lidar2base_publisher']['ros__parameters']
+        map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
         clock_publisher_ros2_params = config_params['clock_publisher_ros2']['ros__parameters']
         prefiltering_params = config_params['prefiltering_component']['ros__parameters']
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
@@ -118,6 +129,7 @@ def launch_setup(context, *args, **kwargs):
     # Overwrite the parameters from the yaml file with the ones from the cli
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
     static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
+    map2robotmap_publisher_params = overwrite_yaml_params_from_cli(map2robotmap_publisher_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
@@ -128,6 +140,7 @@ def launch_setup(context, *args, **kwargs):
 
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(static_transform_params, 'static_transform_params')
+    print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
     print_yaml_params(clock_publisher_ros2_params, 'clock_publisher_ros2_params')
     print_yaml_params(prefiltering_params, 'prefiltering_params')
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
@@ -136,26 +149,47 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(multi_robot_communicator_params, 'multi_robot_communicator_params')
 
     # Create the static transform publisher node
-    # frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
-    # child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
-    # static_transform_publisher = Node(
-    #     # name=model_namespace + '_lidar2base_publisher',
-    #     name='lidar2base_publisher',
-    #     namespace=model_namespace,
-    #     package='tf2_ros',
-    #     executable='static_transform_publisher',
-    #     # arguments has to be a list of strings
-    #     arguments=[str(static_transform_params['lidar2base_x']),
-    #                str(static_transform_params['lidar2base_y']),
-    #                str(static_transform_params['lidar2base_z']),
-    #                str(static_transform_params['lidar2base_roll']),
-    #                str(static_transform_params['lidar2base_pitch']),
-    #                str(static_transform_params['lidar2base_yaw']),
-    #                frame_id,
-    #                child_frame_id],
-    #     parameters=[shared_params],
-    #     output='both'
-    # )
+    frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
+    child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
+    static_transform_publisher = Node(
+        # name=model_namespace + '_lidar2base_publisher',
+        name='lidar2base_publisher',
+        namespace=model_namespace,
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        # arguments has to be a list of strings
+        arguments=[str(static_transform_params['lidar2base_x']),
+                   str(static_transform_params['lidar2base_y']),
+                   str(static_transform_params['lidar2base_z']),
+                   str(static_transform_params['lidar2base_roll']),
+                   str(static_transform_params['lidar2base_pitch']),
+                   str(static_transform_params['lidar2base_yaw']),
+                   frame_id,
+                   child_frame_id],
+        parameters=[shared_params],
+        output='both'
+    )
+
+    # Create the map2robotmap publisher node
+    if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
+        map2robotmap_child_frame_id = model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
+        map2robotmap_publisher = Node(
+            name='map2robotmap_publisher',
+            namespace=model_namespace,
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            # arguments has to be a list of strings
+            arguments=[str(map2robotmap_publisher_params['map2robotmap_x']),
+                       str(map2robotmap_publisher_params['map2robotmap_y']),
+                       str(map2robotmap_publisher_params['map2robotmap_z']),
+                       str(map2robotmap_publisher_params['map2robotmap_roll']),
+                       str(map2robotmap_publisher_params['map2robotmap_pitch']),
+                       str(map2robotmap_publisher_params['map2robotmap_yaw']),
+                       map2robotmap_publisher_params['map2robotmap_frame_id'],
+                       map2robotmap_child_frame_id],
+            parameters=[shared_params],
+            output='both'
+        )
 
     # # Start rviz2 from this launch file if set to true
     # if shared_params['start_rviz2']:
@@ -180,15 +214,17 @@ def launch_setup(context, *args, **kwargs):
     #     )
 
     # # Create the map2odom publisher node
-    # map2odom_publisher_ros2 = Node(
-    #     package='hdl_graph_slam',
-    #     executable='map2odom_publisher_ros2.py',
-    #     name='map2odom_publisher_ros2',
-    #     namespace=model_namespace,
-    #     output='both',
-    #     parameters=[hdl_graph_slam_params, shared_params],
-    #     remappings=[('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
-    # )
+    remaps = [('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub')]
+    print_remappings(remaps, 'map2odom_publisher_ros2')
+    map2odom_publisher_ros2 = Node(
+        package='hdl_graph_slam',
+        executable='map2odom_publisher_ros2.py',
+        name='map2odom_publisher_ros2',
+        namespace=model_namespace,
+        output='both',
+        parameters=[hdl_graph_slam_params, shared_params],
+        remappings=remaps
+    )
 
     # Create the container node
     # container_name = model_namespace + '_hdl_graph_slam_container'
@@ -204,40 +240,48 @@ def launch_setup(context, *args, **kwargs):
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
     prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
-    prefiltering_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::PrefilteringComponent',
-        name='prefiltering_component',
-        namespace=model_namespace,
-        parameters=[prefiltering_params, shared_params],
-        remappings=[
-            ('/imu/data', shared_params['imu_topic']),
-            ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
-            ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points'),
-        ],
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
+              ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
+              ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+              ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points')]
+    print_remappings(remaps, 'prefiltering_component')
+    if prefiltering_params['enable_prefiltering']:
+        prefiltering_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::PrefilteringComponent',
+            name='prefiltering_component',
+            namespace=model_namespace,
+            parameters=[prefiltering_params, shared_params],
+            remappings=remaps,
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
-    scan_matching_odometry_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::ScanMatchingOdometryComponent',
-        name='scan_matching_odometry_component',
-        namespace=model_namespace,
-        parameters=[scan_matching_odometry_params, shared_params],
-        remappings=[
-            ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-            ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
-            ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
-            ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
-            ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-            ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),
-        ],
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+              ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
+              ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
+              ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
+              ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+              ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),]
+    print_remappings(remaps, 'scan_matching_odometry_component')
+    if scan_matching_odometry_params['enable_scan_matching_odometry']:
+        scan_matching_odometry_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::ScanMatchingOdometryComponent',
+            name='scan_matching_odometry_component',
+            namespace=model_namespace,
+            parameters=[scan_matching_odometry_params, shared_params],
+            remappings=remaps,
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
-    # TODO somehwere simple "/floor_coeffs" topic is either subscribed or published to even with namespace and remappings, but not sure where
+    remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+              ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+              ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
+              ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
+              ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')]
+    print_remappings(remaps, 'floor_detection_component')
     if floor_detection_params['enable_floor_detection']:
         floor_detection_node = ComposableNode(
             package='hdl_graph_slam',
@@ -245,14 +289,7 @@ def launch_setup(context, *args, **kwargs):
             name='floor_detection_component',
             namespace=model_namespace,
             parameters=[floor_detection_params, shared_params],
-            remappings=[
-                ('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-                ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-                ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
-                ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
-                ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')
-            ],
+            remappings=remaps,
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
@@ -264,34 +301,40 @@ def launch_setup(context, *args, **kwargs):
     hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
     hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
     hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
+    remaps = [('/imu/data', shared_params['imu_topic']),
+              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+              ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+              ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+              ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
+              ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
+              ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
+              ('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub'),
+              ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
+              ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
+              ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
+              ('/hdl_graph_slam/slam_status', '/' + model_namespace + '/hdl_graph_slam/slam_status'),
+              ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
+              ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
+              ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
+              ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
+              ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
+              ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
+    print_remappings(remaps, 'hdl_graph_slam_component')
     hdl_graph_slam_node = ComposableNode(
         package='hdl_graph_slam',
         plugin='hdl_graph_slam::HdlGraphSlamComponent',
         name='hdl_graph_slam_component',
         namespace=model_namespace,
         parameters=[hdl_graph_slam_params, shared_params],
-        remappings=[
-            ('/imu/data', shared_params['imu_topic']),
-            ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-            ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-            ('floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-            ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
-            ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
-            ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
-            ('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub'),
-            ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
-            ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
-            ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
-            ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
-            ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
-            ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
-            ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
-            ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
-        ],
+        remappings=remaps,
         extra_arguments=[{'use_intra_process_comms': True}]
     )
 
-    composable_nodes = [prefiltering_node, scan_matching_odometry_node]
+    composable_nodes = []
+    if prefiltering_params['enable_prefiltering']:
+        composable_nodes.append(prefiltering_node)
+    if scan_matching_odometry_params['enable_scan_matching_odometry']:
+        composable_nodes.append(scan_matching_odometry_node)
     if floor_detection_params['enable_floor_detection']:
         composable_nodes.append(floor_detection_node)
     composable_nodes.append(hdl_graph_slam_node)
@@ -303,28 +346,30 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # multi_robot_communicator_params['own_name'] = model_namespace
+    # remaps = [('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
+    # print_remappings(remaps, 'multi_robot_communicator')
     # multi_robot_communicator = Node(
     #     package='hdl_graph_slam',
     #     executable='multi_robot_communicator',
     #     name='multi_robot_communicator',
     #     namespace=model_namespace,
     #     parameters=[multi_robot_communicator_params, shared_params],
-    #     remappings=[
-    #         ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),
-    #     ],
+    #     remappings=remaps,
     #     output='screen'
     # )
 
-    # launch_description_list = []
+    launch_description_list = [static_transform_publisher]
+    if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
+        launch_description_list.append(map2robotmap_publisher)
     # if shared_params['start_rviz2']:
     #     launch_description_list.append(rviz2)
     # # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
     # if os.path.expandvars('$ROS_DISTRO') != 'humble':
     #     launch_description_list.append(clock_publisher_ros2)
-    # launch_description_list.append(map2odom_publisher_ros2)
-    # launch_description_list.append(container)
-    # launch_description_list.append(load_composable_nodes)
-    launch_description_list = [container, load_composable_nodes]
+    launch_description_list.append(map2odom_publisher_ros2)
+    launch_description_list.append(container)
+    launch_description_list.append(load_composable_nodes)
+    # launch_description_list = [container, load_composable_nodes]
     # if multi_robot_communicator_params['enable_multi_robot_communicator']:
     #     launch_description_list.append(multi_robot_communicator)
 

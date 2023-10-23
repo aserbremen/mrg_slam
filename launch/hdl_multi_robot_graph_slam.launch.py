@@ -200,7 +200,7 @@ def launch_setup(context, *args, **kwargs):
     container_name = model_namespace + '/hdl_graph_slam_container'  # used in composable nodes
     container = Node(
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',
         name="hdl_graph_slam_container",
         namespace=model_namespace,
         output='both',
@@ -282,10 +282,12 @@ def launch_setup(context, *args, **kwargs):
               ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
               ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
               ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
+              ('/hdl_graph_slam/slam_status', '/' + model_namespace + '/hdl_graph_slam/slam_status'),
               ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
               ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
               ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
               ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
+              ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
               ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
     print_remappings(remaps, 'hdl_graph_slam_component')
     hdl_graph_slam_node = ComposableNode(

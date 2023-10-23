@@ -31,9 +31,9 @@ def main():
                 stamp_nanosecs = stamp_str.split(' ')[2]
                 stamp = float(stamp_secs + '.' + stamp_nanosecs)
 
-                accum_dist_str = next((line for line in lines if line.startswith('accum_distance')), None)
+                # Skip the vertices with negative accum_dist indicating loop closure vertices leading to jumps in the estimated trajectory file
+                accum_dist_str = next((line for line in lines if line.startswith('accum_dist')), None)
                 accum_dist = float(accum_dist_str.split(' ')[1])
-                # We have to skip poses with negative accummulated distance indicating loop closure constraints
                 if accum_dist < 0:
                     continue
 

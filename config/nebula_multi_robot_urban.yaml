@@ -105,7 +105,7 @@ scan_matching_odometry_component:
 # Floor detection component parameters
 floor_detection_component:
   ros__parameters:
-    enable_floor_detection: true
+    enable_floor_detection: false
     tilt_deg: 0.0
     sensor_height: 0.716 # https://app.gazebosim.org/OpenRobotics/fuel/models/COSTAR_HUSKY_SENSOR_CONFIG_1
     height_clip_range: 1.0
@@ -121,7 +121,7 @@ floor_detection_component:
 hdl_graph_slam_component:
   ros__parameters:
     own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1", "husky4"]
+    /properties/scenario/rovers/names: ["husky3", "husky4"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -161,18 +161,18 @@ hdl_graph_slam_component:
     fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
     use_planar_registration_guess: false
-    loop_closure_edge_robust_kernel: "Huber"
-    loop_closure_edge_robust_kernel_size: 1.0
-    # scan matching params
+    loop_closure_edge_robust_kernel: "Cauchy" # "NONE"
+    loop_closure_edge_robust_kernel_size: 0.1 # 1.0
+    # scan matching params, registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
     registration_method: "FAST_GICP"
     reg_num_threads: 0
     reg_transformation_epsilon: 0.1
     reg_maximum_iterations: 64
     reg_max_correspondence_distance: 2.0
     reg_max_optimizer_iterations: 20
-    reg_use_reciprocal_correspondences: false
+    reg_use_reciprocal_correspondences: true # false
     reg_correspondence_randomness: 20
-    reg_resolution: 1.0
+    reg_resolution: 0.8 # 1.0 
     reg_nn_search_method: "DIRECT7"
     # edge params
     # GPS
@@ -191,9 +191,10 @@ hdl_graph_slam_component:
     floor_edge_stddev: 10.0
     # scan matching
     # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
-    odometry_edge_robust_kernel: "NONE"
-    odometry_edge_robust_kernel_size: 1.0
+    odometry_edge_robust_kernel: "Cauchy" # "NONE"
+    odometry_edge_robust_kernel_size: 0.1 # 1.0
     use_const_inf_matrix: false
+    # information matrix parameters
     const_stddev_x: 0.5
     const_stddev_q: 0.1
     var_gain_a: 20.0
@@ -212,7 +213,7 @@ hdl_graph_slam_component:
 # Multi robot communicator
 multi_robot_communicator:
   ros__parameters:
-    enable_multi_robot_communicator: true
+    enable_multi_robot_communicator: false
     own_name: "husky1"
     robot_names: ["husky1", "husky4"]
     publish_graph_trigger_mode: "slam"
