@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "husky1"
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -14,11 +14,12 @@ lidar2base_publisher:
     lidar2base_y: 0.0
     lidar2base_z: 0.0
     lidar2base_roll: 0.0
-    lidar2base_pitch: 0.0 # 15 degrees inclined
+    lidar2base_pitch: 0.0
     lidar2base_yaw: 0.0
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
 
+# Transform between map and robotmap for the multi robot scenario
 map2robotmap_publisher:
   ros__parameters:
     enable_map2robotmap_publisher: true
@@ -39,14 +40,14 @@ clock_publisher_ros2:
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
-    enable_prefiltering: false
-    
+    enable_prefiltering: true
+
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
-    downsample_method: "NONE"
+    downsample_method: "VOXELGRID"
     downsample_resolution: 0.1
     
     # Outlier removal method options [STATISTICAL, RADIUS, NONE]
-    outlier_removal_method: "NONE" 
+    outlier_removal_method: "RADIUS" 
     # Further parameters when choosing STATISTICAL
     statistical_mean_k: 30
     statistical_stddev: 1.2
@@ -68,11 +69,11 @@ prefiltering_component:
 # Scan matching component parameters
 scan_matching_odometry_component:
   ros__parameters:
-    enable_scan_matching_odometry: false
+    enable_scan_matching_odometry: true
 
     points_topic: "/velodyne_points"
-    odom_frame_id: "odom"
-    robot_odom_frame_id: "robot_odom"
+    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
     keyframe_delta_angle: 1.0
@@ -107,21 +108,21 @@ floor_detection_component:
   ros__parameters:
     enable_floor_detection: false
     tilt_deg: 0.0
-    sensor_height: 0.716 # https://app.gazebosim.org/OpenRobotics/fuel/models/COSTAR_HUSKY_SENSOR_CONFIG_1
+    sensor_height: 2.0
     height_clip_range: 1.0
-    floor_pts_thresh: 200 # to be tested
+    floor_pts_thresh: 512
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    points_topic: "/velodyne_points"
+    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
 
 # HDL graph slam component parameters
 hdl_graph_slam_component:
   ros__parameters:
-    own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
+    own_name: "atlas"
+    /properties/scenario/rovers/names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -156,41 +157,29 @@ hdl_graph_slam_component:
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
     # loop closure params
-    distance_thresh: 15.0
+    distance_thresh: 35.0
     accum_distance_thresh: 25.0
     min_edge_interval: 15.0
     fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
     use_planar_registration_guess: false
-    loop_closure_edge_robust_kernel: "Cauchy" # "NONE"
-    loop_closure_edge_robust_kernel_size: 0.1 # 1.0
+    loop_closure_edge_robust_kernel: "Huber"
+    loop_closure_edge_robust_kernel_size: 1.0
     use_loop_closure_consistency_check: true
     loop_closure_consistency_max_delta_trans: 0.1  # meter
     loop_closure_consistency_max_delta_angle: 3.0  # degree
-    # scan matching params, registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
+    # scan matching params
     registration_method: "FAST_GICP"
     reg_num_threads: 0
     reg_transformation_epsilon: 0.1
     reg_maximum_iterations: 64
     reg_max_correspondence_distance: 2.0
     reg_max_optimizer_iterations: 20
-    reg_use_reciprocal_correspondences: true # false
+    reg_use_reciprocal_correspondences: false
     reg_correspondence_randomness: 20
-    reg_resolution: 0.8 # 1.0 
+    reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
-    # scan context ++ params
-    sc_lidar_height: 0.71 # husky 0.71, spot tbd
-    sc_pc_num_ring: 20
-    sc_pc_num_sector: 60
-    sc_pc_max_radius: 80.0
-    # scan context tree params
-    sc_num_exclude_recent: 10
-    sc_num_candidates_from_tree: 10
-    # loop threshold
-    sc_search_ratio: 0.1
-    sc_dist_thres: 0.13
-    sc_tree_making_period: 50
-    # edge params
+    #  edge params
     # GPS
     gps_edge_robust_kernel: "NONE"
     gps_edge_robust_kernel_size: 1.0
@@ -207,10 +196,9 @@ hdl_graph_slam_component:
     floor_edge_stddev: 10.0
     # scan matching
     # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
-    odometry_edge_robust_kernel: "Cauchy" # "NONE"
-    odometry_edge_robust_kernel_size: 0.1 # 1.0
+    odometry_edge_robust_kernel: "NONE"
+    odometry_edge_robust_kernel_size: 1.0
     use_const_inf_matrix: false
-    # information matrix parameters
     const_stddev_x: 0.5
     const_stddev_q: 0.1
     var_gain_a: 20.0
@@ -219,9 +207,9 @@ hdl_graph_slam_component:
     min_stddev_q: 0.05
     max_stddev_q: 0.2
     # update params
-    graph_update_interval: 3.0
-    map_cloud_update_interval: 10.0
-    map_cloud_resolution: 0.5
+    graph_update_interval: 1.0
+    map_cloud_update_interval: 1.0
+    map_cloud_resolution: 0.05
     save_graph: false
     # remappings are handled in the python respective launch file
 
@@ -230,8 +218,8 @@ hdl_graph_slam_component:
 multi_robot_communicator:
   ros__parameters:
     enable_multi_robot_communicator: false
-    own_name: "husky1"
-    robot_names: ["husky1", "husky4"]
+    own_name: "atlas"
+    robot_names: ["atlas", "bestla"]
     publish_graph_trigger_mode: "slam"
     graph_request_min_accum_dist: 3.0
     graph_request_max_robot_dist: 10.0

@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "atlas"
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -21,7 +21,7 @@ lidar2base_publisher:
 
 map2robotmap_publisher:
   ros__parameters:
-    enable_map2robotmap_publisher: false
+    enable_map2robotmap_publisher: true
     map2robotmap_x: 0.0
     map2robotmap_y: 0.0
     map2robotmap_z: 0.0
@@ -71,8 +71,8 @@ scan_matching_odometry_component:
     enable_scan_matching_odometry: true
 
     points_topic: "/velodyne_points"
-    odom_frame_id: "odom"
-    robot_odom_frame_id: "robot_odom"
+    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
     keyframe_delta_angle: 1.0
@@ -113,7 +113,7 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    points_topic: "/velodyne_points"
+    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
 
@@ -142,12 +142,13 @@ hdl_graph_slam_component:
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
     g2o_solver_num_iterations: 512
+    g2o_verbose: false
     # constraint switches
     enable_gps: false
     enable_imu_acceleration: false
     enable_imu_orientation: false
     # keyframe registration params
-    max_keyframes_per_update: 10
+    max_keyframes_per_update: 10000
     keyframe_delta_trans: 2.0
     keyframe_delta_angle: 2.0
     # fix first node for optimization stability
@@ -163,6 +164,9 @@ hdl_graph_slam_component:
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
+    use_loop_closure_consistency_check: true
+    loop_closure_consistency_max_delta_trans: 0.1  # meter
+    loop_closure_consistency_max_delta_angle: 3.0  # degree
     # scan matching params
     registration_method: "FAST_GICP"
     reg_num_threads: 0
@@ -174,7 +178,7 @@ hdl_graph_slam_component:
     reg_correspondence_randomness: 20
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
-    # edge params
+    #  edge params
     # GPS
     gps_edge_robust_kernel: "NONE"
     gps_edge_robust_kernel_size: 1.0

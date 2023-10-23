@@ -137,7 +137,7 @@ public:
     /**
      * @brief perform graph optimization
      */
-    int optimize( int num_iterations );
+    int optimize( int num_iterations, bool verbose = false );
 
     /**
      * @brief computes the covariance matrices for the given vertices, access result via

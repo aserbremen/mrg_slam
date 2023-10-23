@@ -23,7 +23,8 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     cloud->reserve( keyframes.front()->cloud->size() * keyframes.size() );
 
     for( const auto& keyframe : keyframes ) {
-        if( keyframe->exclude_from_map ) {
+        // Exclude points from the first keyframe, since they might include points of rovers that have not been filtered
+        if( keyframe->first_keyframe ) {
             continue;
         }
         Eigen::Matrix4f pose = keyframe->pose.matrix().cast<float>();
@@ -64,7 +65,7 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
     voxelGridFilter.filter( *filtered );
 
-    std::cout << filtered->size() << std::endl;
+    std::cout << "Generating map with resolution " << resolution << " and size " << filtered->size() << std::endl;
 
     return filtered;
 }

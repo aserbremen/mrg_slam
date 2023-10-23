@@ -66,13 +66,14 @@ def print_remappings(remappings, header=None):
 
 def launch_setup(context, *args, **kwargs):
 
+    config_file = 'hdl_multi_robot_graph_slam.yaml'
+    if 'config' in context.launch_configurations:
+        config_file = context.launch_configurations['config']
     config_file_path = os.path.join(
         get_package_share_directory('hdl_graph_slam'),
         'config',
-        'hdl_multi_robot_graph_slam.yaml'
+        config_file
     )
-    if 'config' in context.launch_configurations:
-        config_file_path = context.launch_configurations['config']
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
@@ -234,6 +235,9 @@ def launch_setup(context, *args, **kwargs):
               ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
               ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),]
     print_remappings(remaps, 'scan_matching_odometry_component')
+    # set the correct frame ids according to the model namespace
+    scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
+    scan_matching_odometry_params['robot_odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
     if scan_matching_odometry_params['enable_scan_matching_odometry']:
         scan_matching_odometry_node = ComposableNode(
             package='hdl_graph_slam',
@@ -271,6 +275,9 @@ def launch_setup(context, *args, **kwargs):
     hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
     hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
     hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
+    # set the correct frame ids according to the model namespace
+    hdl_graph_slam_params['map_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['map_frame_id']
+    hdl_graph_slam_params['odom_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['odom_frame_id']
     remaps = [('/imu/data', shared_params['imu_topic']),
               ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
               ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
@@ -288,6 +295,7 @@ def launch_setup(context, *args, **kwargs):
               ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
               ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
               ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
+              ('/hdl_graph_slam/save_gids', '/' + model_namespace + '/hdl_graph_slam/save_gids'),
               ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
     print_remappings(remaps, 'hdl_graph_slam_component')
     hdl_graph_slam_node = ComposableNode(

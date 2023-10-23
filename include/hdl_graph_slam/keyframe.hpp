@@ -8,9 +8,9 @@
 #include <pcl/point_types.h>
 
 #include <boost/optional.hpp>
-#include <hdl_graph_slam/global_id.hpp>
-// ROS2 migration
 #include <builtin_interfaces/msg/time.hpp>
+#include <hdl_graph_slam/edge.hpp>
+#include <hdl_graph_slam/global_id.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
@@ -51,12 +51,12 @@ public:
     bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
 public:
-    builtin_interfaces::msg::Time     stamp;                     // timestamp
-    Eigen::Isometry3d                 odom;                      // odometry (estimated by scan_matching_odometry)
-    double                            accum_distance;            // accumulated distance from the first node (by scan_matching_odometry)
-    GlobalId                          gid;                       // global id
-    bool                              exclude_from_map;          // whether the corresponding point cloud should be excluded from the map
-    pcl::PointCloud<PointT>::ConstPtr cloud;                     // point cloud
+    builtin_interfaces::msg::Time stamp;           // timestamp
+    Eigen::Isometry3d             odom;            // odometry (estimated by scan_matching_odometry)
+    double                        accum_distance;  // accumulated distance from the first node (by scan_matching_odometry)
+    GlobalId                      gid;             // global id
+    bool                          first_keyframe;  // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    pcl::PointCloud<PointT>::ConstPtr             cloud;         // point cloud
     sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg;     // point cloud ROS msg
     boost::optional<Eigen::Vector4d>              floor_coeffs;  // detected floor's coefficients
     boost::optional<Eigen::Vector3d>              utm_coord;     // UTM coord obtained by GPS
@@ -65,6 +65,9 @@ public:
     boost::optional<Eigen::Quaterniond> orientation;   //
 
     g2o::VertexSE3* node;  // node instance
+
+    Edge::Ptr prev_edge = nullptr;  // previous edge TYPE_ODOM
+    Edge::Ptr next_edge = nullptr;  // next edge TYPE_ODOM
 };
 
 /**
@@ -79,7 +82,7 @@ public:
 
     KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals = nullptr );
     /*
-    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool exclude_from_map = false,
+    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool first_keyframe = false,
                       const Eigen::MatrixXd* covariance = nullptr );
                       */
 
@@ -88,11 +91,11 @@ public:
 public:
     builtin_interfaces::msg::Time     stamp;  // timestamp
     long                              id;
-    GlobalId                          gid;               // global id
-    Eigen::Isometry3d                 pose;              // pose estimated by graph optimization
-    pcl::PointCloud<PointT>::ConstPtr cloud;             // point cloud
-    bool                              exclude_from_map;  // whether the corresponding point cloud should be excluded from the map
-    Eigen::MatrixXd                   covariance;
+    GlobalId                          gid;    // global id
+    Eigen::Isometry3d                 pose;   // pose estimated by graph optimization
+    pcl::PointCloud<PointT>::ConstPtr cloud;  // point cloud
+    bool            first_keyframe;           // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    Eigen::MatrixXd covariance;
 };
 
 }  // namespace hdl_graph_slam
