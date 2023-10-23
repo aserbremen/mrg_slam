@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "atlas"
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -14,11 +14,12 @@ lidar2base_publisher:
     lidar2base_y: 0.0
     lidar2base_z: 0.0
     lidar2base_roll: 0.0
-    lidar2base_pitch: 0.0 # 15 degrees inclined
+    lidar2base_pitch: 0.0
     lidar2base_yaw: 0.0
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
 
+# Transform between map and robotmap for the multi robot scenario
 map2robotmap_publisher:
   ros__parameters:
     enable_map2robotmap_publisher: true
@@ -71,8 +72,8 @@ scan_matching_odometry_component:
     enable_scan_matching_odometry: true
 
     points_topic: "/velodyne_points"
-    odom_frame_id: "odom"
-    robot_odom_frame_id: "robot_odom"
+    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
     keyframe_delta_angle: 1.0
@@ -113,7 +114,7 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    points_topic: "/velodyne_points"
+    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
 
@@ -208,7 +209,7 @@ hdl_graph_slam_component:
     # update params
     graph_update_interval: 1.0
     map_cloud_update_interval: 1.0
-    map_cloud_resolution: 0.15
+    map_cloud_resolution: 0.05
     save_graph: false
     # remappings are handled in the python respective launch file
 

@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "atlas"
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -71,8 +71,8 @@ scan_matching_odometry_component:
     enable_scan_matching_odometry: true
 
     points_topic: "/velodyne_points"
-    odom_frame_id: "odom"
-    robot_odom_frame_id: "robot_odom"
+    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
     keyframe_delta_angle: 1.0
@@ -113,7 +113,7 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    points_topic: "/velodyne_points"
+    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
 
@@ -178,18 +178,6 @@ hdl_graph_slam_component:
     reg_correspondence_randomness: 20
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
-    # scan context ++ params
-    sc_lidar_height: 0.71 # husky 0.71, spot tbd
-    sc_pc_num_ring: 20
-    sc_pc_num_sector: 60
-    sc_pc_max_radius: 80.0
-    # scan context tree params
-    sc_num_exclude_recent: 10
-    sc_num_candidates_from_tree: 10
-    # loop threshold
-    sc_search_ratio: 0.1
-    sc_sc_dist_thres: 0.13
-    sc_tree_making_period: 50
     #  edge params
     # GPS
     gps_edge_robust_kernel: "NONE"
