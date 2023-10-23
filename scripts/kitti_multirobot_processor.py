@@ -2,7 +2,10 @@ import os
 import fire
 import datetime
 import time
+import subprocess
 from tqdm import tqdm
+import signal
+import sys
 
 import rclpy
 from rclpy.node import Node
@@ -41,9 +44,11 @@ class KittiMultiRobotProcessor(Node):
         super().__init__('kitti_multirobot_processor')
 
         self.robot_name = self.declare_parameter('robot_name', 'atlas').value
-        self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti_dataset/data_odometry_velodyne/dataset/').value
+        self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
+        self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', '00').value
         self.rate = self.declare_parameter('rate', 10.0).value
+        self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
         point_cloud_topic = self.robot_name + '/velodyne_points'
@@ -67,6 +72,14 @@ class KittiMultiRobotProcessor(Node):
         self.slam_status = msg
 
     def start_playback(self):
+        # Start the slam node in a subprocess
+        slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py',
+                    'mode_namespace:=' + self.robot_name, 'config:=' + self.slam_config]
+        with open(os.path.join(self.result_dir, 'slam.log'), mode='w') as slam_log:
+            self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
+            print(f'Started slam node with cmd {slam_cmd}')
+            print(f'Started slam node with pid {self.slam_process.pid}')
+        time.sleep(2)
         self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
         print(f'Starting playback with rate {self.rate:.2f}x')
         self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
@@ -126,6 +139,8 @@ class KittiMultiRobotProcessor(Node):
 
     def finalize_playback(self):
         # call the dumb and save graph service on hdl graph slam
+        self.slam_process.send_signal(subprocess.signal.SIGINT)
+        self.slam_process.wait(timeout=10)
         self.progress_bar.close()
 
     def plot_trajectories(self):
@@ -192,11 +207,14 @@ def print_info(executor, kitti_processor: KittiMultiRobotProcessor):
     spin(executor, kitti_processor)
 
 
-def spin(executor, node):
+def spin(executor: MultiThreadedExecutor, node: KittiMultiRobotProcessor):
+    # make sure all SIGINT are captured
+    signal.signal(signal.SIGINT, signal.default_int_handler)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        print('Trying to gracefully shutdown')
+        node.finalize_playback()
     finally:
         executor.shutdown()
         node.destroy_node()
