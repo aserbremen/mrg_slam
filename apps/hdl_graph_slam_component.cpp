@@ -1367,7 +1367,7 @@ private:
         }
 
         if( !boost::filesystem::is_directory( directory ) ) {
-            boost::filesystem::create_directory( directory );
+            boost::filesystem::create_directories( directory );
         }
 
         std::cout << "all data dumped to:" << directory << std::endl;
@@ -1445,7 +1445,7 @@ private:
         // res.success = ret == 0;
         auto dir = boost::filesystem::path( req->destination ).remove_filename();
         if( !boost::filesystem::is_directory( dir ) ) {
-            boost::filesystem::create_directory( dir );
+            boost::filesystem::create_directories( dir );
         }
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
