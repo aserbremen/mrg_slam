@@ -6,18 +6,19 @@ import subprocess
 from tqdm import tqdm
 import signal
 import sys
+from threading import Event
 
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
-from pprint import pprint
 
 from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Path
 from vamex_slam_msgs.msg import SlamStatus
+from vamex_slam_msgs.srv import DumpGraph, SaveMap
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -49,6 +50,7 @@ class KittiMultiRobotProcessor(Node):
         self.sequence = self.declare_parameter('sequence', '00').value
         self.rate = self.declare_parameter('rate', 10.0).value
         self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
+
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
         point_cloud_topic = self.robot_name + '/velodyne_points'
@@ -66,22 +68,71 @@ class KittiMultiRobotProcessor(Node):
 
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-        # assert (len(self.timestamps) == len(list(self.dataset.velo)))
+
+        self.playback_length = self.declare_parameter('playback_length', 35).value
+
+        self.service_done_event = Event()
+
+        self.dump_service_client = self.create_client(
+            DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
+        self.save_map_client = self.create_client(
+            SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
+
+        self.done = False
+
+        self.slam_process = None  # type: subprocess.Popen
+        self.progress_bar = None  # type: tqdm
 
     def slam_status_callback(self, msg: SlamStatus):
         self.slam_status = msg
 
-    def start_playback(self):
+    def perform_async_service_call(self, client, request, timeout):
+        while client.wait_for_service(timeout_sec=1.0) is False:
+            print('service', client.srv_name,
+                  'not available, waiting again...')
+
+        print('service', client.srv_name, 'calling async')
+        self.service_done_event.clear()
+        event = Event()
+
+        def done_callback(future):
+            nonlocal event
+            event.set()
+
+        future = client.call_async(request)
+        print('adding done callback')
+        future.add_done_callback(done_callback)
+        print(f'waiting for done callback with timeout {timeout}')
+        event_done = event.wait(timeout=timeout)
+        if not event_done:
+            print('service', client.srv_name, 'timed out')
+            return None
+        else:
+            print('service', client.srv_name, 'done')
+            result = future.result()
+            print('returning result')
+            return result
+
+    def get_result_callback(self, future):
+        # Signal that action is done
+        self.service_done_event.set()
+
+    def playback(self):
+        # create the results directory
+        if not os.path.exists(os.path.join(self.result_dir, self.sequence)):
+            os.makedirs(os.path.join(self.result_dir, self.sequence))
         # Start the slam node in a subprocess
         slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py',
                     'mode_namespace:=' + self.robot_name, 'config:=' + self.slam_config]
-        with open(os.path.join(self.result_dir, 'slam.log'), mode='w') as slam_log:
+        with open(os.path.join(self.result_dir, self.sequence, 'slam.log'), mode='w') as slam_log:
             self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
-            print(f'Started slam node with cmd {slam_cmd}')
-            print(f'Started slam node with pid {self.slam_process.pid}')
-        time.sleep(2)
-        self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
+            print(f'Started slam node with pid {self.slam_process.pid} and cmd:')
+            print(' '.join(slam_cmd))
+        time.sleep(1)
+        if self.playback_length > 0 and self.playback_length < len(self.timestamps):
+            self.timestamps = self.timestamps[:self.playback_length]
         print(f'Starting playback with rate {self.rate:.2f}x')
+        self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
         self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
                                        callback_group=self.reentrant_callback_group)
 
@@ -104,7 +155,6 @@ class KittiMultiRobotProcessor(Node):
         # Float 32 is 4 bytes and there are 4 fields
         ros_pcl.point_step = len(ros_pcl.fields) * 4
         ros_pcl.row_step = ros_pcl.point_step * num_points
-
         ros_pcl.data = velo.tobytes()
 
         return ros_pcl
@@ -138,10 +188,30 @@ class KittiMultiRobotProcessor(Node):
             self.timer.reset()
 
     def finalize_playback(self):
+        print('Finalizing playback')
         # call the dumb and save graph service on hdl graph slam
-        self.slam_process.send_signal(subprocess.signal.SIGINT)
-        self.slam_process.wait(timeout=10)
-        self.progress_bar.close()
+        dump_request = DumpGraph.Request()
+        dump_request.destination = os.path.join(self.result_dir, self.sequence, 'g2o')
+        self.perform_async_service_call(self.dump_service_client, dump_request, timeout=4.0)
+
+        save_map_request = SaveMap.Request()
+        save_map_request.destination = os.path.join(self.result_dir, self.sequence, 'map')
+
+        # self.save_map = self.create_client(SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map')
+        save_map_request = SaveMap.Request()
+        save_map_request.destination = os.path.join(self.result_dir, self.sequence, 'map.pcd')
+        save_map_request.resolution = -1.0  # save full resolution
+        self.perform_async_service_call(self.save_map_client, save_map_request, timeout=4.0)
+
+        if self.slam_process is not None:
+            print('Sending SIGINT to slam process')
+            self.slam_process.send_signal(subprocess.signal.SIGINT)
+            self.slam_process.wait(timeout=10)
+        if self.progress_bar is not None:
+            print('Closing progress bar')
+            self.progress_bar.close()
+
+        sys.exit(0)
 
     def plot_trajectories(self):
         cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
@@ -197,8 +267,8 @@ def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
     spin(executor, kitti_processor)
 
 
-def start_playback(executor, kitti_processor: KittiMultiRobotProcessor):
-    kitti_processor.start_playback()
+def playback(executor, kitti_processor: KittiMultiRobotProcessor):
+    kitti_processor.playback()
     spin(executor, kitti_processor)
 
 
@@ -230,7 +300,7 @@ def main(args=None):
 
     fire.Fire({
         'plot_trajectories': lambda: plot_trajectories(executor, kitti_processor),
-        'start_playback': lambda: start_playback(executor, kitti_processor),
+        'playback': lambda: playback(executor, kitti_processor),
         'print_info': lambda: print_info(executor, kitti_processor),
     })
 
