@@ -71,8 +71,6 @@ class KittiMultiRobotProcessor(Node):
 
         self.playback_length = self.declare_parameter('playback_length', 35).value
 
-        self.service_done_event = Event()
-
         self.dump_service_client = self.create_client(
             DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
         self.save_map_client = self.create_client(
@@ -86,36 +84,21 @@ class KittiMultiRobotProcessor(Node):
     def slam_status_callback(self, msg: SlamStatus):
         self.slam_status = msg
 
+    def done_callback(self, future):
+        print('done callback called')
+        print(future.result())
+        self.result = future.result()
+
     def perform_async_service_call(self, client, request, timeout):
         while client.wait_for_service(timeout_sec=1.0) is False:
             print('service', client.srv_name,
                   'not available, waiting again...')
 
         print('service', client.srv_name, 'calling async')
-        self.service_done_event.clear()
-        event = Event()
-
-        def done_callback(future):
-            nonlocal event
-            event.set()
 
         future = client.call_async(request)
         print('adding done callback')
-        future.add_done_callback(done_callback)
-        print(f'waiting for done callback with timeout {timeout}')
-        event_done = event.wait(timeout=timeout)
-        if not event_done:
-            print('service', client.srv_name, 'timed out')
-            return None
-        else:
-            print('service', client.srv_name, 'done')
-            result = future.result()
-            print('returning result')
-            return result
-
-    def get_result_callback(self, future):
-        # Signal that action is done
-        self.service_done_event.set()
+        future.add_done_callback(self.done_callback)
 
     def playback(self):
         # create the results directory
@@ -188,6 +171,8 @@ class KittiMultiRobotProcessor(Node):
             self.timer.reset()
 
     def finalize_playback(self):
+        # TODO Perform graceful shutdown in sequential callbacks instead of this, by adding callbacks to the
+        # subsequent callbacks
         print('Finalizing playback')
         # call the dumb and save graph service on hdl graph slam
         dump_request = DumpGraph.Request()
@@ -281,7 +266,7 @@ def spin(executor: MultiThreadedExecutor, node: KittiMultiRobotProcessor):
     # make sure all SIGINT are captured
     signal.signal(signal.SIGINT, signal.default_int_handler)
     try:
-        rclpy.spin(node)
+        rclpy.spin(node=node, executor=executor)
     except KeyboardInterrupt:
         print('Trying to gracefully shutdown')
         node.finalize_playback()
