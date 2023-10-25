@@ -1450,6 +1450,14 @@ private:
         int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
         res->success = ret == 0;
 
+        if( res->success ) {
+            std::cout << "saved " << cloud->points.size() << " with resolution " << req->resolution << " points to " << req->destination
+                      << std::endl;
+        } else {
+            std::cout << "failed to save " << cloud->points.size() << " with resolution " << req->resolution << " points to "
+                      << req->destination << std::endl;
+        }
+
         // ROS2 services are of type void and dont return a bool.
         // return true;
     }
