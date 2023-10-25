@@ -6,7 +6,7 @@ import subprocess
 from tqdm import tqdm
 import signal
 import sys
-from threading import Event
+from enum import Enum
 
 import rclpy
 from rclpy.node import Node
@@ -33,6 +33,14 @@ import pykitti
 # dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
 
 
+class Task(Enum):
+    PLAYBACK = 0
+    DUMP_GRAPH = 1
+    SAVE_MAP = 2
+    SHUTDOWN_SLAM = 3
+    SHUTDOWN_NODE = 4
+
+
 def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
     ros_ts = Time()
     ros_ts.sec = int(pykitti_ts.total_seconds())
@@ -48,8 +56,12 @@ class KittiMultiRobotProcessor(Node):
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', '00').value
-        self.rate = self.declare_parameter('rate', 10.0).value
+        self.rate = self.declare_parameter('rate', 25.0).value
         self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
+        self.playback_length = self.declare_parameter('playback_length', 35).value
+        self.map_resolution = self.declare_parameter('map_resolution', -1).value
+
+        self.task = None
 
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
@@ -69,38 +81,17 @@ class KittiMultiRobotProcessor(Node):
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
 
-        self.playback_length = self.declare_parameter('playback_length', 35).value
-
         self.dump_service_client = self.create_client(
             DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
         self.save_map_client = self.create_client(
             SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
 
-        self.done = False
-
         self.slam_process = None  # type: subprocess.Popen
         self.progress_bar = None  # type: tqdm
 
-    def slam_status_callback(self, msg: SlamStatus):
-        self.slam_status = msg
-
-    def done_callback(self, future):
-        print('done callback called')
-        print(future.result())
-        self.result = future.result()
-
-    def perform_async_service_call(self, client, request, timeout):
-        while client.wait_for_service(timeout_sec=1.0) is False:
-            print('service', client.srv_name,
-                  'not available, waiting again...')
-
-        print('service', client.srv_name, 'calling async')
-
-        future = client.call_async(request)
-        print('adding done callback')
-        future.add_done_callback(self.done_callback)
-
-    def playback(self):
+    def start_playback(self):
+        self.dump_graph_requested = False
+        self.save_map_requested = False
         # create the results directory
         if not os.path.exists(os.path.join(self.result_dir, self.sequence)):
             os.makedirs(os.path.join(self.result_dir, self.sequence))
@@ -111,13 +102,32 @@ class KittiMultiRobotProcessor(Node):
             self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
             print(f'Started slam node with pid {self.slam_process.pid} and cmd:')
             print(' '.join(slam_cmd))
-        time.sleep(1)
+        time.sleep(2)
         if self.playback_length > 0 and self.playback_length < len(self.timestamps):
             self.timestamps = self.timestamps[:self.playback_length]
         print(f'Starting playback with rate {self.rate:.2f}x')
         self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
-        self.timer = self.create_timer(1.0 / self.rate, self.playback_timer,
-                                       callback_group=self.reentrant_callback_group)
+        self.task = Task.PLAYBACK
+        self.task_timer = self.create_timer(1.0 / self.rate, self.task_timer_callback, callback_group=self.reentrant_callback_group)
+
+    def task_timer_callback(self):
+        self.task_timer.cancel()
+        if self.task == Task.PLAYBACK:
+            self.playback()
+        elif self.task == Task.DUMP_GRAPH:
+            self.dump_graph()
+        elif self.task == Task.SAVE_MAP:
+            self.save_map()
+        elif self.task == Task.SHUTDOWN_SLAM:
+            self.shutdown_slam()
+        elif self.task == Task.SHUTDOWN_NODE:
+            self.shutdown_node()
+        else:
+            print('Unknown task')
+        self.task_timer.reset()
+
+    def slam_status_callback(self, msg: SlamStatus):
+        self.slam_status = msg
 
     def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
         # create a ROS2 PointCloud2 message
@@ -147,10 +157,8 @@ class KittiMultiRobotProcessor(Node):
         clock_msg.clock = stamp
         self.clock_pub.publish(clock_msg)
 
-    def playback_timer(self):
-        self.timer.cancel()
+    def playback(self):
         if self.slam_status.in_optimization or self.slam_status.in_loop_closure:
-            self.timer.reset()
             return
 
         velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
@@ -164,116 +172,67 @@ class KittiMultiRobotProcessor(Node):
         self.point_cloud_counter += 1
 
         if self.point_cloud_counter >= len(self.timestamps):
-            self.timer.cancel()
-            print('Finished playback')
-            self.finalize_playback()
-        else:
-            self.timer.reset()
+            self.progress_bar.close()
+            print('Finished playback and closed progress bar')
+            self.task = Task.DUMP_GRAPH
+            # self.finalize_playback()
 
-    def finalize_playback(self):
-        # TODO Perform graceful shutdown in sequential callbacks instead of this, by adding callbacks to the
-        # subsequent callbacks
-        print('Finalizing playback')
+    def perform_async_service_call(self, client, request):
+        while client.wait_for_service(timeout_sec=1.0) is False:
+            print('service', client.srv_name, 'not available, waiting again...')
+
+        print('calling async service', client.srv_name)
+        future = client.call_async(request)
+        if isinstance(request, DumpGraph.Request):
+            future.add_done_callback(self.done_dump_graph_callback)
+        if isinstance(request, SaveMap.Request):
+            future.add_done_callback(self.done_save_map_callback)
+
+    def done_dump_graph_callback(self, future):
+        print(future.result())
+        self.result = future.result()
+        print(f'Dump graph service call success? {self.result.success}')
+        self.task = Task.SAVE_MAP
+
+    def done_save_map_callback(self, future):
+        print(future.result())
+        self.result = future.result()
+        print(f'Save map service call success? {self.result.success}')
+        self.task = Task.SHUTDOWN_SLAM
+
+    def dump_graph(self):
+        if self.dump_graph_requested:
+            return
+        self.dump_graph_requested = True
         # call the dumb and save graph service on hdl graph slam
         dump_request = DumpGraph.Request()
         dump_request.destination = os.path.join(self.result_dir, self.sequence, 'g2o')
-        self.perform_async_service_call(self.dump_service_client, dump_request, timeout=4.0)
+        self.perform_async_service_call(self.dump_service_client, dump_request)
 
+    def save_map(self):
+        if self.save_map_requested:
+            return
+        # call the dumb and save graph service on hdl graph slam
         save_map_request = SaveMap.Request()
         save_map_request.destination = os.path.join(self.result_dir, self.sequence, 'map')
+        save_map_request.resolution = self.map_resolution
+        self.save_map_requested = True
+        self.perform_async_service_call(self.save_map_client, save_map_request)
 
-        # self.save_map = self.create_client(SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map')
-        save_map_request = SaveMap.Request()
-        save_map_request.destination = os.path.join(self.result_dir, self.sequence, 'map.pcd')
-        save_map_request.resolution = -1.0  # save full resolution
-        self.perform_async_service_call(self.save_map_client, save_map_request, timeout=4.0)
-
+    def shutdown_slam(self):
         if self.slam_process is not None:
             print('Sending SIGINT to slam process')
             self.slam_process.send_signal(subprocess.signal.SIGINT)
             self.slam_process.wait(timeout=10)
-        if self.progress_bar is not None:
-            print('Closing progress bar')
-            self.progress_bar.close()
+            print('Slam process terminated')
+        self.task = Task.SHUTDOWN_NODE
 
-        sys.exit(0)
-
-    def plot_trajectories(self):
-        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
-        self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        tolerance = 0.5
-        ax.plot([pose[0, 3] for pose in self.velo_gt_poses], [pose[1, 3]
-                for pose in self.velo_gt_poses], 'r-', label='velo', picker=tolerance)
-        intervals = 20
-        idxs = np.floor(np.linspace(0, len(self.velo_gt_poses) - 1, intervals)).astype(int)
-        print(f'num poses {len(self.velo_gt_poses)} idxs {idxs}')
-        for i, idx in enumerate(idxs):
-            if i == 0:
-                ax.text(self.velo_gt_poses[0][0, 3], self.velo_gt_poses[0][1, 3], 'start')
-            if i == len(idxs) - 1:
-                ax.text(self.velo_gt_poses[-1][0, 3], self.velo_gt_poses[-1][1, 3], 'end')
-            else:
-                ax.text(self.velo_gt_poses[idx][0, 3], self.velo_gt_poses[idx][1, 3],
-                        f'{i*100/intervals}%')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_aspect('equal')
-        ax.legend()
-
-        def on_pick(self, event):
-            artist = event.artist
-            xmouse, ymouse = event.mouseevent.xdata, event.mouseevent.ydata
-            print(f'xmouse {xmouse:.2f}, ymouse {ymouse:.2f}')
-            x, y = artist.get_xdata(), artist.get_ydata()
-            index = event.ind
-            print(f'indexes {index}')
-            print(f'timestamp {self.timestamps[index].total_seconds()} pose {self.velo_gt_poses[index]}')
-        fig.canvas.mpl_connect('pick_event', on_pick)
-        plt.show()
-
-    # print info about all the chosen sequences
-    def print_info(self):
-        print(f'sequences {self.dataset.sequence}')
-        print(f'number of point clouds {len(self.timestamps)}')
-        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
-        velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
-        traveled_distance = 0
-        for i in range(len(velo_gt_poses) - 1):
-            traveled_distance += np.linalg.norm(velo_gt_poses[i][0:3, 3] - velo_gt_poses[i + 1][0:3, 3])
-        print(f'total traveled distance {traveled_distance}')
-        num_pcl_points = [velo.shape[0] for velo in self.dataset.velo]
-        print(f'mean number of points pcl {np.mean(num_pcl_points)} std {np.std(num_pcl_points)}')
-
-
-def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
-    kitti_processor.plot_trajectories()
-    spin(executor, kitti_processor)
-
-
-def playback(executor, kitti_processor: KittiMultiRobotProcessor):
-    kitti_processor.playback()
-    spin(executor, kitti_processor)
-
-
-def print_info(executor, kitti_processor: KittiMultiRobotProcessor):
-    kitti_processor.print_info()
-    spin(executor, kitti_processor)
-
-
-def spin(executor: MultiThreadedExecutor, node: KittiMultiRobotProcessor):
-    # make sure all SIGINT are captured
-    signal.signal(signal.SIGINT, signal.default_int_handler)
-    try:
-        rclpy.spin(node=node, executor=executor)
-    except KeyboardInterrupt:
-        print('Trying to gracefully shutdown')
-        node.finalize_playback()
-    finally:
-        executor.shutdown()
-        node.destroy_node()
+    def shutdown_node(self):
+        print('Shutting down node, rclpy, and sys')
+        self.destroy_node()
         rclpy.shutdown()
+        print('Shutting down system')
+        sys.exit()
 
 
 def main(args=None):
@@ -283,11 +242,18 @@ def main(args=None):
     kitti_processor = KittiMultiRobotProcessor()
     executor.add_node(kitti_processor)
 
-    fire.Fire({
-        'plot_trajectories': lambda: plot_trajectories(executor, kitti_processor),
-        'playback': lambda: playback(executor, kitti_processor),
-        'print_info': lambda: print_info(executor, kitti_processor),
-    })
+    kitti_processor.start_playback()
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    try:
+        rclpy.spin(node=kitti_processor, executor=executor)
+    except KeyboardInterrupt:
+        print('Trying to gracefully shutdown')
+        kitti_processor.shutdown_slam()
+        kitti_processor.shutdown_node()
+    finally:
+        print('Shutting down')
+        kitti_processor.destroy_node()
+        executor.shutdown()
 
 
 if __name__ == '__main__':
