@@ -157,7 +157,7 @@ hdl_graph_slam_component:
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
     # loop closure params
-    distance_thresh: 35.0
+    distance_thresh: 20.0
     accum_distance_thresh: 25.0
     min_edge_interval: 15.0
     fitness_score_max_range: .inf
