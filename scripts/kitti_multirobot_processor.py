@@ -70,9 +70,10 @@ class KittiMultiRobotProcessor(Node):
         self.rate = self.declare_parameter('rate', 25.0).value
         self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
-        self.map_resolution = self.declare_parameter('map_resolution', -1).value
-        self.start_time = self.declare_parameter('start_time', 240.0).value
-        self.end_time = self.declare_parameter('end_time', 260.0).value
+        # -1 means all points of the pointcloud, otherwise voxel size
+        self.map_resolution = self.declare_parameter('map_resolution', -1.0).value
+        self.start_time = self.declare_parameter('start_time', 244.5).value
+        self.end_time = self.declare_parameter('end_time', 249.5).value
 
         self.task = None
 
@@ -80,6 +81,7 @@ class KittiMultiRobotProcessor(Node):
 
         self.robots = dict()
 
+        # Setup all robots with dictionaries for their publishers, subscribers, and services, flags
         for robot_name in self.robot_names:
             self.robots[robot_name] = dict()
             point_cloud_topic = robot_name + '/velodyne_points'
@@ -91,29 +93,33 @@ class KittiMultiRobotProcessor(Node):
             self.robots[robot_name]['slam_status'] = SlamStatus()  # type: SlamStatus
             self.robots[robot_name]['min_timestamp'] = self.min_times[self.robot_names.index(robot_name)]
             self.robots[robot_name]['max_timestamp'] = self.max_times[self.robot_names.index(robot_name)]
+            if self.robots[robot_name]['min_timestamp'] < self.start_time:
+                self.robots[robot_name]['min_timestamp'] = self.start_time
+            if self.robots[robot_name]['max_timestamp'] > self.end_time:
+                self.robots[robot_name]['max_timestamp'] = self.end_time
             print(
                 f'Robot {robot_name} min timestamp: {self.robots[robot_name]["min_timestamp"]} max timestamp: {self.robots[robot_name]["max_timestamp"]}')
             self.robots[robot_name]['dump_service_client'] = self.create_client(
                 DumpGraph, '/' + robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['save_map_client'] = self.create_client(
                 SaveMap, '/' + robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
-            self.robots[robot_name]['slam_process'] = SlamStatus()  # type: subprocess.Popen
+            self.robots[robot_name]['slam_process'] = None  # type: subprocess.Popen
             self.robots[robot_name]['dump_graph_requested'] = False
             self.robots[robot_name]['save_map_requested'] = False
             self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.sequence, robot_name)
 
         self.clock_pub = self.create_publisher(Clock, 'clock', 10)
-        self.point_cloud_counter = 0
 
         # gt_path_topic = self.robot_name + '/gt_path'
         # self.gt_path_pub = self.create_publisher(Path, gt_path_topic, 10, callback_group=self.reentrant_callback_group)
-
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
-        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
-        self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
 
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-        self.timestamps = np.array([ts.total_seconds() for ts in self.timestamps if self.start_time <= ts.total_seconds() <= self.end_time])
+        # self.timestamps = np.array([ts.total_seconds() for ts in self.timestamps if self.start_time <= ts.total_seconds() <= self.end_time])
+        self.timestamps = np.array([ts.total_seconds() for ts in self.timestamps])
+
+        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
+        self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
 
         self.slam_process = None  # type: subprocess.Popen
         self.progress_bar = None  # type: tqdm
@@ -124,39 +130,49 @@ class KittiMultiRobotProcessor(Node):
         # create the results directory
         if not os.path.exists(os.path.join(self.result_dir, self.sequence)):
             os.makedirs(os.path.join(self.result_dir, self.sequence))
+
+        # set the point cloud counter to the index of the first timestamp that is greater than the min timestamp
+        self.point_cloud_counter = len(self.timestamps)
+        self.point_cloud_idx_max = -1
         for robot_name in self.robot_names:
+            print(f'\n\n{robot_name}')
             if not os.path.exists(self.robots[robot_name]['result_dir']):
                 os.makedirs(self.robots[robot_name]['result_dir'])
+            # Set the max point cloud index to the index of the last timestamp that is less than the max timestamp
+            idx_max = np.abs(self.timestamps - self.robots[robot_name]['max_timestamp']).argmin()
+            print(f'Found max timestamp {self.timestamps[idx_max]} at index {idx_max}')
+            if idx_max > self.point_cloud_idx_max:
+                print(f'Setting point cloud idx max to index of last timestamp {idx_max}')
+                self.point_cloud_idx_max = idx_max
             # Start the slam node in a subprocess, set the start position as well
-            # if self.robots[robot_name]['min_timestamp'] < self.start_time:
-            #     self.robots[robot_name]['min_timestamp'] = self.start_time
-            # if self.robots[robot_name]['max_timestamp'] > self.end_time:
-            #     self.robots[robot_name]['max_timestamp'] = self.end_time
-            idx = np.abs(self.timestamps - self.robots[robot_name]['min_timestamp']).argmin()
-            print(f'Found min timestamp {self.timestamps[idx]} at index {idx}')
-            print(f'Pose for min timestamp {self.velo_gt_poses[idx]}')
-            x, y, z = self.velo_gt_poses[idx][0:3, 3]
-            rotation = R.from_matrix(self.velo_gt_poses[idx][0:3, 0:3])  # type: R
-            roll, pitch, yaw = rotation.as_euler('xyz', degrees=True)
-            print(f'x: {x}, y: {y}, z: {z}, roll: {roll}, pitch: {pitch}, yaw: {yaw}')
-            # find the index of the first timestamp that is greater than the min timestamp
-            self.robots[robot_name]['min_timestamp'] = np.searchsorted(self.timestamps, self.robots[robot_name]['min_timestamp'])
+            idx_min = np.abs(self.timestamps - self.robots[robot_name]['min_timestamp']).argmin()
+            print(f'Found min timestamp {self.timestamps[idx_min]} at index {idx_min}')
+            print(f'Pose for min timestamp\n{self.velo_gt_poses[idx_min]}')
+            # set the point cloud counter to the index of the first timestamp that is greater than the min timestamp
+            if idx_min < self.point_cloud_counter:
+                print(f'Setting point cloud counter to index of first timestamp {idx_min}')
+                self.point_cloud_counter = idx_min
+            x, y, z = self.velo_gt_poses[idx_min][0:3, 3]
+            print(f'rotmat {self.velo_gt_poses[idx_min][0:3, 0:3].reshape(3, 3)}')
+            rotation = R.from_matrix(self.velo_gt_poses[idx_min][0:3, 0:3])  # type: R
+            roll, pitch, yaw = rotation.as_euler('ZYX', degrees=False)
+            print(f'x: {x}, y: {y}, z: {z}, roll: {np.rad2deg(roll)}, pitch: {np.rad2deg(pitch)}, yaw: {np.rad2deg(yaw)}')
             slam_cmd = [
                 'ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
                 self.slam_config,
                 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z),
                 'roll:=' + str(roll), 'pitch:=' + str(pitch), 'yaw:=' + str(yaw)]
             with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), mode='w') as slam_log:
-                # self.robots[robot_name]['slam_process'] = subprocess.Popen(
-                #     slam_cmd, stdout=slam_log, stderr=slam_log)  # type: subprocess.Popen
-                # self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
-                # print(f'Started slam node with pid {self.robots[robot_name]["slam_process"].pid} and cmd:')
+                self.robots[robot_name]['slam_process'] = subprocess.Popen(
+                    slam_cmd, stdout=slam_log, stderr=slam_log)  # type: subprocess.Popen
+                self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
+                print(f'Started slam node with pid {self.robots[robot_name]["slam_process"].pid} and cmd:')
                 print(' '.join(slam_cmd))
-            time.sleep(0.1)
+            time.sleep(2)
         # if self.playback_length > 0 and self.playback_length < len(self.timestamps):
         #     self.timestamps = self.timestamps[:self.playback_length]
         print(f'Starting playback with rate {self.rate:.2f}x')
-        self.progress_bar = tqdm(total=len(self.timestamps), desc='Playback progress', unit='point clouds')
+        self.progress_bar = tqdm(total=self.point_cloud_idx_max - self.point_cloud_counter, unit='point clouds', desc='Playback')
         self.task = Task.PLAYBACK
         self.task_timer = self.create_timer(1.0 / self.rate, self.task_timer_callback, callback_group=self.reentrant_callback_group)
 
@@ -226,12 +242,14 @@ class KittiMultiRobotProcessor(Node):
         self.publish_clock_msg(ros_pcl.header.stamp)
         # Publish the pointcloud for each robot if it is within the time bounds
         for robot_name in self.robot_names:
-            print(f'Checking if ts {ts} is within bounds for robot {robot_name}')
-            print(f'Min ts: {self.robots[robot_name]["min_timestamp"]}, Max ts: {self.robots[robot_name]["max_timestamp"]}')
+            # print(f'Checking if ts {ts} is within bounds for robot {robot_name}')
+            # print(f'Min ts: {self.robots[robot_name]["min_timestamp"]}, Max ts: {self.robots[robot_name]["max_timestamp"]}')
             if self.robots[robot_name]['min_timestamp'] <= ts <= self.robots[robot_name]['max_timestamp']:
                 # set the frame id to the robot name
                 ros_pcl.header.frame_id = robot_name + '/velodyne'
-                print(f'Publishing point cloud for robot {robot_name} with ts {ts}')
+                print(
+                    f'Publishing point cloud for robot {robot_name} with ts {ts} \
+                        min ts {self.robots[robot_name]["min_timestamp"]} max ts {self.robots[robot_name]["max_timestamp"]}')
                 self.robots[robot_name]['point_cloud_pub'].publish(ros_pcl)
         # self.point_cloud_pub.publish(ros_pcl)
 
@@ -239,7 +257,7 @@ class KittiMultiRobotProcessor(Node):
 
         self.progress_bar.update(1)
 
-        if self.point_cloud_counter >= len(self.timestamps):
+        if self.point_cloud_counter >= len(self.timestamps) or self.timestamps[self.point_cloud_counter] > self.end_time:
             self.progress_bar.close()
             print('Finished playback and closed progress bar')
             self.task = Task.DUMP_GRAPH
@@ -260,48 +278,62 @@ class KittiMultiRobotProcessor(Node):
         print(future.result())
         self.result = future.result()
         print(f'Dump graph service call success? {self.result.success}')
-        self.task = Task.SAVE_MAP
+        if all([self.robots[robot_name]['dump_graph_requested'] for robot_name in self.robot_names]):
+            self.task = Task.SAVE_MAP
 
     def done_save_map_callback(self, future):
         print(future.result())
         self.result = future.result()
         print(f'Save map service call success? {self.result.success}')
-        self.task = Task.SHUTDOWN_SLAM
+        if all([self.robots[robot_name]['save_map_requested'] for robot_name in self.robot_names]):
+            self.task = Task.SHUTDOWN_SLAM
 
     def dump_graph(self):
-        if self.dump_graph_requested:
-            return
-        self.dump_graph_requested = True
-        # call the dumb and save graph service on hdl graph slam
+        robot_to_dump = None
         for robot_name in self.robot_names:
-            dump_request = DumpGraph.Request()
-            dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
-            self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request)
-        # dump_request = DumpGraph.Request()
-        # dump_request.destination = os.path.join(self.result_dir, self.sequence, 'g2o')
-        # self.perform_async_service_call(self.dump_service_client, dump_request)
+            if self.robots[robot_name]['dump_graph_requested']:
+                continue
+            else:
+                robot_to_dump = robot_name
+                break
+        if robot_to_dump is None:
+            return
+        # call the dumb and save graph service on hdl graph slam
+        dump_request = DumpGraph.Request()
+        dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
+        self.robots[robot_name]['dump_graph_requested'] = True
+        self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request)
 
     def save_map(self):
-        if self.save_map_requested:
-            return
-        # call the dumb and save graph service on hdl graph slam
+        robot_to_save = None
         for robot_name in self.robot_names:
-            self.save_map_requested = True
-            save_map_request = SaveMap.Request()
-            save_map_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'map')
-            save_map_request.resolution = self.map_resolution
-            self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request)
-        # save_map_request = SaveMap.Request()
-        # save_map_request.destination = os.path.join(self.result_dir, self.sequence, 'map')
-        # save_map_request.resolution = self.map_resolution
-        # self.perform_async_service_call(self.save_map_client, save_map_request)
+            if self.robots[robot_name]['save_map_requested']:
+                continue
+            else:
+                robot_to_save = robot_name
+                break
+        if robot_to_save is None:
+            return
+        save_map_request = SaveMap.Request()
+        save_map_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'map.pcd')
+        save_map_request.resolution = self.map_resolution
+        self.robots[robot_name]['save_map_requested'] = True
+        self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request)
 
     def shutdown_slam(self):
-        if self.slam_process is not None:
-            print('Sending SIGINT to slam process')
-            self.slam_process.send_signal(subprocess.signal.SIGINT)
-            self.slam_process.wait(timeout=10)
-            print('Slam process terminated')
+
+        for robot_name in self.robot_names:
+            if self.robots[robot_name]['slam_process'] is not None:
+                print(f'Sending SIGINT to slam process for robot {robot_name}')
+                self.robots[robot_name]['slam_process'].send_signal(subprocess.signal.SIGINT)
+                self.robots[robot_name]['slam_process'].wait(timeout=10)
+                print(f'Slam process for robot {robot_name} terminated')
+
+        # if self.slam_process is not None:
+        #     print('Sending SIGINT to slam process')
+        #     self.slam_process.send_signal(subprocess.signal.SIGINT)
+        #     self.slam_process.wait(timeout=10)
+        #     print('Slam process terminated')
         self.task = Task.SHUTDOWN_NODE
 
     def shutdown_node(self):
