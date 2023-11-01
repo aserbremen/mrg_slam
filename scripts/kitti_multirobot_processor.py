@@ -36,10 +36,11 @@ import pykitti
 
 class Task(Enum):
     PLAYBACK = 0
-    DUMP_GRAPH = 1
-    SAVE_MAP = 2
-    SHUTDOWN_SLAM = 3
-    SHUTDOWN_NODE = 4
+    WAIT_SLAM_DONE = 1
+    DUMP_GRAPH = 2
+    SAVE_MAP = 3
+    SHUTDOWN_SLAM = 4
+    SHUTDOWN_NODE = 5
 
 
 def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
@@ -67,13 +68,13 @@ class KittiMultiRobotProcessor(Node):
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', '00').value
-        self.rate = self.declare_parameter('rate', 25.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
+        self.rate = self.declare_parameter('rate', 10.0).value
+        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         # -1 means all points of the pointcloud, otherwise voxel size
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).value
-        self.start_time = self.declare_parameter('start_time', 244.5).value
-        self.end_time = self.declare_parameter('end_time', 249.5).value
+        self.start_time = self.declare_parameter('start_time', 235.5).value
+        self.end_time = self.declare_parameter('end_time', 255.5).value
 
         self.task = None
 
@@ -105,7 +106,9 @@ class KittiMultiRobotProcessor(Node):
                 SaveMap, '/' + robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['slam_process'] = None  # type: subprocess.Popen
             self.robots[robot_name]['dump_graph_requested'] = False
+            self.robots[robot_name]['dump_graph_done'] = False
             self.robots[robot_name]['save_map_requested'] = False
+            self.robots[robot_name]['save_map_done'] = False
             self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.sequence, robot_name)
 
         self.clock_pub = self.create_publisher(Clock, 'clock', 10)
@@ -162,10 +165,10 @@ class KittiMultiRobotProcessor(Node):
                 self.slam_config,
                 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z),
                 'roll:=' + str(roll), 'pitch:=' + str(pitch), 'yaw:=' + str(yaw)]
-            with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), mode='w') as slam_log:
+            with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), mode='w') as std_log, \
+                    open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.err'), mode='w') as err_log:
                 self.robots[robot_name]['slam_process'] = subprocess.Popen(
-                    slam_cmd, stdout=slam_log, stderr=slam_log)  # type: subprocess.Popen
-                self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)
+                    slam_cmd, stdout=std_log, stderr=err_log)  # type: subprocess.Popen
                 print(f'Started slam node with pid {self.robots[robot_name]["slam_process"].pid} and cmd:')
                 print(' '.join(slam_cmd))
             time.sleep(2)
@@ -180,6 +183,8 @@ class KittiMultiRobotProcessor(Node):
         self.task_timer.cancel()
         if self.task == Task.PLAYBACK:
             self.playback()
+        elif self.task == Task.WAIT_SLAM_DONE:
+            self.wait_slam_done()
         elif self.task == Task.DUMP_GRAPH:
             self.dump_graph()
         elif self.task == Task.SAVE_MAP:
@@ -193,7 +198,16 @@ class KittiMultiRobotProcessor(Node):
         self.task_timer.reset()
 
     def slam_status_callback(self, msg: SlamStatus):
-        self.slam_status = msg
+        self.robots[msg.robot_name]['slam_status'] = msg  # type: SlamStatus
+
+    def wait_slam_done(self):
+        if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
+                any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]):
+            time.sleep(1)
+            print('Slam is optimizing or in loop closure, waiting')
+            return
+        print('Slam is done optimizing and in loop closure, starting dump graph')
+        self.task = Task.DUMP_GRAPH
 
     def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
         # create a ROS2 PointCloud2 message
@@ -227,13 +241,9 @@ class KittiMultiRobotProcessor(Node):
         self.clock_pub.publish(clock_msg)
 
     def playback(self):
-
         if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
            any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]):
             return
-
-        # if self.slam_status.in_optimization or self.slam_status.in_loop_closure:
-        #     return
 
         velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
         ts = self.timestamps[self.point_cloud_counter]
@@ -242,8 +252,6 @@ class KittiMultiRobotProcessor(Node):
         self.publish_clock_msg(ros_pcl.header.stamp)
         # Publish the pointcloud for each robot if it is within the time bounds
         for robot_name in self.robot_names:
-            # print(f'Checking if ts {ts} is within bounds for robot {robot_name}')
-            # print(f'Min ts: {self.robots[robot_name]["min_timestamp"]}, Max ts: {self.robots[robot_name]["max_timestamp"]}')
             if self.robots[robot_name]['min_timestamp'] <= ts <= self.robots[robot_name]['max_timestamp']:
                 # set the frame id to the robot name
                 ros_pcl.header.frame_id = robot_name + '/velodyne'
@@ -251,7 +259,6 @@ class KittiMultiRobotProcessor(Node):
                     f'Publishing point cloud for robot {robot_name} with ts {ts} \
                         min ts {self.robots[robot_name]["min_timestamp"]} max ts {self.robots[robot_name]["max_timestamp"]}')
                 self.robots[robot_name]['point_cloud_pub'].publish(ros_pcl)
-        # self.point_cloud_pub.publish(ros_pcl)
 
         self.point_cloud_counter += 1
 
@@ -260,39 +267,48 @@ class KittiMultiRobotProcessor(Node):
         if self.point_cloud_counter >= len(self.timestamps) or self.timestamps[self.point_cloud_counter] > self.end_time:
             self.progress_bar.close()
             print('Finished playback and closed progress bar')
-            self.task = Task.DUMP_GRAPH
-            # self.finalize_playback()
+            # publish a clock message with an offset to trigger optimization once more
+            self.publish_clock_msg(float_ts_to_ros_ts(self.end_time + 2.0))
+            self.task = Task.WAIT_SLAM_DONE
 
-    def perform_async_service_call(self, client, request):
+    def perform_async_service_call(self, client, request, robot_name):
         while client.wait_for_service(timeout_sec=1.0) is False:
             print('service', client.srv_name, 'not available, waiting again...')
 
         print('calling async service', client.srv_name)
         future = client.call_async(request)
         if isinstance(request, DumpGraph.Request):
-            future.add_done_callback(self.done_dump_graph_callback)
+            future.add_done_callback(self.get_done_dump_graph_callback(robot_name))
         if isinstance(request, SaveMap.Request):
-            future.add_done_callback(self.done_save_map_callback)
+            future.add_done_callback(self.get_done_save_map_callback(robot_name))
 
-    def done_dump_graph_callback(self, future):
-        print(future.result())
-        self.result = future.result()
-        print(f'Dump graph service call success? {self.result.success}')
-        if all([self.robots[robot_name]['dump_graph_requested'] for robot_name in self.robot_names]):
-            self.task = Task.SAVE_MAP
+    def get_done_dump_graph_callback(self, robot_name):
+        def done_dump_graph_callback(future):
+            result = future.result()
+            print(f'Dump graph service call for robot {robot_name} success? {result.success}')
+            self.robots[robot_name]['dump_graph_done'] = True
+            if all([self.robots[robot_name]['dump_graph_requested'] for robot_name in self.robot_names]):
+                print('All dump graph requests done, starting save map')
+                self.task = Task.SAVE_MAP
+        return done_dump_graph_callback
 
-    def done_save_map_callback(self, future):
-        print(future.result())
-        self.result = future.result()
-        print(f'Save map service call success? {self.result.success}')
-        if all([self.robots[robot_name]['save_map_requested'] for robot_name in self.robot_names]):
-            self.task = Task.SHUTDOWN_SLAM
+    def get_done_save_map_callback(self, robot_name):
+        def done_save_map_callback(future):
+            result = future.result()
+            print(f'Save map service call for robot {robot_name} success? {result.success}')
+            self.robots[robot_name]['save_map_done'] = True
+            if all([self.robots[robot_name]['save_map_requested'] for robot_name in self.robot_names]):
+                self.task = Task.SHUTDOWN_SLAM
+        return done_save_map_callback
 
     def dump_graph(self):
         robot_to_dump = None
         for robot_name in self.robot_names:
             if self.robots[robot_name]['dump_graph_requested']:
-                continue
+                if self.robots[robot_name]['dump_graph_done']:
+                    continue
+                else:
+                    break
             else:
                 robot_to_dump = robot_name
                 break
@@ -302,13 +318,16 @@ class KittiMultiRobotProcessor(Node):
         dump_request = DumpGraph.Request()
         dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
         self.robots[robot_name]['dump_graph_requested'] = True
-        self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request)
+        self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request, robot_name)
 
     def save_map(self):
         robot_to_save = None
         for robot_name in self.robot_names:
             if self.robots[robot_name]['save_map_requested']:
-                continue
+                if self.robots[robot_name]['save_map_done']:
+                    continue
+                else:
+                    break
             else:
                 robot_to_save = robot_name
                 break
@@ -318,22 +337,22 @@ class KittiMultiRobotProcessor(Node):
         save_map_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'map.pcd')
         save_map_request.resolution = self.map_resolution
         self.robots[robot_name]['save_map_requested'] = True
-        self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request)
+        self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request, robot_name)
 
     def shutdown_slam(self):
-
         for robot_name in self.robot_names:
             if self.robots[robot_name]['slam_process'] is not None:
                 print(f'Sending SIGINT to slam process for robot {robot_name}')
-                self.robots[robot_name]['slam_process'].send_signal(subprocess.signal.SIGINT)
-                self.robots[robot_name]['slam_process'].wait(timeout=10)
-                print(f'Slam process for robot {robot_name} terminated')
+                try:
+                    self.robots[robot_name]['slam_process'].send_signal(subprocess.signal.SIGINT)
+                    self.robots[robot_name]['slam_process'].wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    print(f'Timeout expired for robot {robot_name} slam process, trying SIGTERM')
+                    self.robots[robot_name]['slam_process'].terminate()
+                    self.robots[robot_name]['slam_process'].wait(timeout=10)
+                finally:
+                    print(f'Robot {robot_name} slam process terminated')
 
-        # if self.slam_process is not None:
-        #     print('Sending SIGINT to slam process')
-        #     self.slam_process.send_signal(subprocess.signal.SIGINT)
-        #     self.slam_process.wait(timeout=10)
-        #     print('Slam process terminated')
         self.task = Task.SHUTDOWN_NODE
 
     def shutdown_node(self):
@@ -357,6 +376,10 @@ def main(args=None):
         rclpy.spin(node=kitti_processor, executor=executor)
     except KeyboardInterrupt:
         print('Trying to gracefully shutdown')
+        kitti_processor.shutdown_slam()
+        kitti_processor.shutdown_node()
+    except Exception as e:
+        print(e)
         kitti_processor.shutdown_slam()
         kitti_processor.shutdown_node()
     finally:
