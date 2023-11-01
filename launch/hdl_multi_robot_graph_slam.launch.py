@@ -267,46 +267,48 @@ def launch_setup(context, *args, **kwargs):
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
-    hdl_graph_slam_params['own_name'] = model_namespace
-    # Overwrite init_pose array with the actual values
-    hdl_graph_slam_params['init_pose'][0] = hdl_graph_slam_params['x']
-    hdl_graph_slam_params['init_pose'][1] = hdl_graph_slam_params['y']
-    hdl_graph_slam_params['init_pose'][2] = hdl_graph_slam_params['z']
-    hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
-    hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
-    hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
-    # set the correct frame ids according to the model namespace
-    hdl_graph_slam_params['map_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['map_frame_id']
-    hdl_graph_slam_params['odom_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['odom_frame_id']
-    remaps = [('/imu/data', shared_params['imu_topic']),
-              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-              ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-              ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-              ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
-              ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
-              ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
-              ('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub'),
-              ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
-              ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
-              ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
-              ('/hdl_graph_slam/slam_status', '/' + model_namespace + '/hdl_graph_slam/slam_status'),
-              ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
-              ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
-              ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
-              ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
-              ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
-              ('/hdl_graph_slam/save_gids', '/' + model_namespace + '/hdl_graph_slam/save_gids'),
-              ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
-    print_remappings(remaps, 'hdl_graph_slam_component')
-    hdl_graph_slam_node = ComposableNode(
-        package='hdl_graph_slam',
-        plugin='hdl_graph_slam::HdlGraphSlamComponent',
-        name='hdl_graph_slam_component',
-        namespace=model_namespace,
-        parameters=[hdl_graph_slam_params, shared_params],
-        remappings=remaps,
-        extra_arguments=[{'use_intra_process_comms': True}]
-    )
+    if hdl_graph_slam_params['enable_graph_slam']:
+        # TODO remove own_name from hdl_graph_slam_params.yaml and use the model_namespace instead
+        hdl_graph_slam_params['own_name'] = model_namespace
+        # Overwrite init_pose array with the actual values
+        hdl_graph_slam_params['init_pose'][0] = hdl_graph_slam_params['x']
+        hdl_graph_slam_params['init_pose'][1] = hdl_graph_slam_params['y']
+        hdl_graph_slam_params['init_pose'][2] = hdl_graph_slam_params['z']
+        hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
+        hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
+        hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
+        # set the correct frame ids according to the model namespace
+        hdl_graph_slam_params['map_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['map_frame_id']
+        hdl_graph_slam_params['odom_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['odom_frame_id']
+        remaps = [('/imu/data', shared_params['imu_topic']),
+                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                  ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+                  ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+                  ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
+                  ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
+                  ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
+                  ('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub'),
+                  ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),
+                  ('/hdl_graph_slam/others_poses', '/' + model_namespace + '/hdl_graph_slam/others_poses'),
+                  ('/hdl_graph_slam/publish_graph', '/' + model_namespace + '/hdl_graph_slam/publish_graph'),
+                  ('/hdl_graph_slam/slam_status', '/' + model_namespace + '/hdl_graph_slam/slam_status'),
+                  ('/hdl_graph_slam/dump', '/' + model_namespace + '/hdl_graph_slam/dump'),
+                  ('/hdl_graph_slam/save_map', '/' + model_namespace + '/hdl_graph_slam/save_map'),
+                  ('/hdl_graph_slam/get_map', '/' + model_namespace + '/hdl_graph_slam/get_map'),
+                  ('/hdl_graph_slam/get_graph_estimate', '/' + model_namespace + '/hdl_graph_slam/get_graph_estimate'),
+                  ('/hdl_graph_slam/request_graph', '/' + model_namespace + '/hdl_graph_slam/request_graph'),
+                  ('/hdl_graph_slam/save_gids', '/' + model_namespace + '/hdl_graph_slam/save_gids'),
+                  ('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
+        print_remappings(remaps, 'hdl_graph_slam_component')
+        hdl_graph_slam_node = ComposableNode(
+            package='hdl_graph_slam',
+            plugin='hdl_graph_slam::HdlGraphSlamComponent',
+            name='hdl_graph_slam_component',
+            namespace=model_namespace,
+            parameters=[hdl_graph_slam_params, shared_params],
+            remappings=remaps,
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
     composable_nodes = []
     if prefiltering_params['enable_prefiltering']:
@@ -315,7 +317,8 @@ def launch_setup(context, *args, **kwargs):
         composable_nodes.append(scan_matching_odometry_node)
     if floor_detection_params['enable_floor_detection']:
         composable_nodes.append(floor_detection_node)
-    composable_nodes.append(hdl_graph_slam_node)
+    if hdl_graph_slam_params['enable_graph_slam']:
+        composable_nodes.append(hdl_graph_slam_node)
 
     # https://docs.ros.org/en/foxy/How-To-Guides/Launching-composable-nodes.html
     load_composable_nodes = LoadComposableNodes(
