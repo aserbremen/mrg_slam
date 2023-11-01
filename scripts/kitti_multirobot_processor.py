@@ -61,20 +61,21 @@ class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
 
-        self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
+        self.robot_names = self.declare_parameter('robot_names', ['atlas']).value
         print(self.robot_names)
         self.min_times = self.declare_parameter('min_times', [0.0, 245.0]).value
-        self.max_times = self.declare_parameter('max_times', [249.0, 10000.0]).value
+        self.max_times = self.declare_parameter('max_times', [100000.0, 10000.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', '00').value
-        self.rate = self.declare_parameter('rate', 10.0).value
+        self.rate = self.declare_parameter('rate', 1.0).value
         self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         # -1 means all points of the pointcloud, otherwise voxel size
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).value
-        self.start_time = self.declare_parameter('start_time', 235.5).value
-        self.end_time = self.declare_parameter('end_time', 255.5).value
+        self.start_time = self.declare_parameter('start_time', 0.0).value
+        self.end_time = self.declare_parameter('end_time', float('inf')).value
+        self.proceed = self.declare_parameter('proceed', True).value
 
         self.task = None
 
@@ -118,18 +119,18 @@ class KittiMultiRobotProcessor(Node):
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
 
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-        # self.timestamps = np.array([ts.total_seconds() for ts in self.timestamps if self.start_time <= ts.total_seconds() <= self.end_time])
         self.timestamps = np.array([ts.total_seconds() for ts in self.timestamps])
+        print(f'Min dataset time {self.timestamps[0]} max dataset time {self.timestamps[-1]}')
 
         cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
         self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
+        # transform the poses so that the first pose is the identity
+        self.velo_gt_poses = np.array([pose @ np.linalg.inv(self.velo_gt_poses[0]) for pose in self.velo_gt_poses])
 
         self.slam_process = None  # type: subprocess.Popen
         self.progress_bar = None  # type: tqdm
 
     def start_playback(self):
-        # self.dump_graph_requested = False
-        # self.save_map_requested = False
         # create the results directory
         if not os.path.exists(os.path.join(self.result_dir, self.sequence)):
             os.makedirs(os.path.join(self.result_dir, self.sequence))
@@ -158,7 +159,7 @@ class KittiMultiRobotProcessor(Node):
             x, y, z = self.velo_gt_poses[idx_min][0:3, 3]
             print(f'rotmat {self.velo_gt_poses[idx_min][0:3, 0:3].reshape(3, 3)}')
             rotation = R.from_matrix(self.velo_gt_poses[idx_min][0:3, 0:3])  # type: R
-            roll, pitch, yaw = rotation.as_euler('ZYX', degrees=False)
+            yaw, pitch, roll = rotation.as_euler('ZYX', degrees=False)
             print(f'x: {x}, y: {y}, z: {z}, roll: {np.rad2deg(roll)}, pitch: {np.rad2deg(pitch)}, yaw: {np.rad2deg(yaw)}')
             slam_cmd = [
                 'ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
@@ -172,8 +173,6 @@ class KittiMultiRobotProcessor(Node):
                 print(f'Started slam node with pid {self.robots[robot_name]["slam_process"].pid} and cmd:')
                 print(' '.join(slam_cmd))
             time.sleep(2)
-        # if self.playback_length > 0 and self.playback_length < len(self.timestamps):
-        #     self.timestamps = self.timestamps[:self.playback_length]
         print(f'Starting playback with rate {self.rate:.2f}x')
         self.progress_bar = tqdm(total=self.point_cloud_idx_max - self.point_cloud_counter, unit='point clouds', desc='Playback')
         self.task = Task.PLAYBACK
@@ -181,20 +180,24 @@ class KittiMultiRobotProcessor(Node):
 
     def task_timer_callback(self):
         self.task_timer.cancel()
-        if self.task == Task.PLAYBACK:
-            self.playback()
-        elif self.task == Task.WAIT_SLAM_DONE:
-            self.wait_slam_done()
-        elif self.task == Task.DUMP_GRAPH:
-            self.dump_graph()
-        elif self.task == Task.SAVE_MAP:
-            self.save_map()
-        elif self.task == Task.SHUTDOWN_SLAM:
-            self.shutdown_slam()
-        elif self.task == Task.SHUTDOWN_NODE:
-            self.shutdown_node()
+        self.proceed = self.get_parameter('proceed').value
+        if self.proceed:
+            if self.task == Task.PLAYBACK:
+                self.playback()
+            elif self.task == Task.WAIT_SLAM_DONE:
+                self.wait_slam_done()
+            elif self.task == Task.DUMP_GRAPH:
+                self.dump_graph()
+            elif self.task == Task.SAVE_MAP:
+                self.save_map()
+            elif self.task == Task.SHUTDOWN_SLAM:
+                self.shutdown_slam()
+            elif self.task == Task.SHUTDOWN_NODE:
+                self.shutdown_node()
+            else:
+                print('Unknown task')
         else:
-            print('Unknown task')
+            print('Paused')
         self.task_timer.reset()
 
     def slam_status_callback(self, msg: SlamStatus):
@@ -206,7 +209,7 @@ class KittiMultiRobotProcessor(Node):
             time.sleep(1)
             print('Slam is optimizing or in loop closure, waiting')
             return
-        print('Slam is done optimizing and in loop closure, starting dump graph')
+        print('Slam is done, starting dump graph')
         self.task = Task.DUMP_GRAPH
 
     def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
@@ -268,7 +271,7 @@ class KittiMultiRobotProcessor(Node):
             self.progress_bar.close()
             print('Finished playback and closed progress bar')
             # publish a clock message with an offset to trigger optimization once more
-            self.publish_clock_msg(float_ts_to_ros_ts(self.end_time + 2.0))
+            self.publish_clock_msg(Time(sec=ros_pcl.header.stamp.sec + 2, nanosec=ros_pcl.header.stamp.nanosec))
             self.task = Task.WAIT_SLAM_DONE
 
     def perform_async_service_call(self, client, request, robot_name):
@@ -318,6 +321,7 @@ class KittiMultiRobotProcessor(Node):
         dump_request = DumpGraph.Request()
         dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
         self.robots[robot_name]['dump_graph_requested'] = True
+        print(f'Dumping graph at: {dump_request.destination}')
         self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request, robot_name)
 
     def save_map(self):
@@ -337,6 +341,7 @@ class KittiMultiRobotProcessor(Node):
         save_map_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'map.pcd')
         save_map_request.resolution = self.map_resolution
         self.robots[robot_name]['save_map_requested'] = True
+        print(f'Saving map with resolution {save_map_request.resolution} at: {save_map_request.destination}')
         self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request, robot_name)
 
     def shutdown_slam(self):
