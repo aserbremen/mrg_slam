@@ -1,5 +1,4 @@
 import os
-import fire
 import datetime
 import time
 import subprocess
@@ -20,7 +19,6 @@ from nav_msgs.msg import Path
 from vamex_slam_msgs.msg import SlamStatus
 from vamex_slam_msgs.srv import DumpGraph, SaveMap
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import pykitti
@@ -61,7 +59,7 @@ class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
 
-        self.robot_names = self.declare_parameter('robot_names', ['atlas']).value
+        self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
         print(self.robot_names)
         self.min_times = self.declare_parameter('min_times', [0.0, 245.0]).value
         self.max_times = self.declare_parameter('max_times', [100000.0, 10000.0]).value
@@ -71,6 +69,7 @@ class KittiMultiRobotProcessor(Node):
         self.rate = self.declare_parameter('rate', 1.0).value
         self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
+        self.eval_name = self.declare_parameter('eval_name', 'reversed').value
         # -1 means all points of the pointcloud, otherwise voxel size
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).value
         self.start_time = self.declare_parameter('start_time', 0.0).value
@@ -110,7 +109,7 @@ class KittiMultiRobotProcessor(Node):
             self.robots[robot_name]['dump_graph_done'] = False
             self.robots[robot_name]['save_map_requested'] = False
             self.robots[robot_name]['save_map_done'] = False
-            self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.sequence, robot_name)
+            self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.sequence, robot_name + '_' + self.eval_name)
 
         self.clock_pub = self.create_publisher(Clock, 'clock', 10)
 
