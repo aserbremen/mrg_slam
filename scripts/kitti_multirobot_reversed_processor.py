@@ -61,13 +61,13 @@ class KittiMultiRobotProcessor(Node):
 
         self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
         print(self.robot_names)
-        # self.min_times = self.declare_parameter('min_times', [0.0, 245.0]).value
+        self.min_times = self.declare_parameter('min_times', [0.0, 0.0]).value
         self.max_times = self.declare_parameter('max_times', [250.0, 250.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', '00').value
         self.rate = self.declare_parameter('rate', 1.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
+        self.result_dir = self.declare_parameter('result_dir', '/home/andi/Seafile/data/slam_results/kitti/sequences/00/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         self.eval_name = self.declare_parameter('eval_name', 'reversed').value
         # -1 means all points of the pointcloud, otherwise voxel size
@@ -92,10 +92,10 @@ class KittiMultiRobotProcessor(Node):
             self.robots[robot_name]['slam_status_sub'] = self.create_subscription(
                 SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['slam_status'] = SlamStatus()  # type: SlamStatus
-            # self.robots[robot_name]['min_timestamp'] = self.min_times[self.robot_names.index(robot_name)]
+            self.robots[robot_name]['min_timestamp'] = self.min_times[self.robot_names.index(robot_name)]
             self.robots[robot_name]['max_timestamp'] = self.max_times[self.robot_names.index(robot_name)]
-            # if self.robots[robot_name]['min_timestamp'] < self.start_time:
-            #     self.robots[robot_name]['min_timestamp'] = self.start_time
+            if self.robots[robot_name]['min_timestamp'] < self.start_time:
+                self.robots[robot_name]['min_timestamp'] = self.start_time
             if self.robots[robot_name]['max_timestamp'] > self.end_time:
                 self.robots[robot_name]['max_timestamp'] = self.end_time
             print(
@@ -287,7 +287,8 @@ class KittiMultiRobotProcessor(Node):
             self.robots['atlas']['point_cloud_pub'].publish(ros_pcl)
             print(f'Publishing point cloud for robot atlas with ts {ts}')
         if self.robots['bestla']['min_timestamp'] <= ts <= self.robots['bestla']['max_timestamp']:
-            ros_pcl.header.frame_id = 'bestla/velodyne'
+            ros_pcl_reversed.header.frame_id = 'bestla/velodyne'
+            ros_pcl_reversed.header.stamp = float_ts_to_ros_ts(ts)
             print(f'Publishing point cloud for robot bestla with ts {ts}')
             self.robots['bestla']['point_cloud_pub'].publish(ros_pcl_reversed)
 
