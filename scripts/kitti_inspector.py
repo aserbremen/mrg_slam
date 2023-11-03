@@ -43,6 +43,7 @@ class KittiMultiRobotProcessor(Node):
         self.sequence = self.declare_parameter('sequence', 0).value
         self.sequence = str(self.sequence).zfill(2)
         self.result_dir = self.declare_parameter('result_dir', '/tmp/ground_truth').value
+        self.tolerance = self.declare_parameter('tolerance', 4.0).value
 
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
@@ -76,8 +77,9 @@ class KittiMultiRobotProcessor(Node):
                    c=colors, cmap='viridis', label='velo', s=0.1)
         cbar = plt.colorbar(plt.cm.ScalarMappable(norm=normalize, cmap=colormap))
         cbar.set_label('time')
+
         # plot the ground truth line with a tolerance for picking points and printing their timestamps
-        tolerance = 7.5
+        tolerance = self.tolerance
         ax.plot([pose[0, 3] for pose in self.velo_gt_poses],
                 [pose[1, 3] for pose in self.velo_gt_poses],
                 c='black', label='velo', picker=tolerance, linewidth=0.1)
@@ -96,10 +98,11 @@ class KittiMultiRobotProcessor(Node):
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_aspect('equal')
+        # turn on grid and other options to make the plot look nice and analyze it better
+        ax.grid(True)
         ax.legend()
         # tight layout
         plt.tight_layout()
-
         fig.canvas.mpl_connect('pick_event', self.on_pick)
         plt.show()
 
@@ -111,7 +114,8 @@ class KittiMultiRobotProcessor(Node):
         indexes = event.ind
         print(f'indexes {indexes}')
         for index in indexes:
-            print(f'   index {index} timestamp {self.timestamps[index].total_seconds()}')
+            print(
+                f'   index {index} timestamp {self.timestamps[index].total_seconds()} x {self.velo_gt_poses[index][0, 3]} y {self.velo_gt_poses[index][1, 3]}')
 
     # print info about all the chosen sequences
     def print_info(self):
