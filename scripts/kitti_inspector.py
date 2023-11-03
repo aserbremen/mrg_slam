@@ -17,9 +17,9 @@ from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Path
-from vamex_slam_msgs.msg import SlamStatus
 from vamex_slam_msgs.srv import DumpGraph, SaveMap
 
+from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import numpy as np
 import pykitti
@@ -33,13 +33,6 @@ import pykitti
 # dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
 
 
-def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
-    ros_ts = Time()
-    ros_ts.sec = int(pykitti_ts.total_seconds())
-    ros_ts.nanosec = int((pykitti_ts.total_seconds() - ros_ts.sec) * 1e9)
-    return ros_ts
-
-
 class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
@@ -49,11 +42,7 @@ class KittiMultiRobotProcessor(Node):
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', 0).value
         self.sequence = str(self.sequence).zfill(2)
-        self.rate = self.declare_parameter('rate', 25.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
-        self.playback_length = self.declare_parameter('playback_length', 35).value
-
-        self.task = None
+        self.result_dir = self.declare_parameter('result_dir', '/tmp/ground_truth').value
 
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
@@ -67,42 +56,6 @@ class KittiMultiRobotProcessor(Node):
 
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
-
-        self.dump_service_client = self.create_client(
-            DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
-        self.save_map_client = self.create_client(
-            SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
-
-        self.slam_process = None  # type: subprocess.Popen
-        self.progress_bar = None  # type: tqdm
-
-    def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
-        # create a ROS2 PointCloud2 message
-        ros_pcl = PointCloud2()
-        ros_pcl.header.stamp = pykitti_ts_to_ros_ts(ts)
-        ros_pcl.header.frame_id = self.robot_name + '/velodyne'
-        num_points = velo.shape[0]
-        ros_pcl.height = 1
-        ros_pcl.width = num_points
-        ros_pcl.is_dense = False
-        ros_pcl.is_bigendian = False
-        ros_pcl.fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
-            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
-        ]
-        # Float 32 is 4 bytes and there are 4 fields
-        ros_pcl.point_step = len(ros_pcl.fields) * 4
-        ros_pcl.row_step = ros_pcl.point_step * num_points
-        ros_pcl.data = velo.tobytes()
-
-        return ros_pcl
-
-    def publish_clock_msg(self, stamp: Time):
-        clock_msg = Clock()
-        clock_msg.clock = stamp
-        self.clock_pub.publish(clock_msg)
 
     def plot_trajectories(self):
         cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
@@ -123,10 +76,7 @@ class KittiMultiRobotProcessor(Node):
                    c=colors, cmap='viridis', label='velo', s=0.1)
         cbar = plt.colorbar(plt.cm.ScalarMappable(norm=normalize, cmap=colormap))
         cbar.set_label('time')
-        # line = ax.plot([pose[0, 3] for pose in self.velo_gt_poses],
-        #                [pose[1, 3]for pose in self.velo_gt_poses],
-        #                c=colors, cmap='viridis', label='velo', picker=tolerance)
-        # fig.colorbar(line)
+        # plot the ground truth line with a tolerance for picking points and printing their timestamps
         tolerance = 7.5
         ax.plot([pose[0, 3] for pose in self.velo_gt_poses],
                 [pose[1, 3] for pose in self.velo_gt_poses],
@@ -177,7 +127,57 @@ class KittiMultiRobotProcessor(Node):
         num_pcl_points = [velo.shape[0] for velo in self.dataset.velo]
         print(f'mean number of points pcl {np.mean(num_pcl_points)} std {np.std(num_pcl_points)}')
 
-        sys.exit(0)
+        exit(0)
+
+    # Write all ground truth poses to a file with the following format:
+    # timestamp x y z qx qy qz qw
+    def write_ground_truth(self):
+        for i in range(11):
+            seq = str(i).zfill(2)
+            dataset = pykitti.odometry(self.base_path, seq)
+            times = dataset.timestamps
+            times = [time.total_seconds() for time in times]
+            cam_gt_poses = dataset.poses
+            velo_gt_poses = [np.linalg.inv(dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
+            # transform the poses so that the first pose is the identity
+            velo_gt_poses_tranformed = np.array([pose @ np.linalg.inv(velo_gt_poses[0]) for pose in velo_gt_poses])
+            # cam ground truth
+            cam_result_path = os.path.join(self.result_dir, 'ground_truth', seq + 'cam.txt')
+            dir_result_path = os.path.dirname(cam_result_path)
+            if not os.path.exists(dir_result_path):
+                os.makedirs(dir_result_path)
+            with open(cam_result_path, 'w') as f:
+                for i in range(len(times)):
+                    time = times[i]
+                    pose = cam_gt_poses[i]
+                    translation = pose[0:3, 3]
+                    quat = R.from_matrix(pose[0:3, 0:3]).as_quat()
+                    f.write(f'{time} {translation[0]} {translation[1]} {translation[2]} {quat[0]} {quat[1]} {quat[2]} {quat[3]}\n')
+            # velo ground truth
+            velo_result_path = os.path.join(self.result_dir, 'ground_truth', seq + 'velo.txt')
+            velo_result_dir = os.path.dirname(velo_result_path)
+            if not os.path.exists(velo_result_dir):
+                os.makedirs(velo_result_dir)
+            with open(velo_result_path, 'w') as f:
+                for i in range(len(times)):
+                    time = times[i]
+                    pose = velo_gt_poses_tranformed[i]
+                    translation = pose[0:3, 3]
+                    quat = R.from_matrix(pose[0:3, 0:3]).as_quat()
+                    f.write(f'{time} {translation[0]} {translation[1]} {translation[2]} {quat[0]} {quat[1]} {quat[2]} {quat[3]}\n')
+            # velo transformed ground truth
+            velo_transformed_result_path = os.path.join(self.result_dir, 'ground_truth', seq + 'velo_xy.txt')
+            velo_transformed_result_dir = os.path.dirname(velo_transformed_result_path)
+            if not os.path.exists(velo_transformed_result_dir):
+                os.makedirs(velo_transformed_result_dir)
+            with open(velo_transformed_result_path, 'w') as f:
+                for i in range(len(times)):
+                    time = times[i]
+                    pose = velo_gt_poses_tranformed[i]
+                    translation = pose[0:3, 3]
+                    quat = R.from_matrix(pose[0:3, 0:3]).as_quat()
+                    f.write(f'{time} {translation[0]} {translation[1]} {translation[2]} {quat[0]} {quat[1]} {quat[2]} {quat[3]}\n')
+        exit(0)
 
 
 def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
@@ -187,6 +187,11 @@ def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
 
 def print_info(executor, kitti_processor: KittiMultiRobotProcessor):
     kitti_processor.print_info()
+    spin(executor, kitti_processor)
+
+
+def write_ground_truth(executor, kitti_processor: KittiMultiRobotProcessor):
+    kitti_processor.write_ground_truth()
     spin(executor, kitti_processor)
 
 
@@ -201,7 +206,6 @@ def spin(executor: MultiThreadedExecutor, node: KittiMultiRobotProcessor):
         print('finally')
         node.destroy_node()
         executor.shutdown()
-        # rclpy.shutdown()
 
 
 def main(args=None):
@@ -214,6 +218,7 @@ def main(args=None):
     fire.Fire({
         'plot_trajectories': lambda: plot_trajectories(executor, kitti_processor),
         'print_info': lambda: print_info(executor, kitti_processor),
+        'write_ground_truth': lambda: write_ground_truth(executor, kitti_processor),
     })
 
 
