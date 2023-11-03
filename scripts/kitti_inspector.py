@@ -115,7 +115,7 @@ class KittiMultiRobotProcessor(Node):
         print(f'indexes {indexes}')
         for index in indexes:
             print(
-                f'   index {index} timestamp {self.timestamps[index].total_seconds()} x {self.velo_gt_poses[index][0, 3]} y {self.velo_gt_poses[index][1, 3]}')
+                f'   index {index} timestamp {self.timestamps[index].total_seconds()} x {self.velo_gt_poses[index][0, 3]} y {self.velo_gt_poses[index][1, 3]} z {self.velo_gt_poses[index][2, 3]}')
 
     # print info about all the chosen sequences
     def print_info(self):
@@ -127,6 +127,10 @@ class KittiMultiRobotProcessor(Node):
         for i in range(len(velo_gt_poses) - 1):
             traveled_distance += np.linalg.norm(velo_gt_poses[i][0:3, 3] - velo_gt_poses[i + 1][0:3, 3])
         print(f'total traveled distance {traveled_distance}')
+        print(f'number of timestamps {len(self.timestamps)}')
+        self.timestamps = [time.total_seconds() for time in self.timestamps]
+        print(f'total time {self.timestamps[-1] - self.timestamps[0]}')
+        print(f'average time between timestamps {(self.timestamps[-1] - self.timestamps[0]) / len(self.timestamps)}')
         print('calculating velodyne point information, this may take some time')
         num_pcl_points = [velo.shape[0] for velo in self.dataset.velo]
         print(f'mean number of points pcl {np.mean(num_pcl_points)} std {np.std(num_pcl_points)}')
