@@ -121,8 +121,10 @@ GlobalIdGenerator::getIdWithoutStartGid( GlobalId gid ) const
 void
 GlobalIdGenerator::addStartGid( const std::string &robot_name, GlobalId other_start_gid )
 {
-    robot_names_start_gid_mapping.insert( std::pair<std::string, GlobalId>( robot_name, other_start_gid ) );
-    std::cout << "Addded " << robot_name << "#" << other_start_gid << " to start_gids" << std::endl;
+    auto it = robot_names_start_gid_mapping.insert( std::pair<std::string, GlobalId>( robot_name, other_start_gid ) );
+    if( it.second ) {
+        std::cout << "Addded " << robot_name << "#" << other_start_gid << " to start_gids" << std::endl;
+    }
 }
 
 

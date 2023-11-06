@@ -521,7 +521,7 @@ private:
             }
 
             // create keyframe and add it to the queue
-            KeyFrame::Ptr keyframe( new KeyFrame( stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
+            KeyFrame::Ptr keyframe( new KeyFrame( own_name, stamp, odom, accum_d, cloud, cloud_msg_filtered ) );
 
             std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
             keyframe_queue.push_back( keyframe );
@@ -590,6 +590,7 @@ private:
             // add pose node
             Eigen::Isometry3d odom = odom2map * keyframe->odom;
             keyframe->node         = graph_slam->add_se3_node( odom );
+            // At this point we generate a new GID for the keyframe
             keyframe->set_gid( *gid_generator );
             gid_keyframe_map[keyframe->gid] = keyframe;
             keyframe_hash[keyframe->stamp]  = keyframe;
@@ -600,7 +601,6 @@ private:
                                                   // other robots have not been filtered for this keyframe
 
                 // fix the first node
-                // if( private_nh.param<bool>( "fix_first_node", false ) ) {
                 if( fix_first_node ) {
                     Eigen::MatrixXd information = Eigen::MatrixXd::Identity( 6, 6 );
                     for( int i = 0; i < 6; i++ ) {
@@ -610,9 +610,7 @@ private:
 
                     anchor_node = graph_slam->add_se3_node( Eigen::Isometry3d::Identity() );
                     anchor_node->setFixed( true );
-                    // KeyFrame::Ptr anchor_kf( new KeyFrame( ros::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
-                    KeyFrame::Ptr anchor_kf( new KeyFrame( rclcpp::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
-                    // if( !private_nh.param<bool>( "fix_first_node_adaptive", true ) ) {
+                    KeyFrame::Ptr anchor_kf( new KeyFrame( own_name, rclcpp::Time(), Eigen::Isometry3d::Identity(), -1, nullptr ) );
                     if( !fix_first_node_adaptive ) {
                         anchor_kf->gid = 0;  // if anchor node is not adaptive (i.e. stays at the origin), its GID needs to be 0 for all
                                              // robots
@@ -621,6 +619,7 @@ private:
                     gid_keyframe_map[0] = anchor_kf;
 
                     anchor_edge = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
+                    // At this point we generate a new GID for the edge of the anchor node
                     Edge::Ptr edge( new Edge( anchor_edge, Edge::TYPE_ODOM, (GlobalId)0, keyframe->gid, *gid_generator ) );
                     edges.emplace_back( edge );
                     edge_gids.insert( edge->gid );
@@ -639,7 +638,8 @@ private:
             Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_robot_keyframe->odom;
             Eigen::MatrixXd   information   = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud,
                                                                                       relative_pose );
-            auto      graph_edge = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
+            auto graph_edge = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
+            // At this point we generate a new GID for the edge
             Edge::Ptr edge( new Edge( graph_edge, Edge::TYPE_ODOM, keyframe->gid, prev_robot_keyframe->gid, *gid_generator ) );
             edges.emplace_back( edge );
             edge_gids.insert( edge->gid );
@@ -767,7 +767,8 @@ private:
             // ros::Time stamp(keyframe_ros.stamp);
             // sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>( keyframe_ros.cloud );
             sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
-            KeyFrame::Ptr keyframe( new KeyFrame( keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros ) );
+            KeyFrame::Ptr                            keyframe(
+                new KeyFrame( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros ) );
 
             Eigen::Isometry3d pose;
             // tf::poseMsgToEigen( keyframe_ros.estimate, pose );
@@ -791,7 +792,6 @@ private:
                 continue;
             }
 
-            // ROS_INFO_STREAM( "Adding edge: " << edge_ros.gid << " (" << edge_ros.from_gid << " -> " << edge_ros.to_gid << ")" );
             RCLCPP_INFO_STREAM( this->get_logger(), "Adding edge: " << gid_generator->getHumanReadableId( edge_ros.gid ) << " ("
                                                                     << gid_generator->getHumanReadableId( edge_ros.from_gid ) << " -> "
                                                                     << gid_generator->getHumanReadableId( edge_ros.to_gid ) << ")" );
@@ -1514,6 +1514,7 @@ private:
 
                 // auto &dst = res->graph.keyframes[i];
                 vamex_slam_msgs::msg::KeyFrameRos dst;
+                dst.robot_name     = src->robot_name;
                 dst.gid            = src->gid;
                 dst.stamp          = src->stamp;
                 dst.first_keyframe = src->first_keyframe;
@@ -1538,7 +1539,8 @@ private:
                 }
 
                 vamex_slam_msgs::msg::EdgeRos dst;
-                dst.type     = src->type == Edge::TYPE_ODOM ? 0 : 1;
+                dst.type     = src->type == Edge::TYPE_ODOM ? vamex_slam_msgs::msg::EdgeRos::TYPE_ODOM
+                                                            : vamex_slam_msgs::msg::EdgeRos::TYPE_LOOP;
                 dst.gid      = src->gid;
                 dst.from_gid = src->from_gid;
                 dst.to_gid   = src->to_gid;

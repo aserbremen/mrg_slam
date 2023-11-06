@@ -11,8 +11,10 @@
 
 namespace hdl_graph_slam {
 
-KeyFrame::KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
-                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
+KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
+                    double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud,
+                    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
+    robot_name( robot_name ),
     stamp( stamp ),
     odom( odom ),
     accum_distance( accum_distance ),

@@ -10,6 +10,7 @@
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <hdl_graph_slam/registrations.hpp>
+#include <unordered_map>
 
 namespace hdl_graph_slam {
 
@@ -80,7 +81,6 @@ private:
                         hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
                         const std::vector<Edge::Ptr>& edges, const std::unordered_map<GlobalId, KeyFrame::Ptr>& gid_keyframe_map );
 
-    // Eigen::Matrix4f single_scan_registration( const pcl::PointCloud<PointT>::Ptr source_cloud );
 
 private:
     rclcpp::Node::SharedPtr            node_ros;
@@ -100,7 +100,9 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    double last_edge_accum_distance;
+    std::unordered_map<std::string, double> last_edge_accum_distance_map;
+    // double                                  last_edge_accum_distance;
+
 
     pcl::Registration<PointT, PointT>::Ptr registration;
 };

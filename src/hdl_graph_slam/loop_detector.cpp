@@ -28,7 +28,10 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<Globa
 
     registration = select_registration_method( node_ros.get() );
 
-    last_edge_accum_distance = 0.0;
+    auto robot_names = node_ros->get_parameter( "robot_names" ).as_string_array();
+    for( const auto& robot_name : robot_names ) {
+        last_edge_accum_distance_map[robot_name] = 0.0;
+    }
 }
 
 /**
@@ -66,7 +69,8 @@ std::vector<KeyFrame::Ptr>
 LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const
 {
     // too close to the last registered loop edge
-    if( new_keyframe->accum_distance >= 0 && new_keyframe->accum_distance - last_edge_accum_distance < distance_from_last_edge_thresh ) {
+    if( new_keyframe->accum_distance >= 0
+        && new_keyframe->accum_distance - last_edge_accum_distance_map.at( new_keyframe->robot_name ) < distance_from_last_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();
     }
 
@@ -77,7 +81,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
     for( const auto& k : keyframes ) {
         // traveled distance between keyframes is too small
         if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0
-            && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh ) {
+            && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh && new_keyframe->robot_name == k->robot_name ) {
             continue;
         }
 
@@ -115,7 +119,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     double          best_score = std::numeric_limits<double>::max();
     KeyFrame::Ptr   best_matched;
-    Eigen::Matrix4f relative_pose;
+    Eigen::Matrix4f rel_pose_new_to_best_matched;
 
     std::cout << std::endl;
     std::cout << "--- loop detection ---" << std::endl;
@@ -149,9 +153,9 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
             continue;
         }
 
-        best_score    = score;
-        best_matched  = candidate;
-        relative_pose = registration->getFinalTransformation();  // New to candidate
+        best_score                   = score;
+        best_matched                 = candidate;
+        rel_pose_new_to_best_matched = registration->getFinalTransformation();  // New to candidate
     }
 
     // loop closure hypothesis check. Calculate relative transformation from new keyframe to candidate to its previous/next keyframe and
@@ -162,15 +166,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // First frame is excluded from map and is always used as a loop closure candidate without the consistency check
     if( use_loop_closure_consistency_check && best_matched->first_keyframe == false ) {
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
-        Eigen::Matrix4f              rel_pose_candidate_to_prev;
         if( best_matched->prev_edge != nullptr ) {
-            rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
-            RCLCPP_INFO_STREAM( node_ros->get_logger(),
-                                "prev edge " << gid_generator->getHumanReadableId( best_matched->prev_edge->gid ) << " from "
-                                             << gid_generator->getHumanReadableId( best_matched->prev_edge->from_gid ) << " to "
-                                             << gid_generator->getHumanReadableId( best_matched->prev_edge->to_gid )
-                                             << " has relative pose\n"
-                                             << rel_pose_candidate_to_prev );
+            Eigen::Matrix4f rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
 
             Eigen::Matrix4f rel_pose_new_to_prev;
             const auto&     prev_kf = gid_keyframe_map.at( best_matched->prev_edge->to_gid );
@@ -183,13 +180,12 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
             }
             registration->align( *prev_aligned, prev_guess );
             if( !registration->hasConverged() ) {
-                RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for prev" );
+                RCLCPP_WARN_STREAM( node_ros->get_logger(), "registration did not converge for prev" );
             }
             rel_pose_new_to_prev = registration->getFinalTransformation();
             // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
-            auto rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * relative_pose * rel_pose_candidate_to_prev;
-            RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for prev\n" << rel_pose_identity_check_prev );
-            float delta_trans_prev = rel_pose_identity_check_prev.block<3, 1>( 0, 3 ).norm();
+            auto  rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * rel_pose_new_to_best_matched * rel_pose_candidate_to_prev;
+            float delta_trans_prev             = rel_pose_identity_check_prev.block<3, 1>( 0, 3 ).norm();
             float delta_angle_prev =
                 Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
             if( delta_trans_prev < loop_closure_consistency_max_delta_trans
@@ -211,15 +207,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         if( !consistency_check_passed ) {
             // Identity transform consistency check with next keyframe, maybe only done for best score?
             pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
-            Eigen::Matrix4f              rel_pose_next_to_candidate;
             if( best_matched->next_edge != nullptr ) {
-                rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
-                RCLCPP_INFO_STREAM( node_ros->get_logger(),
-                                    "next edge " << gid_generator->getHumanReadableId( best_matched->next_edge->gid ) << " from "
-                                                 << gid_generator->getHumanReadableId( best_matched->next_edge->from_gid ) << " to "
-                                                 << gid_generator->getHumanReadableId( best_matched->next_edge->to_gid )
-                                                 << " has relative pose\n"
-                                                 << rel_pose_next_to_candidate );
+                Eigen::Matrix4f rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
 
                 Eigen::Matrix4f rel_pose_new_to_next;
                 const auto&     next_kf = gid_keyframe_map.at( best_matched->next_edge->from_gid );
@@ -232,12 +221,15 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
                 }
                 registration->align( *next_aligned, next_guess );
                 if( !registration->hasConverged() ) {
-                    RCLCPP_INFO_STREAM( node_ros->get_logger(), "registration did not converge for next" );
+                    RCLCPP_WARN_STREAM( node_ros->get_logger(), "registration did not converge for next" );
                 }
                 rel_pose_new_to_next = registration->getFinalTransformation();
                 // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
-                auto rel_pose_identity_check_next = relative_pose.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
-                RCLCPP_INFO_STREAM( node_ros->get_logger(), "identity check matrix for next\n" << rel_pose_identity_check_next );
+                auto rel_pose_identity_check_next = rel_pose_new_to_best_matched.inverse() * rel_pose_new_to_next
+                                                    * rel_pose_next_to_candidate;
+                // Alternative way to calculate the identity transform
+                // auto rel_pose_identity_check_next2 = rel_pose_new_to_next.inverse() * rel_pose_new_to_best_matched
+                //                                      * rel_pose_next_to_candidate.inverse();
                 float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
                 float delta_angle_next = Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) )
                                              .angularDistance( Eigen::Quaternionf::Identity() );
@@ -277,14 +269,16 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     std::cout << "loop found! from " << gid_generator->getHumanReadableId( new_keyframe->gid ) << " to "
               << gid_generator->getHumanReadableId( best_matched->gid ) << std::endl;
-    std::cout << "relpose: " << relative_pose.block<3, 1>( 0, 3 ).transpose() << " - "
-              << Eigen::Quaternionf( relative_pose.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
+    std::cout << "relpose: " << rel_pose_new_to_best_matched.block<3, 1>( 0, 3 ).transpose() << " - "
+              << Eigen::Quaternionf( rel_pose_new_to_best_matched.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 
+    // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
     if( new_keyframe->accum_distance >= 0 ) {
-        last_edge_accum_distance = new_keyframe->accum_distance;
+        RCLCPP_INFO_STREAM( node_ros->get_logger(), "Updating last edge accum distance in loop detector" );
+        last_edge_accum_distance_map[new_keyframe->robot_name] = new_keyframe->accum_distance;
     }
 
-    return std::make_shared<Loop>( new_keyframe, best_matched, relative_pose );
+    return std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );
 }
 
 

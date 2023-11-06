@@ -33,8 +33,9 @@ public:
     using Ptr      = std::shared_ptr<KeyFrame>;
     using ConstPtr = std::shared_ptr<const KeyFrame>;
 
-    KeyFrame( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
-              const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
+    KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
+              double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud,
+              const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
     virtual ~KeyFrame();
 
@@ -51,6 +52,7 @@ public:
     bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
 public:
+    std::string                   robot_name;      // robot name
     builtin_interfaces::msg::Time stamp;           // timestamp
     Eigen::Isometry3d             odom;            // odometry (estimated by scan_matching_odometry)
     double                        accum_distance;  // accumulated distance from the first node (by scan_matching_odometry)
