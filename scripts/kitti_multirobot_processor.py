@@ -65,7 +65,8 @@ class KittiMultiRobotProcessor(Node):
         self.max_times = self.declare_parameter('max_times', [100000.0, 10000.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
-        self.sequence = self.declare_parameter('sequence', '00').value
+        self.sequence = self.declare_parameter('sequence', 0).value
+        self.sequence = str(self.sequence).zfill(2)
         self.rate = self.declare_parameter('rate', 1.0).value
         self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value

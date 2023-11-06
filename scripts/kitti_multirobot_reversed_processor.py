@@ -62,12 +62,13 @@ class KittiMultiRobotProcessor(Node):
         self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
         print(self.robot_names)
         self.min_times = self.declare_parameter('min_times', [0.0, 0.0]).value
-        self.max_times = self.declare_parameter('max_times', [250.0, 250.0]).value
+        self.max_times = self.declare_parameter('max_times', [60.0, 60.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
-        self.sequence = self.declare_parameter('sequence', '00').value
+        self.sequence = self.declare_parameter('sequence', 0).value
+        self.sequence = str(self.sequence).zfill(2)
         self.rate = self.declare_parameter('rate', 1.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/home/andi/Seafile/data/slam_results/kitti/sequences/00/').value
+        self.result_dir = self.declare_parameter('result_dir', '/home/andi/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         self.eval_name = self.declare_parameter('eval_name', 'reversed').value
         # -1 means all points of the pointcloud, otherwise voxel size
@@ -141,21 +142,12 @@ class KittiMultiRobotProcessor(Node):
         for robot_name in self.robot_names:
             print(f'\n\n{robot_name}')
             if not os.path.exists(self.robots[robot_name]['result_dir']):
+                print(f'Creating result dir for robot {robot_name} at {self.robots[robot_name]["result_dir"]}')
                 os.makedirs(self.robots[robot_name]['result_dir'])
-            # Set the max point cloud index to the index of the last timestamp that is less than the max timestamp
-            # idx_max = np.abs(self.timestamps - self.robots[robot_name]['max_timestamp']).argmin()
-            # print(f'Found max timestamp {self.timestamps[idx_max]} at index {idx_max}')
-            # if idx_max > self.point_cloud_idx_max:
-            #     print(f'Setting point cloud idx max to index of last timestamp {idx_max}')
-            #     self.point_cloud_idx_max = idx_max
             # Start the slam node in a subprocess, set the start position as well
             idx_min = np.abs(self.timestamps - self.robots[robot_name]['min_timestamp']).argmin()
             print(f'Found min timestamp {self.timestamps[idx_min]} at index {idx_min}')
             print(f'Pose for min timestamp\n{self.velo_gt_poses[idx_min]}')
-            # set the point cloud counter to the index of the first timestamp that is greater than the min timestamp
-            # if idx_min < self.point_cloud_counter:
-            #     print(f'Setting point cloud counter to index of first timestamp {idx_min}')
-            #     self.point_cloud_counter = idx_min
             if robot_name == 'atlas':
                 x, y, z = self.velo_gt_poses[idx_min][0:3, 3]
                 print(f'rotmat {self.velo_gt_poses[idx_min][0:3, 0:3].reshape(3, 3)}')
@@ -271,16 +263,6 @@ class KittiMultiRobotProcessor(Node):
         ros_pcl_reversed = self.kitti_to_ros_point_cloud(ts, velo_reversed)
 
         self.publish_clock_msg(ros_pcl.header.stamp)
-        # Publish the pointcloud for each robot if it is within the time bounds
-        # for robot_name in self.robot_names:
-        #     if self.robots[robot_name]['min_timestamp'] <= ts <= self.robots[robot_name]['max_timestamp']:
-        #         # set the frame id to the robot name
-        #         ros_pcl.header.frame_id = robot_name + '/velodyne'
-        #         print(
-        #             f'Publishing point cloud for robot {robot_name} with ts {ts} \
-        #                 min ts {self.robots[robot_name]["min_timestamp"]} max ts {self.robots[robot_name]["max_timestamp"]}')
-        #         self.robots[robot_name]['point_cloud_pub'].publish(ros_pcl)
-
         # Publish the forward moving pointcloud for atlas
         if self.robots['atlas']['min_timestamp'] <= ts <= self.robots['atlas']['max_timestamp']:
             ros_pcl.header.frame_id = 'atlas/velodyne'

@@ -65,6 +65,7 @@ class KittiMultiRobotProcessor(Node):
         for i in range(len(self.velo_gt_poses) - 1):
             traveled_distance += np.linalg.norm(self.velo_gt_poses[i][0:3, 3] - self.velo_gt_poses[i + 1][0:3, 3])
         print(f'total traveled distance {traveled_distance}')
+        print(f'total time {(self.timestamps[-1] - self.timestamps[0]).total_seconds()}')
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -72,10 +73,11 @@ class KittiMultiRobotProcessor(Node):
         colors = np.arange(len(self.velo_gt_poses))
         colormap = plt.get_cmap('viridis')
         normalize = plt.Normalize(vmin=colors.min(), vmax=colors.max())
-        ax.scatter([pose[0, 3] for pose in self.velo_gt_poses],
-                   [pose[1, 3] for pose in self.velo_gt_poses],
-                   c=colors, cmap='viridis', label='velo', s=0.1)
-        cbar = plt.colorbar(plt.cm.ScalarMappable(norm=normalize, cmap=colormap))
+        scatter = ax.scatter([pose[0, 3] for pose in self.velo_gt_poses],
+                             [pose[1, 3] for pose in self.velo_gt_poses],
+                             c=colors, cmap='viridis', label='velo', s=0.1)
+        # cbar = plt.colorbar(plt.cm.ScalarMappable(norm=normalize, cmap=colormap))
+        cbar = plt.colorbar(scatter)
         cbar.set_label('time')
 
         # plot the ground truth line with a tolerance for picking points and printing their timestamps
