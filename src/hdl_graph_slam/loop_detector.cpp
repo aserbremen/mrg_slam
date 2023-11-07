@@ -69,6 +69,7 @@ std::vector<KeyFrame::Ptr>
 LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const
 {
     // too close to the last registered loop edge
+    // TODO the last edge check is not correct yet
     if( new_keyframe->accum_distance >= 0
         && new_keyframe->accum_distance - last_edge_accum_distance_map.at( new_keyframe->robot_name ) < distance_from_last_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();

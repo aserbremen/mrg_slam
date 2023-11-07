@@ -254,11 +254,13 @@ public:
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
-        optimization_timer = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( graph_update_interval, 0 ),
-                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ),
-                                                   reentrant_callback_group2 );
-        map_publish_timer  = rclcpp::create_timer( node_ros, node_ros->get_clock(), rclcpp::Duration( map_cloud_update_interval, 0 ),
-                                                   std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
+        optimization_timer                 = rclcpp::create_timer( node_ros, node_ros->get_clock(),
+                                                                   rclcpp::Duration( std::max( static_cast<int>( graph_update_interval ), 1 ), 0 ),
+                                                                   std::bind( &HdlGraphSlamComponent::optimization_timer_callback, this ),
+                                                                   reentrant_callback_group2 );
+        map_publish_timer                  = rclcpp::create_timer( node_ros, node_ros->get_clock(),
+                                                                   rclcpp::Duration( std::max( static_cast<int>( map_cloud_update_interval ), 1 ), 0 ),
+                                                                   std::bind( &HdlGraphSlamComponent::map_points_publish_timer_callback, this ) );
 
         gps_processor.onInit( node_ros );
         imu_processor.onInit( node_ros );
@@ -318,6 +320,8 @@ private:
         this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
         this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
         this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
+        this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
+        this->declare_parameter<std::string>( "GraphExchangeMode", "PATH_PROXIMITY" );
 
         // KeyframeUpdater parameters (not directly used by this class)
         this->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
@@ -419,6 +423,9 @@ private:
         map_cloud_update_interval            = this->get_parameter( "map_cloud_update_interval" ).as_double();
         graph_request_min_accum_dist         = this->get_parameter( "graph_request_min_accum_dist" ).as_double();
         graph_request_max_robot_dist         = this->get_parameter( "graph_request_max_robot_dist" ).as_double();
+        graph_request_min_time_delay         = this->get_parameter( "graph_request_min_time_delay" ).as_double();
+        std::string graph_exchange_mode_str  = this->get_parameter( "GraphExchangeMode" ).as_string();
+        graph_exchange_mode                  = graph_exchange_mode_from_string( graph_exchange_mode_str );
     }
 
     /**
@@ -877,33 +884,57 @@ private:
 
         std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
 
-        Eigen::Vector3d own_position    = prev_robot_keyframe->estimate().translation();
-        const auto     &robot_name      = slam_pose_msg->robot_name;
-        double          accum_dist      = slam_pose_msg->accum_dist;
-        double         &last_accum_dist = others_last_accum_dist[robot_name];
-        others_slam_poses[robot_name]   = *slam_pose_msg;
-        if( last_accum_dist >= 0 && fabs( accum_dist - last_accum_dist ) < graph_request_min_accum_dist ) {
+        Eigen::Vector2d own_position          = prev_robot_keyframe->estimate().translation().head( 2 );
+        const auto     &other_robot_name      = slam_pose_msg->robot_name;
+        double          other_accum_dist      = slam_pose_msg->accum_dist;
+        double         &other_last_accum_dist = others_last_accum_dist[other_robot_name];
+        others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
+        if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
+            return;
+        }
+        if( ( this->now().seconds() - others_last_graph_exchange_time[other_robot_name].seconds() ) < graph_request_min_time_delay ) {
             return;
         }
 
-        double          max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
-        Eigen::Vector3d other_position     = Eigen::Vector3d( slam_pose_msg->pose.position.x, slam_pose_msg->pose.position.y,
-                                                              slam_pose_msg->pose.position.z );
-        if( ( own_position - other_position ).squaredNorm() > max_robot_dist_sqr ) {
+        bool request_graph = false;
+        if( graph_exchange_mode == CURRENT_PROXIMITY ) {
+            double          max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
+            Eigen::Vector2d other_position     = Eigen::Vector2d( slam_pose_msg->pose.position.x, slam_pose_msg->pose.position.y );
+            if( ( own_position - other_position ).squaredNorm() > max_robot_dist_sqr ) {
+                return;
+            } else {
+                request_graph = true;
+            }
+        } else if( graph_exchange_mode == PATH_PROXIMITY ) {
+            double max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
+            for( const auto &other_pose : others_slam_poses[other_robot_name] ) {
+                Eigen::Vector2d other_position = Eigen::Vector2d( other_pose.pose.position.x, other_pose.pose.position.y );
+                if( ( own_position - other_position ).squaredNorm() > max_robot_dist_sqr ) {
+                    continue;
+                } else {
+                    request_graph = true;
+                    break;
+                }
+            }
+        }
+        if( !request_graph ) {
             return;
         }
 
-        while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
+        others_last_graph_exchange_time[other_robot_name] = this->now();
+        while( !request_graph_service_clients[other_robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
             if( !rclcpp::ok() ) {
                 return;
             }
             RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
-                                         "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
+                                         "Waiting for service " << request_graph_service_clients[other_robot_name]->get_service_name()
                                                                 << " to appear..." );
         }
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << robot_name << " with new accum dist "
-                                                                               << accum_dist - last_accum_dist << "m" );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << other_robot_name << " with new accum dist "
+                                                                               << other_accum_dist - other_last_accum_dist << "m" );
+        slam_status_msg.in_graph_exchange = true;
+        slam_status_publisher->publish( slam_status_msg );
         vamex_slam_msgs::srv::PublishGraph::Request::SharedPtr req = std::make_shared<vamex_slam_msgs::srv::PublishGraph::Request>();
 
         req->robot_name = own_name;
@@ -918,23 +949,25 @@ private:
         }
 
         unique_lck.unlock();
-
-        auto               result_future = request_graph_service_clients[robot_name]->async_send_request( req );
-        std::future_status status        = result_future.wait_for( std::chrono::seconds( 5 ) );
+        auto               result_future = request_graph_service_clients[other_robot_name]->async_send_request( req );
+        std::future_status status        = result_future.wait_for( std::chrono::seconds( 20 ) );
 
         if( status == std::future_status::timeout ) {
-            RCLCPP_WARN_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+            RCLCPP_WARN_STREAM( this->get_logger(), "Request graph service call to rover " << other_robot_name << " timed out" );
+            slam_status_msg.in_graph_exchange = false;
+            slam_status_publisher->publish( slam_status_msg );
             return;
         }
         if( status == std::future_status::ready ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << other_robot_name << " successful" );
         }
         auto result = result_future.get();
         // Fill the graph queue with the received graph
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
         graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
-
-        last_accum_dist = accum_dist;
+        slam_status_msg.in_graph_exchange = false;
+        slam_status_publisher->publish( slam_status_msg );
+        other_last_accum_dist = other_accum_dist;
     }
 
     /**
@@ -1619,7 +1652,7 @@ private:
             std::lock_guard<std::mutex> lock( graph_queue_mutex );
             graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
 
-            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].accum_dist;
+            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].back().accum_dist;
         }
         // Call the optimization callback to process the received graphs needed when working with use_sim_time true
         optimization_timer_callback();
@@ -1693,7 +1726,24 @@ private:
         }
     }
 
+
 private:
+    enum GraphExchangeMode {
+        CURRENT_PROXIMITY,
+        PATH_PROXIMITY,
+    };
+
+    GraphExchangeMode graph_exchange_mode_from_string( const std::string &str )
+    {
+        // Transform to upper case
+        if( str == "CURRENT_PROXIMITY" ) {
+            return GraphExchangeMode::CURRENT_PROXIMITY;
+        } else if( str == "PATH_PROXIMITY" ) {
+            return GraphExchangeMode::PATH_PROXIMITY;
+        } else {
+            throw std::runtime_error( "Unknown graph exchange mode: " + str );
+        }
+    }
     // ROS
     // ros::NodeHandle nh;
     // ros::NodeHandle mt_nh;
@@ -1717,14 +1767,17 @@ private:
     // ros::Publisher  graph_broadcast_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                               slam_pose_broadcast_pub;
     std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
-    std::unordered_map<std::string, vamex_slam_msgs::msg::PoseWithName>                            others_slam_poses;
+    std::unordered_map<std::string, std::vector<vamex_slam_msgs::msg::PoseWithName>>               others_slam_poses;
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                            slam_pose_broadcast_sub;
     rclcpp::Publisher<vamex_slam_msgs::msg::SlamStatus>::SharedPtr                                 slam_status_publisher;
     vamex_slam_msgs::msg::SlamStatus                                                               slam_status_msg;
     // other robot name -> accumulated dist when last graph update was requested from that robot
-    std::unordered_map<std::string, double> others_last_accum_dist;
-    double                                  graph_request_min_accum_dist;
-    double                                  graph_request_max_robot_dist;
+    std::unordered_map<std::string, double>       others_last_accum_dist;
+    std::unordered_map<std::string, rclcpp::Time> others_last_graph_exchange_time;
+    double                                        graph_request_min_accum_dist;
+    double                                        graph_request_max_robot_dist;
+    double                                        graph_request_min_time_delay;
+    GraphExchangeMode                             graph_exchange_mode;
 
     // ros::Subscriber odom_broadcast_sub;
     // ros::Publisher  odom_broadcast_pub;

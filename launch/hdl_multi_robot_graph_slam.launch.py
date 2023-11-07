@@ -32,7 +32,6 @@ PARAM_MAPPING = {
     'pitch': float,
     'yaw': float,
     'init_pose_topic': str,
-    'enable_multi_robot_communicator': bool,
 }
 
 
@@ -88,7 +87,6 @@ def launch_setup(context, *args, **kwargs):
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
         floor_detection_params = config_params['floor_detection_component']['ros__parameters']
         hdl_graph_slam_params = config_params['hdl_graph_slam_component']['ros__parameters']
-        multi_robot_communicator_params = config_params['multi_robot_communicator']['ros__parameters']
 
     # Overwrite the parameters from the yaml file with the ones from the cli
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
@@ -98,7 +96,6 @@ def launch_setup(context, *args, **kwargs):
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
     hdl_graph_slam_params = overwrite_yaml_params_from_cli(hdl_graph_slam_params, context.launch_configurations)
-    multi_robot_communicator_params = overwrite_yaml_params_from_cli(multi_robot_communicator_params, context.launch_configurations)
 
     model_namespace = shared_params['model_namespace']
 
@@ -110,7 +107,6 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
     print_yaml_params(floor_detection_params, 'floor_detection_params')
     print_yaml_params(hdl_graph_slam_params, 'hdl_graph_slam_params')
-    print_yaml_params(multi_robot_communicator_params, 'multi_robot_communicator_params')
 
     # Create the static transform publisher node
     frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
@@ -326,19 +322,6 @@ def launch_setup(context, *args, **kwargs):
         composable_node_descriptions=composable_nodes
     )
 
-    multi_robot_communicator_params['own_name'] = model_namespace
-    remaps = [('/hdl_graph_slam/get_graph_gids', '/' + model_namespace + '/hdl_graph_slam/get_graph_gids'),]
-    print_remappings(remaps, 'multi_robot_communicator')
-    multi_robot_communicator = Node(
-        package='hdl_graph_slam',
-        executable='multi_robot_communicator',
-        name='multi_robot_communicator',
-        namespace=model_namespace,
-        parameters=[multi_robot_communicator_params, shared_params],
-        remappings=remaps,
-        output='screen'
-    )
-
     launch_description_list = [static_transform_publisher]
     if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
         launch_description_list.append(map2robotmap_publisher)
@@ -350,8 +333,6 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list.append(map2odom_publisher_ros2)
     launch_description_list.append(container)
     launch_description_list.append(load_composable_nodes)
-    if multi_robot_communicator_params['enable_multi_robot_communicator']:
-        launch_description_list.append(multi_robot_communicator)
 
     # Return nodes
     return launch_description_list

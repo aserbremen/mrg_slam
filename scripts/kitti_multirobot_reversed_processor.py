@@ -62,7 +62,7 @@ class KittiMultiRobotProcessor(Node):
         self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
         print(self.robot_names)
         self.min_times = self.declare_parameter('min_times', [0.0, 0.0]).value
-        self.max_times = self.declare_parameter('max_times', [60.0, 60.0]).value
+        self.max_times = self.declare_parameter('max_times', [240.0, 235.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', 0).value
@@ -213,7 +213,8 @@ class KittiMultiRobotProcessor(Node):
 
     def wait_slam_done(self):
         if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
-                any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]):
+                any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]) or \
+                any([self.robots[robot_name]['slam_status'].in_graph_exchange for robot_name in self.robot_names]):
             time.sleep(1)
             print('Slam is optimizing or in loop closure, waiting')
             return
@@ -280,7 +281,8 @@ class KittiMultiRobotProcessor(Node):
         self.progress_bar.update(1)
 
         if self.point_cloud_counter >= len(self.timestamps) or self.timestamps[self.point_cloud_counter] > self.end_time or \
-                self.point_cloud_counter_reversed < 0 or self.timestamps[self.point_cloud_counter_reversed] < self.start_time:
+                self.point_cloud_counter_reversed < 0 or self.timestamps[self.point_cloud_counter_reversed] < self.start_time or \
+                ts >= self.robots['atlas']['max_timestamp'] and ts >= self.robots['bestla']['max_timestamp']:
             self.progress_bar.close()
             print('Finished playback and closed progress bar')
             # publish a clock message with an offset to trigger optimization once more
