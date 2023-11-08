@@ -7,8 +7,9 @@ TX, TY, TZ, QX, QY, QZ, QW = range(7)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--g2o_folder', type=str, help='path to g2o folder containing result with folders for every vertex', required=True)
-    parser.add_argument('--output_file', type=str, help='absolute path to output file, if not set a file', required=False)
+    parser.add_argument('-i', '--g2o_folder', type=str,
+                        help='path to g2o folder containing result with folders for every vertex', required=True)
+    parser.add_argument('-o', '--output_file', type=str, help='absolute path to output file, if not set a file', required=False)
 
     args = parser.parse_args()
 
@@ -29,7 +30,12 @@ def main():
                 stamp_str = next((line for line in lines if line.startswith('stamp')), None)
                 stamp_secs = stamp_str.split(' ')[1]
                 stamp_nanosecs = stamp_str.split(' ')[2]
+                # remove new line character if present
+                if stamp_nanosecs.endswith('\n'):
+                    stamp_nanosecs = stamp_nanosecs[:-1]
+                stamp_nanosecs = stamp_nanosecs.zfill(9)
                 stamp = float(stamp_secs + '.' + stamp_nanosecs)
+                print(f'stamp nanosecs: {stamp_nanosecs} stamp secs: {stamp_secs} stamp: {stamp}')
 
                 # Skip the vertices with negative accum_dist indicating loop closure vertices leading to jumps in the estimated trajectory file
                 accum_dist_str = next((line for line in lines if line.startswith('accum_dist')), None)
