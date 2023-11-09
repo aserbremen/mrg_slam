@@ -1,9 +1,13 @@
 import os
-import fire
 import time
+import signal
+import subprocess
+from enum import Enum
+import tqdm
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 import rclpy.logging
 from tf2_ros import TransformBroadcaster
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -13,16 +17,19 @@ from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
 
 from rosgraph_msgs.msg import Clock
+from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py.point_cloud2 import read_points
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
 from vamex_slam_msgs.msg import SlamStatus
+from vamex_slam_msgs.srv import DumpGraph, SaveMap
 
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from pyquaternion import Quaternion
+from scipy.spatial.transform import Rotation as R
+# from pyquaternion import Quaternion
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -46,6 +53,15 @@ def euler_from_quaternion(x, y, z, w):
     yaw_z = math.atan2(t3, t4)
 
     return roll_x, pitch_y, yaw_z  # in radians
+
+
+class Task(Enum):
+    PLAYBACK = 0
+    WAIT_SLAM_DONE = 1
+    DUMP_GRAPH = 2
+    SAVE_MAP = 3
+    SHUTDOWN_SLAM = 4
+    SHUTDOWN_NODE = 5
 
 
 # https://answers.ros.org/question/358686/how-to-read-a-bag-file-in-ros2/
@@ -73,31 +89,32 @@ class BagFileParser():
         return [(timestamp, deserialize_message(data, self.topic_msg_message[topic_name])) for timestamp, data in rows]
 
 
-class RosbagProcessor(Node):
+class NebulaProcessor(Node):
     def __init__(self) -> None:
         super().__init__('rosbag_processor')
 
         self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
         self.robot_names = self.declare_parameter('robot_names', ['husky1']).get_parameter_value().string_array_value
-        self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
+        self.dataset_base_dir = self.declare_parameter('dataset_base_dir', '/data/datasets/nebula').get_parameter_value().string_value
+        self.dataset = self.declare_parameter('dataset', 'urban').get_parameter_value().string_value
+        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/nebula').get_parameter_value().string_value
+        self.eval_name = self.declare_parameter('eval_name', 'urban_multi').get_parameter_value().string_value
+        # -1.0 means use the resolution from the map, otherwise voxel size in meters
+        self.map_resolution = self.declare_parameter('map_resolution', -1.0).get_parameter_value().double_value
+        self.slam_config = self.declare_parameter('slam_config', 'nebula_multi_robot_urban.yaml').get_parameter_value().string_value
         self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
-        # For analysing pointcloud data
-        self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
-        self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
 
         # The slam status callback and the timer callback need to be reentrant, so that the slam status can be updated while the timer is processed
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        if self.dataset_dir == '':
-            print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
+        if self.dataset_base_dir == '':
+            print('Please specify the dataset directory parameter <dataset_base_dir> like this: --ros-args -p dataset_base_dir:=/path/to/dataset')
             exit(1)
 
-        self.data_dict = {}
-        self.setup_playback()
-
     def setup_playback(self):
+        self.robots = {}  # type: dict[str, dict]
         print('Setting up playback for robots: {}'.format(self.robot_names))
         for robot_name in self.robot_names:
             self.setup_robot(robot_name)
@@ -107,8 +124,9 @@ class RosbagProcessor(Node):
 
     def setup_robot(self, robot_name):
 
-        keyed_scan_bag_path = os.path.join(self.dataset_dir, 'rosbag', robot_name, robot_name + '.db3')
-        odometry_bag_path = os.path.join(self.dataset_dir, 'ground_truth', robot_name + '_odom', robot_name + '_odom.db3')
+        keyed_scan_bag_path = os.path.join(self.dataset_base_dir, self.dataset, 'rosbag', robot_name, robot_name + '.db3')
+        odometry_bag_path = os.path.join(self.dataset_base_dir, self.dataset, 'ground_truth',
+                                         robot_name + '_odom', robot_name + '_odom.db3')
         if not os.path.exists(keyed_scan_bag_path):
             print('Keyed scan bag does not exist: {}'.format(keyed_scan_bag_path))
             exit(1)
@@ -121,9 +139,9 @@ class RosbagProcessor(Node):
         print("Trying to get all messages from ros2 bag {} with topic name {}".format(keyed_scan_bag_path,  keyed_scans_topic_name))
         scans_msgs = keyed_scans_parser.get_messages(keyed_scans_topic_name)
         # Add the keyed scans data to the data dict
-        self.data_dict[robot_name] = {}
-        self.data_dict[robot_name]['scans_msgs'] = scans_msgs
-        self.data_dict[robot_name]['scans_stamps'] = np.array([msg[0] for msg in scans_msgs])
+        self.robots[robot_name] = {}
+        self.robots[robot_name]['scans_msgs'] = scans_msgs
+        self.robots[robot_name]['scans_stamps'] = np.array([msg[0] for msg in scans_msgs])
 
         odometry_parser = BagFileParser(odometry_bag_path)
         odometry_topic_name = '/' + robot_name + '/lo_frontend/odometry'
@@ -132,69 +150,133 @@ class RosbagProcessor(Node):
         # odometry msg stamp is given in the header
         odometry_stamps = np.array([int(msg[1].header.stamp.sec * 1e9 + msg[1].header.stamp.nanosec) for msg in odometry_msgs])
         # Add the odometry to the data dict
-        self.data_dict[robot_name]['odometry_msgs'] = odometry_msgs
-        self.data_dict[robot_name]['odometry_stamps'] = odometry_stamps
+        self.robots[robot_name]['odometry_msgs'] = odometry_msgs
+        self.robots[robot_name]['odometry_stamps'] = odometry_stamps
 
-        self.data_dict[robot_name]['scan_counter'] = 0
+        self.robots[robot_name]['scan_counter'] = 0
         point_cloud2_topic_name = '/' + robot_name + '/prefiltering/filtered_points'
-        self.data_dict[robot_name]['point_cloud2_publisher'] = self.create_publisher(PointCloud2, point_cloud2_topic_name, 10)
+        self.robots[robot_name]['point_cloud_pub'] = self.create_publisher(PointCloud2, point_cloud2_topic_name, 10)
         print('Setting up PointCloud2 publisher on topic {}'.format(point_cloud2_topic_name))
         odometry_topic_name = '/' + robot_name + '/scan_matching_odometry/odom'
-        self.data_dict[robot_name]['odometry_publisher'] = self.create_publisher(Odometry,  odometry_topic_name, 10)
+        self.robots[robot_name]['odom_pub'] = self.create_publisher(Odometry,  odometry_topic_name, 10)
         print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
 
         # Create the subscription to the slam status in order to stop playback when the algorithms are optimizing or loop closing
         slam_status_topic_name = '/' + robot_name + '/hdl_graph_slam/slam_status'
-        self.data_dict[robot_name]['slam_status_subscription'] = self.create_subscription(
+        self.robots[robot_name]['slam_status_subscription'] = self.create_subscription(
             SlamStatus, slam_status_topic_name, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
-        self.data_dict[robot_name]['slam_status'] = SlamStatus()
+        self.robots[robot_name]['slam_status'] = SlamStatus()
 
         # Setup a filtered_points publisher for floor detection
         if self.enable_floor_detetction:
-            self.data_dict[robot_name]['filtered_points_publisher'] = self.create_publisher(
+            self.robots[robot_name]['filtered_points_publisher'] = self.create_publisher(
                 PointCloud2, '/' + robot_name + '/prefiltering/filtered_points', 10)
 
+        # setup the slam process and saving of data
+        self.robots[robot_name]['slam_process'] = None  # type: subprocess.Popen
+        self.robots[robot_name]['dump_graph_requested'] = False
+        self.robots[robot_name]['dump_graph_done'] = False
+        dump_graph_topic = '/' + robot_name + '/hdl_graph_slam/dump'
+        self.robots[robot_name]['dump_service_client'] = self.create_client(
+            DumpGraph, dump_graph_topic, callback_group=self.reentrant_callback_group)
+        self.robots[robot_name]['save_map_requested'] = False
+        self.robots[robot_name]['save_map_done'] = False
+        save_map_topic = '/' + robot_name + '/hdl_graph_slam/save_map'
+        self.robots[robot_name]['save_map_client'] = self.create_client(
+            SaveMap, save_map_topic, callback_group=self.reentrant_callback_group)
+        self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.dataset, self.eval_name, robot_name)
+        if not os.path.exists(self.robots[robot_name]['result_dir']):
+            os.makedirs(self.robots[robot_name]['result_dir'])
+        else:
+            self.get_logger().warn('Result directory {} already exists, overwriting'.format(self.robots[robot_name]['result_dir']))
+
+        # Start the slam process with the correct starting position
+        start_pos = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.position
+        start_quat = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.orientation
+        x, y, z = start_pos.x, start_pos.y, start_pos.z
+        qx, qy, qz, qw = start_quat.x, start_quat.y, start_quat.z, start_quat.w
+        rot = R.from_quat([qx, qy, qz, qw])
+        yaw, pitch, roll = rot.as_euler('ZYX', degrees=False)
+        print(f'Starting slam process for robot {robot_name} at position ({x}, {y}, {z}) \
+                with orientation ({np.rad2deg( roll)}, {np.rad2deg(pitch)}, {np.rad2deg(yaw)})')
+        slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name,
+                    'config:=' + self.slam_config, 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z), 'yaw:=' + str(yaw), 'pitch:=' + str(pitch), 'roll:=' + str(roll)]
+        with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), 'w') as f:
+            self.robots[robot_name]['slam_process'] = subprocess.Popen(slam_cmd, stdout=f, stderr=f)
+            print(f'Started slam process for robot {robot_name} with pid {self.robots[robot_name]["slam_process"].pid} and cmd')
+            print(' '.join(slam_cmd))
+        time.sleep(3)
+
+    def task_timer_callback(self):
+        self.task_timer.cancel()
+        if self.task == Task.PLAYBACK:
+            self.playback()
+        elif self.task == Task.WAIT_SLAM_DONE:
+            self.wait_slam_done()
+        elif self.task == Task.DUMP_GRAPH:
+            self.dump_graph()
+        elif self.task == Task.SAVE_MAP:
+            self.save_map()
+        elif self.task == Task.SHUTDOWN_SLAM:
+            self.shutdown_slam()
+        elif self.task == Task.SHUTDOWN_NODE:
+            self.shutdown_node()
+        else:
+            print('Unknown task')
+        self.task_timer.reset()
+
     def start_playback(self):
+        self.setup_playback()
+
         print('Starting playback with rate {}'.format(self.playback_rate))
-        self.timer = self.create_timer(1.0 / self.playback_rate, self.process_rosbags, callback_group=self.reentrant_callback_group)
+        self.task = Task.PLAYBACK
+        # self.timer = self.create_timer(1.0 / self.playback_rate, self.playback, callback_group=self.reentrant_callback_group)
+        self.task_timer = self.create_timer(1.0 / self.playback_rate, self.task_timer_callback,
+                                            callback_group=self.reentrant_callback_group)
         self.print_wait_info_once = True
+        total_scans = sum(len(self.robots[k]['scans_stamps']) for k in self.robots)
+        self.progress_bar = tqdm.tqdm(total=total_scans, desc='Playback', unit='scans')
 
-    def print_initial_poses(self):
+    def publish_transform(self, stamp, frame_id, child_frame_id,  translation, rotation):
+        t = TransformStamped()
+        t.header.stamp = stamp
+        t.header.frame_id = frame_id
+        t.child_frame_id = child_frame_id
+        t.transform.translation.x = translation.x
+        t.transform.translation.y = translation.y
+        t.transform.translation.z = translation.z
+        t.transform.rotation.x = rotation.x
+        t.transform.rotation.y = rotation.y
+        t.transform.rotation.z = rotation.z
+        t.transform.rotation.w = rotation.w
+        self.tf_broadcaster.sendTransform(t)
 
-        for robot_name in self.robot_names:
-            pointcloud_stamp = self.data_dict[robot_name]['scans_stamps'][0]
-            closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
+    def publish_clock_msg(self, stamp):
+        clock_msg = Clock()
+        clock_msg.clock.sec = stamp.sec
+        clock_msg.clock.nanosec = stamp.nanosec
+        self.clock_publisher.publish(clock_msg)
 
-            initial_odom = self.data_dict[robot_name]['odometry_msgs'][closest_odometry_index][1]
-            position = initial_odom.pose.pose.position
-            orientation = initial_odom.pose.pose.orientation
-            euler = euler_from_quaternion(orientation.x, orientation.y, orientation.z, orientation.w)
-            print('Robot {} initial pose:'.format(robot_name))
-            print('position    {:.3f} {:.3f} {:.3f}'.format(position.x, position.y, position.y))
-            print('orientation {:.3f} {:.3f} {:.3f} {:.3f}'.format(orientation.x, orientation.y, orientation.z, orientation.w))
-            print('euler rpy   {:.3f} {:.3f} {:.3f}'.format(euler[0], euler[1], euler[2]))
-            print("Convenient format:")
-            print('x: {:.3f}\ny: {:.3f}\nz: {:.3f}\n'.format(position.x, position.y, position.z))
-            print('qx: {:.3f}\nqy: {:.3f}\nqz: {:.3f}\nqw: {:.3f}\n'.format(orientation.x, orientation.y, orientation.z, orientation.w))
-            print('roll: {:.3f}\npitch: {:.3f}\nyaw: {:.3f}\n'.format(euler[0], euler[1], euler[2]))
-
-        exit(0)
-
-    def process_rosbags(self):
+    def playback(self):
+        if any(self.robots[robot_name]['slam_status'].in_optimization or
+               self.robots[robot_name]['slam_status'].in_loop_closure or
+               self.robots[robot_name]['slam_status'].in_graph_exchange for robot_name in self.robots):
+            return
         # Make sure that this timer is only executed once, reset the timer at the end of this function
-        self.timer.cancel()
+        # self.timer.cancel()
         # Get the robot name with the lowest timestamp
+
         robot_name = min(
-            self.data_dict, key=lambda k: self.data_dict[k]['scans_stamps'][self.data_dict[k]['scan_counter']]
-            if self.data_dict[k]['scan_counter'] < len(self.data_dict[k]['scans_stamps']) else float('inf'))
+            self.robots, key=lambda k: self.robots[k]['scans_stamps'][self.robots[k]['scan_counter']]
+            if self.robots[k]['scan_counter'] < len(self.robots[k]['scans_stamps']) else float('inf'))
 
         # Get the pointcloud and the corresponding odometry message with the closest timestamp
-        pointcloud_stamp = self.data_dict[robot_name]['scans_stamps'][self.data_dict[robot_name]['scan_counter']]
-        closest_odometry_index = np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pointcloud_stamp))
-        odometry_stamp = self.data_dict[robot_name]['odometry_stamps'][closest_odometry_index]
+        pointcloud_stamp = self.robots[robot_name]['scans_stamps'][self.robots[robot_name]['scan_counter']]
+        closest_odometry_index = np.argmin(np.abs(self.robots[robot_name]['odometry_stamps'] - pointcloud_stamp))
+        odometry_stamp = self.robots[robot_name]['odometry_stamps'][closest_odometry_index]
 
-        pointcloud = self.data_dict[robot_name]['scans_msgs'][self.data_dict[robot_name]['scan_counter']][1].scan
-        odometry = self.data_dict[robot_name]['odometry_msgs'][closest_odometry_index][1]
+        pointcloud = self.robots[robot_name]['scans_msgs'][self.robots[robot_name]['scan_counter']][1].scan  # type: PointCloud2
+        odometry = self.robots[robot_name]['odometry_msgs'][closest_odometry_index][1]
         # Publish the corresponding pointcloud and odometry message
         if pointcloud.header.frame_id == '':
             pointcloud.header.frame_id = robot_name + '/velodyne'
@@ -204,29 +286,26 @@ class RosbagProcessor(Node):
         pointcloud.header.stamp.sec = int(str(pointcloud_stamp)[:len(str(pointcloud_stamp))-9])
         pointcloud.header.stamp.nanosec = int(str(pointcloud_stamp)[len(str(pointcloud_stamp))-9:])
 
-        # Since we are not using a rosbag2 player, we need to publish the clock message ourselves
-        clock_msg = Clock()
-        clock_msg.clock.sec = pointcloud.header.stamp.sec
-        clock_msg.clock.nanosec = pointcloud.header.stamp.nanosec
-        self.clock_publisher.publish(clock_msg)
-
         # Publish the tf2 transform between model_namespace/odom and model_namespace/base_link (model_namespace/velodyne) as both conincide
         # This is needed for the floor detection output visulization
-        t = TransformStamped()
-        t.header.stamp = pointcloud.header.stamp
-        t.header.frame_id = robot_name + '/odom'
-        t.child_frame_id = robot_name + '/base_link'
-        t.transform.translation.x = odometry.pose.pose.position.x
-        t.transform.translation.y = odometry.pose.pose.position.y
-        t.transform.translation.z = odometry.pose.pose.position.z
-        t.transform.rotation.x = odometry.pose.pose.orientation.x
-        t.transform.rotation.y = odometry.pose.pose.orientation.y
-        t.transform.rotation.z = odometry.pose.pose.orientation.z
-        t.transform.rotation.w = odometry.pose.pose.orientation.w
-        self.tf_broadcaster.sendTransform(t)
+        self.publish_transform(pointcloud.header.stamp, robot_name + '/odom', robot_name + '/base_link',
+                               odometry.pose.pose.position, odometry.pose.pose.orientation)
+        # t = TransformStamped()
+        # t.header.stamp = pointcloud.header.stamp
+        # t.header.frame_id = robot_name + '/odom'
+        # t.child_frame_id = robot_name + '/base_link'
+        # t.transform.translation.x = odometry.pose.pose.position.x
+        # t.transform.translation.y = odometry.pose.pose.position.y
+        # t.transform.translation.z = odometry.pose.pose.position.z
+        # t.transform.rotation.x = odometry.pose.pose.orientation.x
+        # t.transform.rotation.y = odometry.pose.pose.orientation.y
+        # t.transform.rotation.z = odometry.pose.pose.orientation.z
+        # t.transform.rotation.w = odometry.pose.pose.orientation.w
+        # self.tf_broadcaster.sendTransform(t)
 
-        while any(self.data_dict[k]['slam_status'].in_optimization or self.data_dict[k]['slam_status'].in_loop_closure
-                  for k in self.data_dict):
+        while any(self.robots[k]['slam_status'].in_optimization or
+                  self.robots[k]['slam_status'].in_loop_closure or
+                  self.robots[k]['slam_status'].in_graph_exchange for k in self.robots):
             if self.print_wait_info_once:
                 print('Waiting for slam to finish optimizing or loop closing')
             self.timer.reset()
@@ -235,193 +314,172 @@ class RosbagProcessor(Node):
         self.print_wait_info_once = True
 
         if self.enable_floor_detetction:
-            self.data_dict[robot_name]['filtered_points_publisher'].publish(pointcloud)
+            self.robots[robot_name]['filtered_points_publisher'].publish(pointcloud)
             # sleep for some time to give the floor detection node time to process the pointcloud
             time.sleep(0.3)
 
         print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
-            robot_name, self.data_dict[robot_name]['scan_counter'], len(self.data_dict[robot_name]['scans_stamps']) - 1,
+            robot_name, self.robots[robot_name]['scan_counter'], len(self.robots[robot_name]['scans_stamps']) - 1,
             pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
-        # Publish the matching pointcloud and odometry message
-        self.data_dict[robot_name]['point_cloud2_publisher'].publish(pointcloud)
-        self.data_dict[robot_name]['odometry_publisher'].publish(odometry)
+        self.progress_bar.update(1)
 
-        self.data_dict[robot_name]['scan_counter'] += 1
+        # Publish the matching pointcloud and odometry message
+        self.robots[robot_name]['point_cloud_pub'].publish(pointcloud)
+        self.robots[robot_name]['odom_pub'].publish(odometry)
+        # Since we are not using a rosbag2 player, we need to publish the clock message ourselves
+        # clock_msg = Clock()
+        # clock_msg.clock.sec = pointcloud.header.stamp.sec
+        # clock_msg.clock.nanosec = pointcloud.header.stamp.nanosec
+        # self.clock_publisher.publish(clock_msg)
+        self.publish_clock_msg(pointcloud.header.stamp)
+
+        self.robots[robot_name]['scan_counter'] += 1
 
         # Reset the timer so we can proceed processing the next message
-        self.timer.reset()
+        # self.timer.reset()
 
         # Exit if all keyed scans have been processed
-        if all(self.data_dict[k]['scan_counter'] == len(self.data_dict[k]['scans_stamps']) for k in self.data_dict):
-            print('Finished processing all messages from the rosbag')
-            self.timer.destroy()
-            exit(0)
+        if all(self.robots[k]['scan_counter'] == len(self.robots[k]['scans_stamps']) for k in self.robots):
+            self.progress_bar.close()
+            print('Finished playback, closing progress bar')
+            # self.timer.destroy()
+            self.task = Task.WAIT_SLAM_DONE
+            # Trigger the optimization once more
+            self.publish_clock_msg(Time(sec=pointcloud.header.stamp.sec + 5, nanosec=pointcloud.header.stamp.nanosec))
+            # exit(0)
+
+    def wait_slam_done(self):
+        if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
+                any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]) or \
+                any([self.robots[robot_name]['slam_status'].in_graph_exchange for robot_name in self.robot_names]):
+            time.sleep(1)
+            print('Slam is optimizing or in loop closure, waiting')
+            return
+        print('Slam is done, starting dump graph')
+        self.task = Task.DUMP_GRAPH
 
     def slam_status_callback(self, msg):
-        self.data_dict[msg.robot_name]['slam_status'] = msg
+        self.robots[msg.robot_name]['slam_status'] = msg
 
-    def plot_trajectories(self):
+    def perform_async_service_call(self, client, request, robot_name):
+        while client.wait_for_service(timeout_sec=1.0) is False:
+            print('service', client.srv_name, 'not available, waiting again...')
 
-        # Create a 3D plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.set_xlabel('x (m)')
-        ax.set_ylabel('y (m)')
-        ax.set_zlabel('z (m)')
-        ax.set_title('Trajectories')
+        print('calling async service', client.srv_name)
+        future = client.call_async(request)
+        if isinstance(request, DumpGraph.Request):
+            future.add_done_callback(self.get_done_dump_graph_callback(robot_name))
+        if isinstance(request, SaveMap.Request):
+            future.add_done_callback(self.get_done_save_map_callback(robot_name))
 
+    def get_done_dump_graph_callback(self, robot_name):
+        def done_dump_graph_callback(future):
+            result = future.result()
+            print(f'Dump graph service call for robot {robot_name} success? {result.success}')
+            self.robots[robot_name]['dump_graph_done'] = True
+            if all([self.robots[robot_name]['dump_graph_requested'] for robot_name in self.robot_names]):
+                print('All dump graph requests done, starting save map')
+                self.task = Task.SAVE_MAP
+        return done_dump_graph_callback
+
+    def get_done_save_map_callback(self, robot_name):
+        def done_save_map_callback(future):
+            result = future.result()
+            print(f'Save map service call for robot {robot_name} success? {result.success}')
+            self.robots[robot_name]['save_map_done'] = True
+            if all([self.robots[robot_name]['save_map_requested'] for robot_name in self.robot_names]):
+                self.task = Task.SHUTDOWN_SLAM
+        return done_save_map_callback
+
+    def dump_graph(self):
+        robot_to_dump = None
         for robot_name in self.robot_names:
-            # Set the color according to tableau palette
-            color = 'C' + str(self.robot_names.index(robot_name))
-            odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
-                                for stamp, odom in self.data_dict[robot_name]['odometry_msgs']])
-
-            ax.plot(odom_xyz[:, 0], odom_xyz[:, 1], odom_xyz[:, 2], color=color, label=robot_name)
-            # Plot text 'start' and 'end' at the start and end of the trajectory
-            z_text_offset = 0.05
-            text_size = 15
-            ax.text(odom_xyz[0, 0], odom_xyz[0, 1], odom_xyz[0, 2]+z_text_offset, 'start', color=color, size=text_size)
-            ax.text(odom_xyz[-1, 0], odom_xyz[-1, 1], odom_xyz[-1, 2]+z_text_offset, 'end', color=color, size=text_size)
-            # Plot text at regular intervals along the trajectory
-            accum_distances = np.cumsum(np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1))
-            interval_percent = 0.05
-            interval_distances = np.arange(0, accum_distances[-1], interval_percent * accum_distances[-1])
-            # Find the indices of the odom_xyz array that are closest to the interval_distances
-            closest_odom_indices = np.argmin(np.abs(accum_distances[:, np.newaxis] - interval_distances), axis=0)
-            for i, odom_idx in enumerate(closest_odom_indices):
-                if i == 0:
+            if self.robots[robot_name]['dump_graph_requested']:
+                if self.robots[robot_name]['dump_graph_done']:
                     continue
-                ax.text(odom_xyz[odom_idx, 0], odom_xyz[odom_idx, 1], odom_xyz[odom_idx, 2]+z_text_offset,
-                        '{:.0f}%'.format(i * interval_percent*100), color=color, size=text_size)
-
-        plt.legend()
-        plt.show()
-
-        exit(0)
-
-    def print_dataset_info(self):
-        for robot_name in self.robot_names:
-            print('\nRobot {}'.format(robot_name))
-            print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
-            print('Number of odometry messages: {}'.format(len(self.data_dict[robot_name]['odometry_stamps'])))
-
-            # Print some point cloud statistics
-            points_dict = {index: read_points(scans_msg[1].scan, field_names=['x', 'y', 'z'], reshape_organized_cloud=True)
-                           for index, scans_msg in enumerate(self.data_dict[robot_name]['scans_msgs'])}
-            # Reorganize the points into a numpy array
-            for index, points_tuple in points_dict.items():
-                points_dict[index] = np.array([np.array([point[0], point[1], point[2]]) for point in points_tuple])
-            num_points_per_scan = np.array([points.shape[0] for index, points in points_dict.items()])
-            print('Average number of points per pointcloud: {:.2f}'.format(np.mean(num_points_per_scan)))
-            print('Std deviation of number of points per pointcloud: {:.2f}'.format(np.std(num_points_per_scan)))
-
-            # Print height range statistics
-            if len(self.robot_names) != len(self.sensor_heights):
-                rclpy.logging.get_logger('rosbag_processor').warn(
-                    'Number of robot names and sensor heights do not match, taking first sensor height for all robots')
-                sensor_height = self.sensor_heights[0]
+                else:
+                    break
             else:
-                sensor_height = self.sensor_heights[self.robot_names.index(robot_name)]
-            z_min = sensor_height - self.sensor_clip_range
-            z_max = sensor_height + self.sensor_clip_range
-            num_points_in_range = [np.sum((points[:, 2] > z_min) & (points[:, 2] < z_max)) for index, points in points_dict.items()]
-            print('Average nummber of points in height range {:.2f}m to {:.2f}m: {:.2f}'.format(z_min, z_max, np.mean(num_points_in_range)))
+                robot_to_dump = robot_name
+                break
+        if robot_to_dump is None:
+            return
+        # call the dumb and save graph service on hdl graph slam
+        dump_request = DumpGraph.Request()
+        dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
+        self.robots[robot_name]['dump_graph_requested'] = True
+        print(f'Dumping graph at: {dump_request.destination}')
+        self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request, robot_name)
 
-            # Print some keyframe statistics
-            keyframe_odom_indices = [np.argmin(np.abs(self.data_dict[robot_name]['odometry_stamps'] - pcl_stamp))
-                                     for pcl_stamp in self.data_dict[robot_name]['scans_stamps']]
-            odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
-                                for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'], keyframe_odom_indices, axis=0)])
-            odom_xyz_norms = np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1)
-            print('Average keyframe distance {:.2f}'.format(np.mean(odom_xyz_norms)))
-            print('Max keyframe distance {:.2f}'.format(np.max(odom_xyz_norms)))
-            print('Min keyframe distance {:.2f}'.format(np.min(odom_xyz_norms)))
-
-            # Need w, x, y, z for pyquaternion
-            odom_orientations = np.array([
-                [odom.pose.pose.orientation.w, odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z]
-                for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'],
-                                           keyframe_odom_indices, axis=0)])
-            delta_rots = np.array([Quaternion.absolute_distance(Quaternion(q1[0], q1[1], q1[2], q1[3]), Quaternion(
-                q2[0], q2[1], q2[2], q2[3])) for q1, q2 in zip(odom_orientations[:-1, :], odom_orientations[1:, :])])
-            print('Average keyframe rotation {:.2f}°'.format(np.rad2deg(np.mean(delta_rots))))
-            print('Max keyframe rotation {:.2f}°'.format(np.rad2deg(np.max(delta_rots))))
-            print('Min keyframe rotation {:.2f}°'.format(np.rad2deg(np.min(delta_rots))))
-
-        exit(0)
-
-    def write_odom_groundtruth(self):
+    def save_map(self):
+        robot_to_save = None
         for robot_name in self.robot_names:
-            nebula_dir = os.path.dirname(self.dataset_dir)
-            if os.path.exists(os.path.join(nebula_dir, 'groundtruth')):
-                dataset_name = os.path.basename(os.path.normpath(self.dataset_dir))
-                gt_filepath = os.path.join(nebula_dir, 'groundtruth', dataset_name + '_' + robot_name + '.txt')
+            if self.robots[robot_name]['save_map_requested']:
+                if self.robots[robot_name]['save_map_done']:
+                    continue
+                else:
+                    break
             else:
-                gt_filepath = os.path.join(self.dataset_dir, 'groundtruth', robot_name + '_odom', 'stamped_groundtruth.txt')
-            print('Writing ground truth odometry to {}'.format(gt_filepath))
-            with open(gt_filepath, 'w') as f:
-                for stamp, msg in self.data_dict[robot_name]['odometry_msgs']:
-                    # we need to use the stamp from the header
-                    original_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-                    f.write('{} {} {} {} {} {} {} {}\n'.format(
-                        original_stamp, msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z,
-                        msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
+                robot_to_save = robot_name
+                break
+        if robot_to_save is None:
+            return
+        save_map_request = SaveMap.Request()
+        save_map_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'map.pcd')
+        save_map_request.resolution = self.map_resolution
+        self.robots[robot_name]['save_map_requested'] = True
+        print(f'Saving map with resolution {save_map_request.resolution} at: {save_map_request.destination}')
+        self.perform_async_service_call(self.robots[robot_name]['save_map_client'], save_map_request, robot_name)
 
-        exit(0)
+    def shutdown_slam(self):
+        for robot_name in self.robot_names:
+            if self.robots[robot_name]['slam_process'] is not None:
+                print(f'Sending SIGINT to slam process for robot {robot_name}')
+                try:
+                    self.robots[robot_name]['slam_process'].send_signal(subprocess.signal.SIGINT)
+                    self.robots[robot_name]['slam_process'].wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    print(f'Timeout expired for robot {robot_name} slam process, trying SIGTERM')
+                    self.robots[robot_name]['slam_process'].terminate()
+                    self.robots[robot_name]['slam_process'].wait(timeout=10)
+                finally:
+                    print(f'Robot {robot_name} slam process terminated')
 
+        self.task = Task.SHUTDOWN_NODE
 
-def play_rosbags(executor, ros_bag_processor):
-    ros_bag_processor.start_playback()
-    spin(executor, ros_bag_processor)
-
-
-def print_initial_poses(executor, ros_bag_processor):
-    ros_bag_processor.print_initial_poses()
-    spin(executor, ros_bag_processor)
-
-
-def plot_trajectories(executor, ros_bag_processor):
-    ros_bag_processor.plot_trajectories()
-    spin(executor, ros_bag_processor)
-
-
-def print_dataset_info(executor, ros_bag_processor):
-    ros_bag_processor.print_dataset_info()
-    spin(executor, ros_bag_processor)
-
-
-def write_odom_groundtruth(executor, ros_bag_processor):
-    ros_bag_processor.write_odom_groundtruth()
-    spin(executor, ros_bag_processor)
-
-
-def spin(executor, node):
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        executor.shutdown()
-        node.destroy_node()
+    def shutdown_node(self):
+        print('Shutting down node, rclpy, and sys')
+        self.destroy_node()
         rclpy.shutdown()
+        print('Shutting down system')
+        exit()
 
 
 def main(args=None):
 
     rclpy.init(args=args)
     # We need a MultiThreadedExecutor to process certain callbacks while within another callback
-    executor = rclpy.executors.MultiThreadedExecutor()
-    rosbag_processor = RosbagProcessor()
-    executor.add_node(rosbag_processor)
+    executor = MultiThreadedExecutor()
+    nebula_processor = NebulaProcessor()
+    executor.add_node(nebula_processor)
 
-    fire.Fire({
-        'play_rosbags': lambda: play_rosbags(executor, rosbag_processor),
-        'print_initial_poses': lambda: print_initial_poses(executor, rosbag_processor),
-        'plot_trajectories': lambda: plot_trajectories(executor, rosbag_processor),
-        'print_dataset_info': lambda: print_dataset_info(executor, rosbag_processor),
-        'write_odom_groundtruth': lambda: write_odom_groundtruth(executor, rosbag_processor)
-    })
+    nebula_processor.start_playback()
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    try:
+        rclpy.spin(node=nebula_processor, executor=executor)
+    except KeyboardInterrupt:
+        print('Trying to gracefully shutdown')
+        nebula_processor.shutdown_slam()
+        nebula_processor.shutdown_node()
+    except Exception as e:
+        print('Caught exception: {}'.format(e))
+        nebula_processor.shutdown_slam()
+        nebula_processor.shutdown_node()
+    finally:
+        print('Finally shutting down')
+        nebula_processor.destroy_node()
+        executor.shutdown()
 
 
 if __name__ == '__main__':

@@ -120,6 +120,7 @@ floor_detection_component:
 # HDL graph slam component parameters
 hdl_graph_slam_component:
   ros__parameters:
+    enable_graph_slam: true
     own_name: "husky1"
     /properties/scenario/rovers/names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
     robot_remove_points_radius: 2.0
@@ -178,18 +179,6 @@ hdl_graph_slam_component:
     reg_correspondence_randomness: 20
     reg_resolution: 0.8 # 1.0 
     reg_nn_search_method: "DIRECT7"
-    # scan context ++ params
-    sc_lidar_height: 0.71 # husky 0.71, spot tbd
-    sc_pc_num_ring: 20
-    sc_pc_num_sector: 60
-    sc_pc_max_radius: 80.0
-    # scan context tree params
-    sc_num_exclude_recent: 10
-    sc_num_candidates_from_tree: 10
-    # loop threshold
-    sc_search_ratio: 0.1
-    sc_dist_thres: 0.13
-    sc_tree_making_period: 50
     # edge params
     # GPS
     gps_edge_robust_kernel: "NONE"
@@ -218,7 +207,15 @@ hdl_graph_slam_component:
     max_stddev_x: 5.0
     min_stddev_q: 0.05
     max_stddev_q: 0.2
-    # update params
+      # graph exchange params
+    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity, timer_based]
+    # CURRENT_PROMIXITY: based on current distance between robots ()
+    # PATH_PROXIMITY: based on already traversed path
+    graph_request_min_accum_dist: 15.0
+    graph_request_max_robot_dist: 25.0
+    graph_request_min_time_delay: 5.0
+    graph_exchange_mode: "PATH_PROXIMITY"
+    # graph update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
     map_cloud_resolution: 0.5
@@ -227,15 +224,15 @@ hdl_graph_slam_component:
 
 
 # Multi robot communicator
-multi_robot_communicator:
-  ros__parameters:
-    enable_multi_robot_communicator: false
-    own_name: "husky1"
-    robot_names: ["husky1", "husky4"]
-    publish_graph_trigger_mode: "slam"
-    graph_request_min_accum_dist: 3.0
-    graph_request_max_robot_dist: 10.0
-    graph_request_min_robot_dist: 2.0
-    graph_request_min_time_delay: 5.0
-    communication_delay: 5
-    # remappings are handled in the python respective launch file
+# multi_robot_communicator:
+#   ros__parameters:
+#     enable_multi_robot_communicator: false
+#     own_name: "husky1"
+#     robot_names: ["husky1", "husky4"]
+#     publish_graph_trigger_mode: "slam"
+#     graph_request_min_accum_dist: 3.0
+#     graph_request_max_robot_dist: 10.0
+#     graph_request_min_robot_dist: 2.0
+#     graph_request_min_time_delay: 5.0
+#     communication_delay: 5
+#     # remappings are handled in the python respective launch file
