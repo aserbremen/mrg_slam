@@ -17,10 +17,11 @@ from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
 from vamex_slam_msgs.msg import SlamStatus
 from vamex_slam_msgs.srv import DumpGraph, SaveMap
+from scipy.spatial.transform import Rotation as R
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pykitti
 # Some information on the odometry dataset
@@ -48,6 +49,13 @@ def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
     return ros_ts
 
 
+def float_ts_to_ros_ts(float_ts: float) -> Time:
+    ros_ts = Time()
+    ros_ts.sec = int(float_ts)
+    ros_ts.nanosec = int((float_ts - ros_ts.sec) * 1e9)
+    return ros_ts
+
+
 class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
@@ -58,8 +66,8 @@ class KittiMultiRobotProcessor(Node):
         self.sequence = self.declare_parameter('sequence', '00').value
         self.rate = self.declare_parameter('rate', 25.0).value
         self.result_dir = self.declare_parameter('result_dir', '/tmp/').value
-        self.playback_length = self.declare_parameter('playback_length', 35).value
-        self.map_resolution = self.declare_parameter('map_resolution', -1).value
+        self.playback_length = self.declare_parameter('playback_length', -1).value
+        self.map_resolution = self.declare_parameter('map_resolution', -1.0).value
 
         self.task = None
 
@@ -72,6 +80,8 @@ class KittiMultiRobotProcessor(Node):
 
         gt_path_topic = self.robot_name + '/gt_path'
         self.gt_path_pub = self.create_publisher(Path, gt_path_topic, 10, callback_group=self.reentrant_callback_group)
+        self.gt_path = Path()
+        self.gt_path.header.frame_id = 'map'
 
         slam_status_topic = '/' + self.robot_name + '/hdl_graph_slam/slam_status'
         self.slam_status_sub = self.create_subscription(
@@ -80,6 +90,12 @@ class KittiMultiRobotProcessor(Node):
 
         self.dataset = pykitti.odometry(self.base_path, self.sequence)  # type: pykitti.odometry
         self.timestamps = self.dataset.timestamps  # type: list[datetime.timedelta]
+        self.timestamps = [ts.total_seconds() for ts in self.timestamps]
+
+        cam_gt_poses = self.dataset.poses  # type: list[np.ndarray]
+        self.velo_gt_poses = [np.linalg.inv(self.dataset.calib.T_cam0_velo) @ pose for pose in cam_gt_poses]
+        # transform the poses so that the first pose is the identity
+        self.velo_gt_poses = np.array([pose @ np.linalg.inv(self.velo_gt_poses[0]) for pose in self.velo_gt_poses])
 
         self.dump_service_client = self.create_client(
             DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
@@ -129,10 +145,26 @@ class KittiMultiRobotProcessor(Node):
     def slam_status_callback(self, msg: SlamStatus):
         self.slam_status = msg
 
-    def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
+    def publish_ground_truth_path(self, ts, robot_name, kitti_pose):
+        self.gt_path.header.stamp = float_ts_to_ros_ts(ts)
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = float_ts_to_ros_ts(ts)
+        pose_msg.header.frame_id = robot_name + '/velodyne'
+        pose_msg.pose.position.x = kitti_pose[0, 3]
+        pose_msg.pose.position.y = kitti_pose[1, 3]
+        pose_msg.pose.position.z = kitti_pose[2, 3]
+        rotation = R.from_matrix(kitti_pose[0:3, 0:3]).as_quat()
+        pose_msg.pose.orientation.x = rotation[0]
+        pose_msg.pose.orientation.y = rotation[1]
+        pose_msg.pose.orientation.z = rotation[2]
+        pose_msg.pose.orientation.w = rotation[3]
+        self.gt_path.poses.append(pose_msg)
+        self.gt_path_pub.publish(self.gt_path)
+
+    def kitti_to_ros_point_cloud(self, ts: float, velo: np.ndarray) -> PointCloud2:
         # create a ROS2 PointCloud2 message
         ros_pcl = PointCloud2()
-        ros_pcl.header.stamp = pykitti_ts_to_ros_ts(ts)
+        ros_pcl.header.stamp = float_ts_to_ros_ts(ts)
         ros_pcl.header.frame_id = self.robot_name + '/velodyne'
         num_points = velo.shape[0]
         ros_pcl.height = 1
@@ -168,6 +200,8 @@ class KittiMultiRobotProcessor(Node):
 
         self.publish_clock_msg(ros_pcl.header.stamp)
         self.point_cloud_pub.publish(ros_pcl)
+
+        self.publish_ground_truth_path(ts, self.robot_name, self.velo_gt_poses[self.point_cloud_counter])
 
         self.point_cloud_counter += 1
 

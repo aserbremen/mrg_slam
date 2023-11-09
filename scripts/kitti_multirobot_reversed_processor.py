@@ -16,6 +16,7 @@ from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
 from vamex_slam_msgs.msg import SlamStatus
 from vamex_slam_msgs.srv import DumpGraph, SaveMap
 
@@ -111,6 +112,11 @@ class KittiMultiRobotProcessor(Node):
             self.robots[robot_name]['save_map_requested'] = False
             self.robots[robot_name]['save_map_done'] = False
             self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.sequence, robot_name + '_' + self.eval_name)
+            self.robots[robot_name]['ground_truth_pub'] = self.create_publisher(
+                Path, robot_name + '/gt_path', 10, callback_group=self.reentrant_callback_group)
+            self.robots[robot_name]['ground_truth_path'] = Path()
+            self.robots[robot_name]['ground_truth_path'].header.frame_id = 'map'
+            self.robots[robot_name]['ground_truth_path'].poses = []
 
         self.clock_pub = self.create_publisher(Clock, 'clock', 10)
 
@@ -247,6 +253,22 @@ class KittiMultiRobotProcessor(Node):
 
         return ros_pcl
 
+    def publish_ground_truth_path(self, ts, robot_name, kitti_pose):
+        self.robots[robot_name]['ground_truth_path'].header.stamp = float_ts_to_ros_ts(ts)
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = float_ts_to_ros_ts(ts)
+        pose_msg.header.frame_id = robot_name + '/velodyne'
+        pose_msg.pose.position.x = kitti_pose[0, 3]
+        pose_msg.pose.position.y = kitti_pose[1, 3]
+        pose_msg.pose.position.z = kitti_pose[2, 3]
+        rotation = R.from_matrix(kitti_pose[0:3, 0:3]).as_quat()
+        pose_msg.pose.orientation.x = rotation[0]
+        pose_msg.pose.orientation.y = rotation[1]
+        pose_msg.pose.orientation.z = rotation[2]
+        pose_msg.pose.orientation.w = rotation[3]
+        self.robots[robot_name]['ground_truth_path'].poses.append(pose_msg)
+        self.robots[robot_name]['ground_truth_pub'].publish(self.robots[robot_name]['ground_truth_path'])
+
     def publish_clock_msg(self, stamp: Time):
         clock_msg = Clock()
         clock_msg.clock = stamp
@@ -269,11 +291,15 @@ class KittiMultiRobotProcessor(Node):
             ros_pcl.header.frame_id = 'atlas/velodyne'
             self.robots['atlas']['point_cloud_pub'].publish(ros_pcl)
             print(f'Publishing point cloud for robot atlas with ts {ts}')
+            # publish the ground truth path
+            self.publish_ground_truth_path(ts, 'atlas', self.velo_gt_poses[self.point_cloud_counter])
         if self.robots['bestla']['min_timestamp'] <= ts <= self.robots['bestla']['max_timestamp']:
             ros_pcl_reversed.header.frame_id = 'bestla/velodyne'
             ros_pcl_reversed.header.stamp = float_ts_to_ros_ts(ts)
             print(f'Publishing point cloud for robot bestla with ts {ts}')
             self.robots['bestla']['point_cloud_pub'].publish(ros_pcl_reversed)
+            # publish the ground truth path
+            self.publish_ground_truth_path(ts, 'bestla', self.velo_gt_poses[self.point_cloud_counter_reversed])
 
         self.point_cloud_counter += 1
         self.point_cloud_counter_reversed -= 1
