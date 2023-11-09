@@ -282,6 +282,7 @@ def launch_setup(context, *args, **kwargs):
                   ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
                   ('/hdl_graph_slam/map_points', '/' + model_namespace + '/hdl_graph_slam/map_points'),
                   ('/hdl_graph_slam/markers', '/' + model_namespace + '/hdl_graph_slam/markers'),
+                  ('/hdl_graph_slam/markers_node_names', '/' + model_namespace + '/hdl_graph_slam/markers_node_names'),
                   ('/hdl_graph_slam/markers_covariance', '/' + model_namespace + '/hdl_graph_slam/markers_covariance'),
                   ('/hdl_graph_slam/odom2pub', '/' + model_namespace + '/hdl_graph_slam/odom2pub'),
                   ('/hdl_graph_slam/read_until', '/' + model_namespace + '/hdl_graph_slam/read_until'),

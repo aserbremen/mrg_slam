@@ -26,8 +26,10 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 {
     node = _node;
 
-    markers_pub           = node->create_publisher<visualization_msgs::msg::MarkerArray>( "/hdl_graph_slam/markers", rclcpp::QoS( 16 ) );
-    markers_marginals_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers_covariance",
+    markers_pub            = node->create_publisher<visualization_msgs::msg::MarkerArray>( "/hdl_graph_slam/markers", rclcpp::QoS( 16 ) );
+    markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers/node_names",
+                                                                                           rclcpp::QoS( 16 ) );
+    markers_marginals_pub  = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers_covariance",
                                                                                           rclcpp::QoS( 16 ) );
 
     // map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
@@ -408,6 +410,34 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
     // markers_pub.publish( markers );
     markers_pub->publish( markers );
+
+    // Publish node names
+    visualization_msgs::msg::MarkerArray node_names;
+    node_names.markers.resize( keyframes.size() );
+    for( size_t i = 0; i < keyframes.size(); i++ ) {
+        auto& marker = node_names.markers[i];
+
+        marker.header.frame_id    = map_frame_id;
+        marker.header.stamp       = stamp;
+        marker.ns                 = "node_names";
+        marker.type               = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        marker.scale.z            = 0.4;  // text height
+        marker.action             = visualization_msgs::msg::Marker::ADD;
+        marker.pose.position.x    = keyframes[i]->estimate().translation().x();
+        marker.pose.position.y    = keyframes[i]->estimate().translation().y();
+        marker.pose.position.z    = keyframes[i]->estimate().translation().z() + 0.5;
+        marker.pose.orientation.w = 1.0;
+        marker.id                 = i;
+        if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
+            marker.text  = gid_gen.getHumanReadableId( keyframes[i]->gid );
+            marker.color = color_blue;
+        } else {
+            marker.color = color_cyan;
+            marker.text  = "+_" + gid_gen.getHumanReadableId( keyframes[i]->gid );
+        }
+    }
+
+    markers_node_names_pub->publish( node_names );
 }
 
 
