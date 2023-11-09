@@ -87,9 +87,11 @@ private:
     std::shared_ptr<GlobalIdGenerator> gid_generator;
 
     double distance_thresh,
-        distance_thresh_squared;            // estimated distance between keyframes consisting a loop must be less than this distance
-    double accum_distance_thresh;           // traveled distance between ...
-    double distance_from_last_edge_thresh;  // a new loop edge must far from the last one at least this distance
+        distance_thresh_squared;   // estimated distance between new keyframe and candidate be less than this distance, for the candidate to
+                                   // be considered
+    double accum_distance_thresh;  // accumulated distance difference between new keyframe and candidandate keyframe must be larger than
+                                   // this, otherwise candidate is ignored
+    double distance_from_last_loop_edge_thresh;  // a new loop edge must far from the last one at least this distance
 
     double fitness_score_max_range;  // maximum allowable distance between corresponding points
     double fitness_score_thresh;     // threshold for scan matching
@@ -100,8 +102,7 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    std::unordered_map<std::string, double> last_edge_accum_distance_map;
-    // double                                  last_edge_accum_distance;
+    std::unordered_map<std::string, double> last_loop_edge_accum_distance_map;
 
 
     pcl::Registration<PointT, PointT>::Ptr registration;

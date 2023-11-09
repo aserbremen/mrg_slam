@@ -10,10 +10,10 @@ namespace hdl_graph_slam {
 LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<GlobalIdGenerator> _gid_generator ) :
     node_ros( _node ), gid_generator( _gid_generator )
 {
-    distance_thresh                = node_ros->get_parameter( "distance_thresh" ).as_double();
-    distance_thresh_squared        = distance_thresh * distance_thresh;
-    accum_distance_thresh          = node_ros->get_parameter( "accum_distance_thresh" ).as_double();
-    distance_from_last_edge_thresh = node_ros->get_parameter( "min_edge_interval" ).as_double();
+    distance_thresh                     = node_ros->get_parameter( "distance_thresh" ).as_double();
+    distance_thresh_squared             = distance_thresh * distance_thresh;
+    accum_distance_thresh               = node_ros->get_parameter( "accum_distance_thresh" ).as_double();
+    distance_from_last_loop_edge_thresh = node_ros->get_parameter( "min_edge_interval" ).as_double();
 
     fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
     fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
@@ -30,7 +30,7 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<Globa
 
     auto robot_names = node_ros->get_parameter( "/properties/scenario/rovers/names" ).as_string_array();
     for( const auto& robot_name : robot_names ) {
-        last_edge_accum_distance_map[robot_name] = 0.0;
+        last_loop_edge_accum_distance_map[robot_name] = 0.0;
     }
 }
 
@@ -68,10 +68,10 @@ LoopDetector::get_distance_thresh() const
 std::vector<KeyFrame::Ptr>
 LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const
 {
-    // too close to the last registered loop edge
-    // TODO the last edge check is not correct yet
+    // too close to the last registered loop edge of the same robot
     if( new_keyframe->accum_distance >= 0
-        && new_keyframe->accum_distance - last_edge_accum_distance_map.at( new_keyframe->robot_name ) < distance_from_last_edge_thresh ) {
+        && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->robot_name )
+               < distance_from_last_loop_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();
     }
 
@@ -80,9 +80,9 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
     candidates.reserve( 32 );
 
     for( const auto& k : keyframes ) {
-        // traveled distance between keyframes is too small
-        if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0
-            && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh && new_keyframe->robot_name == k->robot_name ) {
+        // traveled distance between keyframes is too small of the same robot
+        if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0 && new_keyframe->robot_name == k->robot_name
+            && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh ) {
             continue;
         }
 
@@ -94,7 +94,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
         const auto& pos1 = k->node->estimate().translation();
         const auto& pos2 = new_keyframe->node->estimate().translation();
 
-        // estimated distance between keyframes is too small
+        // estimated distance between keyframes is too big for loop closure
         double dist_squared = ( pos1.head<2>() - pos2.head<2>() ).squaredNorm();
         if( dist_squared > distance_thresh_squared ) {
             continue;
@@ -276,7 +276,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
     if( new_keyframe->accum_distance >= 0 ) {
         RCLCPP_INFO_STREAM( node_ros->get_logger(), "Updating last edge accum distance in loop detector" );
-        last_edge_accum_distance_map[new_keyframe->robot_name] = new_keyframe->accum_distance;
+        last_loop_edge_accum_distance_map[new_keyframe->robot_name] = new_keyframe->accum_distance;
     }
 
     return std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );
