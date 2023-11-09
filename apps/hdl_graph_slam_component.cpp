@@ -774,8 +774,8 @@ private:
             // ros::Time stamp(keyframe_ros.stamp);
             // sensor_msgs::PointCloud2::Ptr cloud_ros = boost::make_shared<sensor_msgs::PointCloud2>( keyframe_ros.cloud );
             sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
-            KeyFrame::Ptr                            keyframe(
-                new KeyFrame( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(), -1, cloud, cloud_ros ) );
+            KeyFrame::Ptr keyframe( new KeyFrame( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
+                                                  keyframe_ros.accum_distance, cloud, cloud_ros ) );
 
             Eigen::Isometry3d pose;
             // tf::poseMsgToEigen( keyframe_ros.estimate, pose );
@@ -1551,6 +1551,7 @@ private:
                 dst.gid            = src->gid;
                 dst.stamp          = src->stamp;
                 dst.first_keyframe = src->first_keyframe;
+                dst.accum_distance = src->accum_distance;
                 // tf::poseEigenToMsg( src->estimate(), dst.estimate );
                 dst.estimate = tf2::toMsg( src->estimate() );
                 dst.cloud    = *src->cloud_msg;

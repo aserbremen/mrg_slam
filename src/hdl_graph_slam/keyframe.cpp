@@ -68,6 +68,7 @@ KeyFrame::save( const std::string& directory )
     }
 
     std::ofstream ofs( directory + "/data" );
+    ofs << "robot_name " << robot_name << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
