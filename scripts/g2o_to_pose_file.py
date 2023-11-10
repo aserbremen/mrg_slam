@@ -17,6 +17,8 @@ def main():
     folder_names = [folder for folder in os.listdir(args.g2o_folder) if folder.isdigit()]
     folder_names = sorted(folder_names, key=lambda x: int(x))
 
+    # The robot name is contained in the data file of the first folder
+    own_robot_name = None
     id_stamp_pose = []
     with open(os.path.join(args.g2o_folder, 'graph.g2o'), 'r') as graph:
         graph_lines = graph.readlines()
@@ -24,6 +26,15 @@ def main():
         for folder in folder_names:
             with open(os.path.join(args.g2o_folder, folder, 'data'), 'r') as data:
                 lines = data.readlines()
+                # Get the robot name from the first line
+                robot_name_str = [line for line in lines if line.startswith('robot_name')]
+                robot_name = robot_name_str[0].split(' ')[1]
+                if own_robot_name is None:
+                    own_robot_name = robot_name
+
+                if own_robot_name != robot_name:
+                    continue
+
                 id_str = [line for line in lines if line.startswith('id')]
                 id = int(id_str[0].split(' ')[1])
 
@@ -35,7 +46,7 @@ def main():
                     stamp_nanosecs = stamp_nanosecs[:-1]
                 stamp_nanosecs = stamp_nanosecs.zfill(9)
                 stamp = float(stamp_secs + '.' + stamp_nanosecs)
-                print(f'stamp nanosecs: {stamp_nanosecs} stamp secs: {stamp_secs} stamp: {stamp}')
+                # print(f'stamp nanosecs: {stamp_nanosecs} stamp secs: {stamp_secs} stamp: {stamp}')
 
                 # Skip the vertices with negative accum_dist indicating loop closure vertices leading to jumps in the estimated trajectory file
                 accum_dist_str = next((line for line in lines if line.startswith('accum_dist')), None)
