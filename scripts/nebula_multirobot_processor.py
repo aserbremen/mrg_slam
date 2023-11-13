@@ -94,15 +94,19 @@ class NebulaProcessor(Node):
         super().__init__('rosbag_processor')
 
         self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
-        self.robot_names = self.declare_parameter('robot_names', ['husky1']).get_parameter_value().string_array_value
+        self.robot_names = self.declare_parameter('robot_names', ['husky1', 'husky4', 'spot1']).get_parameter_value().string_array_value
         self.dataset_base_dir = self.declare_parameter('dataset_base_dir', '/data/datasets/nebula').get_parameter_value().string_value
+        self.result_dir = self.declare_parameter(
+            'result_dir', '/data/Seafile/data/slam_results/nebula/results/').get_parameter_value().string_value
         self.dataset = self.declare_parameter('dataset', 'urban').get_parameter_value().string_value
-        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/nebula').get_parameter_value().string_value
-        self.eval_name = self.declare_parameter('eval_name', 'urban_multi').get_parameter_value().string_value
+        self.eval_name = self.declare_parameter('eval_name', 'path_proximity').get_parameter_value().string_value
         # -1.0 means use the resolution from the map, otherwise voxel size in meters
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).get_parameter_value().double_value
         self.slam_config = self.declare_parameter('slam_config', 'nebula_multi_robot_urban.yaml').get_parameter_value().string_value
         self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
+
+        self.odom_translation_noise = self.declare_parameter('odom_translation_noise', 0.05).get_parameter_value().double_value  # in meters
+        self.odom_rotation_noise = self.declare_parameter('odom_rotation_noise', 0.1).get_parameter_value().double_value  # in degrees
 
         # The slam status callback and the timer callback need to be reentrant, so that the slam status can be updated while the timer is processed
         self.reentrant_callback_group = ReentrantCallbackGroup()
@@ -115,7 +119,6 @@ class NebulaProcessor(Node):
 
     def setup_playback(self):
         self.robots = {}  # type: dict[str, dict]
-        print('Setting up playback for robots: {}'.format(self.robot_names))
         for robot_name in self.robot_names:
             self.setup_robot(robot_name)
 
@@ -124,6 +127,7 @@ class NebulaProcessor(Node):
 
     def setup_robot(self, robot_name):
 
+        print(f'\nSetting up playback for robot {robot_name}')
         keyed_scan_bag_path = os.path.join(self.dataset_base_dir, self.dataset, 'rosbag', robot_name, robot_name + '.db3')
         odometry_bag_path = os.path.join(self.dataset_base_dir, self.dataset, 'ground_truth',
                                          robot_name + '_odom', robot_name + '_odom.db3')
@@ -136,7 +140,7 @@ class NebulaProcessor(Node):
 
         keyed_scans_parser = BagFileParser(keyed_scan_bag_path)
         keyed_scans_topic_name = '/' + robot_name + '/lamp/keyed_scans'
-        print("Trying to get all messages from ros2 bag {} with topic name {}".format(keyed_scan_bag_path,  keyed_scans_topic_name))
+        print('Getting messages with topic {} from bag {}'.format(keyed_scans_topic_name,  keyed_scan_bag_path))
         scans_msgs = keyed_scans_parser.get_messages(keyed_scans_topic_name)
         # Add the keyed scans data to the data dict
         self.robots[robot_name] = {}
@@ -145,7 +149,7 @@ class NebulaProcessor(Node):
 
         odometry_parser = BagFileParser(odometry_bag_path)
         odometry_topic_name = '/' + robot_name + '/lo_frontend/odometry'
-        print("Trying to get all messages from ros2 bag {} with topic name {}".format(odometry_bag_path,  odometry_topic_name))
+        print('Getting messages with topic {} from bag {}'.format(odometry_topic_name,  odometry_bag_path))
         odometry_msgs = odometry_parser.get_messages(odometry_topic_name)
         # odometry msg stamp is given in the header
         odometry_stamps = np.array([int(msg[1].header.stamp.sec * 1e9 + msg[1].header.stamp.nanosec) for msg in odometry_msgs])
@@ -184,7 +188,10 @@ class NebulaProcessor(Node):
         save_map_topic = '/' + robot_name + '/hdl_graph_slam/save_map'
         self.robots[robot_name]['save_map_client'] = self.create_client(
             SaveMap, save_map_topic, callback_group=self.reentrant_callback_group)
-        self.robots[robot_name]['result_dir'] = os.path.join(self.result_dir, self.dataset, self.eval_name, robot_name)
+        result_dir_str = os.path.join(self.result_dir, self.dataset, ''.join(
+            [n[0] + n[-1]for n in self.robot_names]) + '_' + self.eval_name, ''.join([robot_name[0], robot_name[-1]]))
+        self.robots[robot_name]['result_dir'] = result_dir_str
+        print(f'Setting up result directory {result_dir_str}')
         if not os.path.exists(self.robots[robot_name]['result_dir']):
             os.makedirs(self.robots[robot_name]['result_dir'])
         else:
@@ -230,10 +237,8 @@ class NebulaProcessor(Node):
 
         print('Starting playback with rate {}'.format(self.playback_rate))
         self.task = Task.PLAYBACK
-        # self.timer = self.create_timer(1.0 / self.playback_rate, self.playback, callback_group=self.reentrant_callback_group)
         self.task_timer = self.create_timer(1.0 / self.playback_rate, self.task_timer_callback,
                                             callback_group=self.reentrant_callback_group)
-        self.print_wait_info_once = True
         total_scans = sum(len(self.robots[k]['scans_stamps']) for k in self.robots)
         self.progress_bar = tqdm.tqdm(total=total_scans, desc='Playback', unit='scans')
 
@@ -262,10 +267,8 @@ class NebulaProcessor(Node):
                self.robots[robot_name]['slam_status'].in_loop_closure or
                self.robots[robot_name]['slam_status'].in_graph_exchange for robot_name in self.robots):
             return
-        # Make sure that this timer is only executed once, reset the timer at the end of this function
-        # self.timer.cancel()
-        # Get the robot name with the lowest timestamp
 
+        # Get the robot name with the lowest timestamp
         robot_name = min(
             self.robots, key=lambda k: self.robots[k]['scans_stamps'][self.robots[k]['scan_counter']]
             if self.robots[k]['scan_counter'] < len(self.robots[k]['scans_stamps']) else float('inf'))
@@ -290,37 +293,13 @@ class NebulaProcessor(Node):
         # This is needed for the floor detection output visulization
         self.publish_transform(pointcloud.header.stamp, robot_name + '/odom', robot_name + '/base_link',
                                odometry.pose.pose.position, odometry.pose.pose.orientation)
-        # t = TransformStamped()
-        # t.header.stamp = pointcloud.header.stamp
-        # t.header.frame_id = robot_name + '/odom'
-        # t.child_frame_id = robot_name + '/base_link'
-        # t.transform.translation.x = odometry.pose.pose.position.x
-        # t.transform.translation.y = odometry.pose.pose.position.y
-        # t.transform.translation.z = odometry.pose.pose.position.z
-        # t.transform.rotation.x = odometry.pose.pose.orientation.x
-        # t.transform.rotation.y = odometry.pose.pose.orientation.y
-        # t.transform.rotation.z = odometry.pose.pose.orientation.z
-        # t.transform.rotation.w = odometry.pose.pose.orientation.w
-        # self.tf_broadcaster.sendTransform(t)
-
-        while any(self.robots[k]['slam_status'].in_optimization or
-                  self.robots[k]['slam_status'].in_loop_closure or
-                  self.robots[k]['slam_status'].in_graph_exchange for k in self.robots):
-            if self.print_wait_info_once:
-                print('Waiting for slam to finish optimizing or loop closing')
-            self.timer.reset()
-            self.print_wait_info_once = False
-            return
-        self.print_wait_info_once = True
 
         if self.enable_floor_detetction:
             self.robots[robot_name]['filtered_points_publisher'].publish(pointcloud)
             # sleep for some time to give the floor detection node time to process the pointcloud
-            time.sleep(0.3)
-
-        print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
-            robot_name, self.robots[robot_name]['scan_counter'], len(self.robots[robot_name]['scans_stamps']) - 1,
-            pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
+        # print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
+        #     robot_name, self.robots[robot_name]['scan_counter'], len(self.robots[robot_name]['scans_stamps']) - 1,
+        #     pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         self.progress_bar.update(1)
 
@@ -328,26 +307,17 @@ class NebulaProcessor(Node):
         self.robots[robot_name]['point_cloud_pub'].publish(pointcloud)
         self.robots[robot_name]['odom_pub'].publish(odometry)
         # Since we are not using a rosbag2 player, we need to publish the clock message ourselves
-        # clock_msg = Clock()
-        # clock_msg.clock.sec = pointcloud.header.stamp.sec
-        # clock_msg.clock.nanosec = pointcloud.header.stamp.nanosec
-        # self.clock_publisher.publish(clock_msg)
         self.publish_clock_msg(pointcloud.header.stamp)
 
         self.robots[robot_name]['scan_counter'] += 1
-
-        # Reset the timer so we can proceed processing the next message
-        # self.timer.reset()
 
         # Exit if all keyed scans have been processed
         if all(self.robots[k]['scan_counter'] == len(self.robots[k]['scans_stamps']) for k in self.robots):
             self.progress_bar.close()
             print('Finished playback, closing progress bar')
-            # self.timer.destroy()
             self.task = Task.WAIT_SLAM_DONE
             # Trigger the optimization once more
             self.publish_clock_msg(Time(sec=pointcloud.header.stamp.sec + 5, nanosec=pointcloud.header.stamp.nanosec))
-            # exit(0)
 
     def wait_slam_done(self):
         if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
