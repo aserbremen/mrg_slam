@@ -121,9 +121,9 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     std::cout << std::endl;
     std::cout << "--- loop detection ---" << std::endl;
-    std::cout << "keyframe " << new_keyframe->readable_id() << " has " << candidate_keyframes.size() << " candidates" << std::endl;
+    std::cout << "keyframe " << new_keyframe->readable_id << " has " << candidate_keyframes.size() << " candidates" << std::endl;
     for( const auto& cand : candidate_keyframes ) {
-        std::cout << cand->readable_id() << std::endl;
+        std::cout << cand->readable_id << std::endl;
     }
     std::cout << "matching" << std::endl;
     auto t1 = std::chrono::system_clock::now();
@@ -145,7 +145,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
         double score = registration->getFitnessScore( fitness_score_max_range );
         if( !registration->hasConverged() || score > best_score ) {
-            std::cout << candidate->readable_id() << " registration did not converrge" << std::endl;
+            std::cout << candidate->readable_id << " registration did not converrge" << std::endl;
             continue;
         }
 
@@ -188,15 +188,15 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
                 Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
             if( delta_trans_prev < loop_closure_consistency_max_delta_trans
                 && delta_angle_prev < loop_closure_consistency_max_delta_angle ) {
-                std::cout << "Consistent with prev keyframe " << prev_kf->readable_id() << " delta trans " << delta_trans_prev
+                std::cout << "Consistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans_prev
                           << " delta angle " << delta_angle_prev * 180.0 / M_PI << std::endl;
                 consistency_check_passed = true;
             } else {
-                std::cout << "Inconsistent with prev keyframe " << prev_kf->readable_id() << " delta trans " << delta_trans_prev
+                std::cout << "Inconsistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans_prev
                           << " delta angle " << delta_angle_prev * 180.0 / M_PI << std::endl;
             }
         } else {
-            std::cout << "candidate " << best_matched->readable_id() << " has no prev edge" << std::endl;
+            std::cout << "candidate " << best_matched->readable_id << " has no prev edge" << std::endl;
         }
         // Only perform the identity check with next keyframe if the consistency check with previous keyframe failed
         if( !consistency_check_passed ) {
@@ -230,21 +230,21 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
                                              .angularDistance( Eigen::Quaternionf::Identity() );
                 if( delta_trans_next < loop_closure_consistency_max_delta_trans
                     && delta_angle_next < loop_closure_consistency_max_delta_angle ) {
-                    std::cout << "Consistent with next keyframe " << next_kf->readable_id() << " delta trans " << delta_trans_next
+                    std::cout << "Consistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next
                               << " delta angle " << delta_angle_next * 180.0 / M_PI << std::endl;
                     consistency_check_passed = true;
                 } else {
-                    std::cout << "Inconsistent with next keyframe " << next_kf->readable_id() << " delta trans " << delta_trans_next
+                    std::cout << "Inconsistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next
                               << " delta angle " << delta_angle_next * 180.0 / M_PI << std::endl;
                 }
             } else {
-                std::cout << "candidate " << best_matched->readable_id() << " has no next edge" << std::endl;
+                std::cout << "candidate " << best_matched->readable_id << " has no next edge" << std::endl;
             }
         }
     }
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
-    std::cout << best_matched->readable_id() << " best_score: " << boost::format( "%.3f" ) % best_score
+    std::cout << best_matched->readable_id << " best_score: " << boost::format( "%.3f" ) % best_score
               << " time: " << boost::format( "%.3f" ) % elapsed_ms.count() << "[msec]" << std::endl;
 
     if( best_score > fitness_score_thresh ) {
@@ -257,7 +257,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         return nullptr;
     }
 
-    std::cout << "loop found! from " << new_keyframe->readable_id() << " to " << best_matched->readable_id() << std::endl;
+    std::cout << "loop found! from " << new_keyframe->readable_id << " to " << best_matched->readable_id << std::endl;
     std::cout << "relpose: " << rel_pose_new_to_best_matched.block<3, 1>( 0, 3 ).transpose() << " - "
               << Eigen::Quaternionf( rel_pose_new_to_best_matched.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 

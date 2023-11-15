@@ -427,11 +427,11 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         marker.pose.orientation.w = 1.0;
         marker.id                 = i;
         if( keyframes[i]->robot_name == own_name ) {
-            marker.text  = keyframes[i]->readable_id();
+            marker.text  = keyframes[i]->readable_id;
             marker.color = color_blue;
         } else {
             marker.color = color_cyan;
-            marker.text  = "+" + keyframes[i]->readable_id();
+            marker.text  = "+" + keyframes[i]->readable_id;
         }
     }
 

@@ -40,18 +40,18 @@ public:
     const Eigen::Isometry3d&           relative_pose() const;
     const Eigen::Matrix<double, 6, 6>& information() const;
 
-    std::string readable_id() const;
-
 public:
-    const g2o::EdgeSE3*             edge;  // edge instance
-    Type                            type;
-    boost::uuids::uuid              uuid;
-    std::shared_ptr<const KeyFrame> from_keyframe;
-    boost::uuids::uuid              from_uuid;
-    std::shared_ptr<const KeyFrame> to_keyframe;
-    boost::uuids::uuid              to_uuid;
-
-    // This class should have readable id str member which is created when calling readable_id() for the first time.
+    const g2o::EdgeSE3*             edge;           // edge instance
+    Type                            type;           // edge type
+    boost::uuids::uuid              uuid;           // unique id for this edge
+    std::string                     uuid_str;       // unique id for this edge as a string for graph exchange
+    std::shared_ptr<const KeyFrame> from_keyframe;  // from keyframe pointer
+    boost::uuids::uuid              from_uuid;      // from keyframe uuid
+    std::string                     from_uuid_str;  // from keyframe uuid as a string for graph exchange
+    std::shared_ptr<const KeyFrame> to_keyframe;    // to keyframe pointer
+    boost::uuids::uuid              to_uuid;        // to keyframe uuid
+    std::string                     to_uuid_str;    // to keyframe uuid as a string for graph exchange
+    std::string                     readable_id;    // readable id for visualizing and debugging
 };
 
 /**
@@ -68,6 +68,7 @@ public:
     ~EdgeSnapshot();
 
 public:
+    // TODO find out whether to use uuid or uuid_str
     Edge::Type         type;
     boost::uuids::uuid uuid;
     boost::uuids::uuid from_uuid;

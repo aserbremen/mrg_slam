@@ -651,10 +651,10 @@ private:
             edge_uuids.insert( edge->uuid );
             // Add the edge to the corresponding keyframes
             RCLCPP_INFO_STREAM( this->get_logger(),
-                                "added " << edge->readable_id() << " as next edge to keyframe " << prev_robot_keyframe->readable_id() );
+                                "added " << edge->readable_id << " as next edge to keyframe " << prev_robot_keyframe->readable_id );
             uuid_keyframe_map[prev_robot_keyframe->uuid]->next_edge = edge;
             RCLCPP_INFO_STREAM( this->get_logger(),
-                                "added " << edge->readable_id() << " as prev edge to keyframe " << keyframe->readable_id() );
+                                "added " << edge->readable_id << " as prev edge to keyframe " << keyframe->readable_id );
             keyframe->prev_edge = edge;
             // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
             //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
@@ -700,7 +700,7 @@ private:
             return false;
         }
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Received graph msgs: " << graph_queue.size() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Flusing graph, received graph msgs: " << graph_queue.size() );
 
         // Create unique keyframes and edges vectors to keep order of received messages
         std::vector<const vamex_slam_msgs::msg::KeyFrameRos *> unique_keyframes;
@@ -756,7 +756,7 @@ private:
                                                   // don't add it to keyframe_hash, which is only used for floor_coeffs
                                                   // keyframe_hash[keyframe->stamp] = keyframe;
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Adding unique keyframe: " << keyframe->readable_id() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding unique keyframe: " << keyframe->readable_id );
         }
 
         for( const auto &edge_ros : unique_edges ) {
@@ -789,19 +789,19 @@ private:
             edge_uuids.insert( edge->uuid );
 
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Adding unique edge: " << edge->readable_id() );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding unique edge: " << edge->readable_id );
 
             // Add odometry edges to the corresponding keyframes as prev or next edge
             if( edge->type == Edge::TYPE_ODOM ) {
                 // Only set the prev edge for 2nd and later keyframes
                 if( from_keyframe->odom_keyframe_counter > 1 ) {
                     from_keyframe->prev_edge = edge;
-                    RCLCPP_INFO_STREAM( this->get_logger(), "Setting edge " << edge->readable_id() << " as prev edge to keyframe "
-                                                                            << from_keyframe->readable_id() );
+                    RCLCPP_INFO_STREAM( this->get_logger(), "Setting edge " << edge->readable_id << " as prev edge to keyframe "
+                                                                            << from_keyframe->readable_id );
                 }
                 to_keyframe->next_edge = edge;
                 RCLCPP_INFO_STREAM( this->get_logger(),
-                                    "Setting edge " << edge->readable_id() << " as next edge to keyframe " << to_keyframe->readable_id() );
+                                    "Setting edge " << edge->readable_id << " as next edge to keyframe " << to_keyframe->readable_id );
             }
 
 
@@ -911,11 +911,11 @@ private:
         req->robot_name = own_name;
         req->processed_keyframe_uuid_strs.reserve( keyframes.size() );
         for( const auto &keyframe : keyframes ) {
-            req->processed_keyframe_uuid_strs.push_back( boost::uuids::to_string( keyframe->uuid ) );
+            req->processed_keyframe_uuid_strs.push_back( keyframe->uuid_str );
         }
         req->processed_edge_uuid_strs.reserve( edges.size() + edge_ignore_uuids.size() );
         for( const auto &edge : edges ) {
-            req->processed_edge_uuid_strs.push_back( boost::uuids::to_string( edge->uuid ) );
+            req->processed_edge_uuid_strs.push_back( edge->uuid_str );
         }
         // TODO check if this is correct
         for( const auto &ignore_edge_uuid : edge_ignore_uuids ) {
@@ -1496,7 +1496,7 @@ private:
                                                         << " processed edges." );
 
             res->graph.robot_name               = own_name;
-            res->graph.latest_keyframe_uuid_str = boost::uuids::to_string( prev_robot_keyframe->uuid );
+            res->graph.latest_keyframe_uuid_str = prev_robot_keyframe->uuid_str;
             res->graph.latest_keyframe_odom     = tf2::toMsg( prev_robot_keyframe->odom );
 
             res->graph.keyframes.reserve( keyframes.size() );
@@ -1506,18 +1506,18 @@ private:
                 // Skip adding keyframes that have already been processed by the other robot
 
                 auto it_processed_gids = std::find( req->processed_keyframe_uuid_strs.begin(), req->processed_keyframe_uuid_strs.end(),
-                                                    boost::uuids::to_string( src->uuid ) );
+                                                    src->uuid_str );
                 if( it_processed_gids != req->processed_keyframe_uuid_strs.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id() << " skipped, already processed" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped, already processed" );
                     continue;
                 } else {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id() << " publishing" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " publishing" );
                 }
 
                 // auto &dst = res->graph.keyframes[i];
                 vamex_slam_msgs::msg::KeyFrameRos dst;
                 dst.robot_name     = src->robot_name;
-                dst.uuid_str       = boost::uuids::to_string( src->uuid );
+                dst.uuid_str       = src->uuid_str;
                 dst.stamp          = src->stamp;
                 dst.odom_counter   = src->odom_keyframe_counter;
                 dst.first_keyframe = src->first_keyframe;
@@ -1536,19 +1536,19 @@ private:
                 auto &src = edges[i];
                 // Skip adding edges that have already been processed by the other robot
                 auto it_processed_gids = std::find( req->processed_edge_uuid_strs.begin(), req->processed_edge_uuid_strs.end(),
-                                                    boost::uuids::to_string( src->uuid ) );
+                                                    src->uuid_str );
                 if( it_processed_gids != req->processed_edge_uuid_strs.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id() << " skipped,already processed" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped,already processed" );
                     continue;
                 } else {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id() << " publishing" );
+                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " publishing" );
                 }
 
                 vamex_slam_msgs::msg::EdgeRos dst;
                 dst.type          = static_cast<uint8_t>( src->type );
-                dst.uuid_str      = boost::uuids::to_string( src->uuid );
-                dst.from_uuid_str = boost::uuids::to_string( src->from_uuid );
-                dst.to_uuid_str   = boost::uuids::to_string( src->to_uuid );
+                dst.uuid_str      = src->uuid_str;
+                dst.from_uuid_str = src->from_uuid_str;
+                dst.to_uuid_str   = src->to_uuid_str;
                 // tf::poseEigenToMsg( src->relative_pose(), dst.relative_pose );
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
@@ -1571,11 +1571,11 @@ private:
         pub_req->robot_name = own_name;
         pub_req->processed_keyframe_uuid_strs.reserve( keyframes.size() );
         for( const auto &keyframe : keyframes ) {
-            pub_req->processed_keyframe_uuid_strs.push_back( boost::uuids::to_string( keyframe->uuid ) );
+            pub_req->processed_keyframe_uuid_strs.push_back( keyframe->uuid_str );
         }
         pub_req->processed_edge_uuid_strs.reserve( edges.size() );
         for( const auto &edge : edges ) {
-            pub_req->processed_edge_uuid_strs.push_back( boost::uuids::to_string( edge->uuid ) );
+            pub_req->processed_edge_uuid_strs.push_back( edge->uuid_str );
         }
 
         unique_lck.unlock();
@@ -1626,15 +1626,15 @@ private:
         res->keyframe_uuid_strs.reserve( keyframes.size() );
         res->readable_keyframes.reserve( keyframes.size() );
         for( size_t i = 0; i < keyframes.size(); i++ ) {
-            res->keyframe_uuid_strs.push_back( boost::uuids::to_string( keyframes[i]->uuid ) );
-            res->readable_keyframes.push_back( keyframes[i]->readable_id() );
+            res->keyframe_uuid_strs.push_back( keyframes[i]->uuid_str );
+            res->readable_keyframes.push_back( keyframes[i]->readable_id );
         }
 
         res->edge_uuid_strs.reserve( edges.size() );
         res->readable_edges.reserve( edges.size() );
         for( size_t i = 0; i < edges.size(); i++ ) {
-            res->edge_uuid_strs.push_back( boost::uuids::to_string( edges[i]->uuid ) );
-            res->readable_edges.push_back( edges[i]->readable_id() );
+            res->edge_uuid_strs.push_back( edges[i]->uuid_str );
+            res->readable_edges.push_back( edges[i]->readable_id );
         }
     }
 
@@ -1650,46 +1650,46 @@ private:
 
         std::ofstream ofs( req->destination );
         ofs << "# keyframes " << keyframes.size() << std::endl;
-        ofs << anchor_kf->readable_id() << " g2o " << std::to_string( anchor_kf->id() ) << std::endl;
+        ofs << anchor_kf->readable_id << " g2o " << std::to_string( anchor_kf->id() ) << std::endl;
         if( req->with_uuid_str ) {
-            ofs << "uuid " << boost::uuids::to_string( anchor_kf->uuid ) << std::endl;
+            ofs << "uuid " << anchor_kf->uuid_str << std::endl;
         }
         if( anchor_kf->prev_edge != nullptr ) {
-            ofs << "    prev edge " << anchor_kf->prev_edge->readable_id() << " g2o " << std::to_string( anchor_kf->prev_edge->edge->id() )
+            ofs << "    prev edge " << anchor_kf->prev_edge->readable_id << " g2o " << std::to_string( anchor_kf->prev_edge->edge->id() )
                 << std::endl;
             if( req->with_uuid_str ) {
-                ofs << "    uuid " << boost::uuids::to_string( anchor_kf->prev_edge->uuid ) << std::endl;
+                ofs << "    uuid " << anchor_kf->prev_edge->uuid_str << std::endl;
             }
         } else {
             ofs << "    prev edge N/A" << std::endl;
         }
         if( anchor_kf->next_edge != nullptr ) {
-            ofs << "    next edge " << anchor_kf->next_edge->readable_id() << " g2o " << std::to_string( anchor_kf->next_edge->edge->id() );
+            ofs << "    next edge " << anchor_kf->next_edge->readable_id << " g2o " << std::to_string( anchor_kf->next_edge->edge->id() );
             if( req->with_uuid_str ) {
-                ofs << "    uuid " << boost::uuids::to_string( anchor_kf->next_edge->uuid ) << std::endl;
+                ofs << "    uuid " << anchor_kf->next_edge->uuid_str << std::endl;
             }
         } else {
             ofs << "    next edge N/A" << std::endl;
         }
         for( const auto &keyframe : keyframes ) {
-            ofs << keyframe->readable_id() << " g2o " << std::to_string( keyframe->node->id() ) << std::endl;
+            ofs << keyframe->readable_id << " g2o " << std::to_string( keyframe->node->id() ) << std::endl;
             if( req->with_uuid_str ) {
-                ofs << "    uuid " << boost::uuids::to_string( keyframe->uuid ) << std::endl;
+                ofs << "    uuid " << keyframe->uuid_str << std::endl;
             }
             if( keyframe->prev_edge != nullptr ) {
-                ofs << "    prev edge " << keyframe->prev_edge->readable_id() << " g2o "
-                    << std::to_string( keyframe->prev_edge->edge->id() ) << std::endl;
+                ofs << "    prev edge " << keyframe->prev_edge->readable_id << " g2o " << std::to_string( keyframe->prev_edge->edge->id() )
+                    << std::endl;
                 if( req->with_uuid_str ) {
-                    ofs << "    uuid " << boost::uuids::to_string( keyframe->prev_edge->uuid ) << std::endl;
+                    ofs << "    uuid " << keyframe->prev_edge->uuid_str << std::endl;
                 }
             } else {
                 ofs << "    prev edge N/A" << std::endl;
             }
             if( keyframe->next_edge != nullptr ) {
-                ofs << "    next edge " << keyframe->next_edge->readable_id() << " g2o "
-                    << std::to_string( keyframe->next_edge->edge->id() ) << std::endl;
+                ofs << "    next edge " << keyframe->next_edge->readable_id << " g2o " << std::to_string( keyframe->next_edge->edge->id() )
+                    << std::endl;
                 if( req->with_uuid_str ) {
-                    ofs << "    uuid " << boost::uuids::to_string( keyframe->next_edge->uuid ) << std::endl;
+                    ofs << "    uuid " << keyframe->next_edge->uuid_str << std::endl;
                 }
             } else {
                 ofs << "    next edge N/A" << std::endl;
@@ -1698,14 +1698,14 @@ private:
         ofs << std::endl;
         ofs << "# edges " << edges.size() << std::endl;
         for( const auto &edge : edges ) {
-            ofs << edge->readable_id() << " g2o " << std::to_string( edge->edge->id() ) << std::endl;
-            ofs << "    from " << edge->from_keyframe->readable_id() << std::endl;
+            ofs << edge->readable_id << " g2o " << std::to_string( edge->edge->id() ) << std::endl;
+            ofs << "    from " << edge->from_keyframe->readable_id << std::endl;
             if( req->with_uuid_str ) {
-                ofs << "    uuid " << boost::uuids::to_string( edge->from_uuid ) << std::endl;
+                ofs << "    uuid " << edge->from_uuid_str << std::endl;
             }
-            ofs << "    to   " << edge->to_keyframe->readable_id() << std::endl;
+            ofs << "    to   " << edge->to_keyframe->readable_id << std::endl;
             if( req->with_uuid_str ) {
-                ofs << "    uuid " << boost::uuids::to_string( edge->to_uuid ) << std::endl;
+                ofs << "    uuid " << edge->to_uuid_str << std::endl;
             }
         }
     }

@@ -51,14 +51,13 @@ public:
 
     bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
-    std::string readable_id( bool with_stamp = false ) const;
-
 public:
     std::string                   robot_name;             // robot name
     builtin_interfaces::msg::Time stamp;                  // timestamp
     Eigen::Isometry3d             odom;                   // odometry (estimated by scan_matching_odometry)
     int                           odom_keyframe_counter;  // odometry keyframe counter for each robot
-    boost::uuids::uuid            uuid;                   // global id
+    boost::uuids::uuid            uuid;                   // unique id
+    std::string                   uuid_str;               // unique id string
     double                        accum_distance;         // accumulated distance from the first node (by scan_matching_odometry)
     bool                          first_keyframe;  // first keyframe of slam, the corresponding point cloud should be excluded from the map
     pcl::PointCloud<PointT>::ConstPtr             cloud;         // point cloud
@@ -71,12 +70,12 @@ public:
 
     g2o::VertexSE3* node;  // node instance
 
-    // TODO this class should have readable id str as member which is created when calling readable_id() for the first time.
-
     // Only for keyframes starting from the first keyframe. First keyframe has no previous edge.
     // Anchor keyframe has no prev or next edge per our definition.
     std::shared_ptr<Edge> prev_edge = nullptr;  // previous edge TYPE_ODOM
     std::shared_ptr<Edge> next_edge = nullptr;  // next edge TYPE_ODOM
+
+    std::string readable_id;
 };
 
 /**
@@ -98,6 +97,7 @@ public:
     ~KeyFrameSnapshot();
 
 public:
+    // TODO find out whether to use uuid or uuid_str
     builtin_interfaces::msg::Time     stamp;  // timestamp
     long                              id;
     boost::uuids::uuid                uuid;   // global id

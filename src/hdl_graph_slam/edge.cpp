@@ -3,8 +3,8 @@
 #include <g2o/types/slam3d/edge_se3.h>
 
 #include <boost/filesystem.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <hdl_graph_slam/edge.hpp>
-
 
 namespace hdl_graph_slam {
 
@@ -18,11 +18,47 @@ Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid,
     edge( edge ),
     type( type ),
     uuid( uuid ),
+    uuid_str( boost::uuids::to_string( uuid ) ),
     from_keyframe( from_keyframe ),
     from_uuid( from_uuid ),
+    from_uuid_str( boost::uuids::to_string( from_uuid ) ),
     to_keyframe( to_keyframe ),
-    to_uuid( to_uuid )
+    to_uuid( to_uuid ),
+    to_uuid_str( boost::uuids::to_string( to_uuid ) )
 {
+    // Create the readable id string
+    if( type == TYPE_ANCHOR ) {
+        readable_id = "anchor." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                      + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+    } else if( type == TYPE_ODOM ) {
+        if( to_keyframe != nullptr && from_keyframe != nullptr ) {
+            readable_id = "odom." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                          + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else if( to_keyframe == nullptr && from_keyframe != nullptr ) {
+            readable_id = "odom." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter )
+                          + "->to_keyframe is null";
+        } else if( to_keyframe != nullptr && from_keyframe == nullptr ) {
+            readable_id = "odom.from_keyframe is null->" + to_keyframe->robot_name + "-"
+                          + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else {
+            readable_id = "odom.from_keyframe is null->to_keyframe is null";
+        }
+    } else if( type == TYPE_LOOP ) {
+        if( from_keyframe != nullptr && to_keyframe != nullptr ) {
+            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                          + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else if( from_keyframe == nullptr && to_keyframe != nullptr ) {
+            readable_id = "loop.from_keyframe is null ->" + to_keyframe->robot_name + "-"
+                          + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else if( from_keyframe != nullptr && to_keyframe == nullptr ) {
+            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter )
+                          + "-> to_keyframe is null";
+        } else {
+            readable_id = "loop from_keyframe is null -> to_keyframe is null";
+        }
+    } else {
+        readable_id = "unknown";
+    }
 }
 
 /*
@@ -54,39 +90,6 @@ const Eigen::Matrix<double, 6, 6>&
 Edge::information() const
 {
     return edge->information();
-}
-
-std::string
-Edge::readable_id() const
-{
-    std::string readable_id;
-    if( type == TYPE_ANCHOR ) {
-        readable_id = "anchor." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
-                      + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
-    } else if( type == TYPE_ODOM ) {
-        if( to_keyframe != nullptr ) {
-            readable_id = "odom." + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else {
-            readable_id = "odom.to_keyframe is null";
-        }
-    } else if( type == TYPE_LOOP ) {
-        if( from_keyframe != nullptr && to_keyframe != nullptr ) {
-            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
-                          + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else if( from_keyframe == nullptr && to_keyframe != nullptr ) {
-            readable_id = "loop.from_keyframe is null ->" + to_keyframe->robot_name + "-"
-                          + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else if( from_keyframe != nullptr && to_keyframe == nullptr ) {
-            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter )
-                          + "-> to_keyframe is null";
-        } else {
-            readable_id = "loop from_keyframe is null -> to_keyframe is null";
-        }
-    } else {
-        readable_id = "unknown";
-    }
-
-    return readable_id;
 }
 
 

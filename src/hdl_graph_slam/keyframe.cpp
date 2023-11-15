@@ -5,6 +5,7 @@
 #include <pcl/io/pcd_io.h>
 
 #include <boost/filesystem.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 // ROS2 migration
 #include <rclcpp/logging.hpp>
@@ -19,12 +20,14 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     odom( odom ),
     odom_keyframe_counter( odom_keyframe_counter ),
     uuid( uuid ),
+    uuid_str( boost::uuids::to_string( uuid ) ),
     accum_distance( accum_distance ),
     first_keyframe( false ),
     cloud( cloud ),
     cloud_msg( cloud_msg ),
     node( nullptr )
 {
+    readable_id = robot_name + "-" + std::to_string( odom_keyframe_counter );
 }
 
 KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
@@ -36,6 +39,7 @@ KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
     cloud_msg( nullptr ),
     node( nullptr )
 {
+    // TODO implement with new way of identifying keyframes
     load( directory, graph );
 }
 
@@ -226,18 +230,6 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
     }
 
     return exist;
-}
-
-std::string
-KeyFrame::readable_id( bool with_stamp ) const
-{
-    std::stringstream ss;
-    ss << robot_name;
-    if( with_stamp ) {
-        ss << "#" << stamp.sec << "." << std::setfill( '0' ) << std::setw( 9 ) << stamp.nanosec;
-    }
-    ss << "-" << odom_keyframe_counter;
-    return ss.str();
 }
 
 /*
