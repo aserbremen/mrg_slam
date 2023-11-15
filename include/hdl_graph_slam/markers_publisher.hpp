@@ -21,10 +21,9 @@ public:
 
     void publish( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes, const std::vector<Edge::Ptr> &edges,
                   const KeyFrame::ConstPtr &last_keyframe, const std::vector<KeyFrame::ConstPtr> &others_last_kf,
-                  double loop_detector_distance_thresh, const GlobalIdGenerator &gid_gen );
+                  double loop_detector_distance_thresh );
 
-    void publishMarginals( const std::vector<KeyFrame::Ptr> &keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX> &marginals,
-                           const GlobalIdGenerator &gid_gen );
+    void publishMarginals( const std::vector<KeyFrame::Ptr> &keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX> &marginals );
 
     // uint32_t getNumSubscribers() const { return markers_pub.getNumSubscribers(); }
     // uint32_t getNumMarginalsSubscribers() const { return markers_marginals_pub.getNumSubscribers(); }

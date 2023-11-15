@@ -12,13 +12,14 @@
 namespace hdl_graph_slam {
 
 KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
-                    double accum_distance, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                    const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
+                    int odom_keyframe_counter, const boost::uuids::uuid& uuid, double accum_distance,
+                    const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
     robot_name( robot_name ),
     stamp( stamp ),
     odom( odom ),
+    odom_keyframe_counter( odom_keyframe_counter ),
+    uuid( uuid ),
     accum_distance( accum_distance ),
-    gid( 0 ),
     first_keyframe( false ),
     cloud( cloud ),
     cloud_msg( cloud_msg ),
@@ -39,13 +40,6 @@ KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
 }
 
 KeyFrame::~KeyFrame() {}
-
-
-void
-KeyFrame::set_gid( const GlobalIdGenerator& gid_generator )
-{
-    gid = gid_generator( id() );
-}
 
 
 Eigen::Matrix<double, 6, 6>
@@ -234,6 +228,18 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
     return exist;
 }
 
+std::string
+KeyFrame::readable_id( bool with_stamp ) const
+{
+    std::stringstream ss;
+    ss << robot_name;
+    if( with_stamp ) {
+        ss << "#" << stamp.sec << "." << std::setfill( '0' ) << std::setw( 9 ) << stamp.nanosec;
+    }
+    ss << "-" << odom_keyframe_counter;
+    return ss.str();
+}
+
 /*
 KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
                                     bool first_keyframe, const Eigen::MatrixXd* _covariance ) :
@@ -248,7 +254,7 @@ KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, cons
 KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) :
     stamp( key->stamp ),
     id( key->id() ),
-    gid( key->gid ),
+    uuid( key->uuid ),
     pose( key->node->estimate() ),
     cloud( key->cloud ),
     first_keyframe( key->first_keyframe )

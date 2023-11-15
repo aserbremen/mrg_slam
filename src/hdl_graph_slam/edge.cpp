@@ -8,12 +8,21 @@
 
 namespace hdl_graph_slam {
 
-Edge::Edge( const g2o::EdgeSE3* edge, Type type ) : edge( edge ), type( type ), gid( 0 ), from_gid( 0 ), to_gid( 0 ) {}
-
-Edge::Edge( const g2o::EdgeSE3* edge, Type type, GlobalId from_gid, GlobalId to_gid, const GlobalIdGenerator& gid_generator ) :
-    edge( edge ), type( type ), from_gid( from_gid ), to_gid( to_gid )
+Edge::Edge( const g2o::EdgeSE3* edge, Type type ) :
+    edge( edge ), type( type ), uuid( boost::uuids::uuid() ), from_uuid( boost::uuids::uuid() ), to_uuid( boost::uuids::uuid() )
 {
-    gid = gid_generator( id() );
+}
+
+Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, std::shared_ptr<const KeyFrame> from_keyframe,
+            const boost::uuids::uuid& from_uuid, std::shared_ptr<const KeyFrame> to_keyframe, const boost::uuids::uuid& to_uuid ) :
+    edge( edge ),
+    type( type ),
+    uuid( uuid ),
+    from_keyframe( from_keyframe ),
+    from_uuid( from_uuid ),
+    to_keyframe( to_keyframe ),
+    to_uuid( to_uuid )
+{
 }
 
 /*
@@ -47,9 +56,42 @@ Edge::information() const
     return edge->information();
 }
 
+std::string
+Edge::readable_id() const
+{
+    std::string readable_id;
+    if( type == TYPE_ANCHOR ) {
+        readable_id = "anchor." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                      + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+    } else if( type == TYPE_ODOM ) {
+        if( to_keyframe != nullptr ) {
+            readable_id = "odom." + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else {
+            readable_id = "odom.to_keyframe is null";
+        }
+    } else if( type == TYPE_LOOP ) {
+        if( from_keyframe != nullptr && to_keyframe != nullptr ) {
+            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                          + to_keyframe->robot_name + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else if( from_keyframe == nullptr && to_keyframe != nullptr ) {
+            readable_id = "loop.from_keyframe is null ->" + to_keyframe->robot_name + "-"
+                          + std::to_string( to_keyframe->odom_keyframe_counter );
+        } else if( from_keyframe != nullptr && to_keyframe == nullptr ) {
+            readable_id = "loop." + from_keyframe->robot_name + "-" + std::to_string( from_keyframe->odom_keyframe_counter )
+                          + "-> to_keyframe is null";
+        } else {
+            readable_id = "loop from_keyframe is null -> to_keyframe is null";
+        }
+    } else {
+        readable_id = "unknown";
+    }
+
+    return readable_id;
+}
+
 
 EdgeSnapshot::EdgeSnapshot( const Edge::Ptr& edge ) :
-    type( edge->type ), gid( edge->gid ), from_gid( edge->from_gid ), to_gid( edge->to_gid )
+    type( edge->type ), uuid( edge->uuid ), from_uuid( edge->from_uuid ), to_uuid( edge->to_uuid )
 {
 }
 

@@ -120,6 +120,7 @@ floor_detection_component:
 # HDL graph slam component parameters
 hdl_graph_slam_component:
   ros__parameters:
+    enable_graph_slam: true
     own_name: "atlas"
     /properties/scenario/rovers/names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0

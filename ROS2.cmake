@@ -167,7 +167,6 @@ add_library(hdl_graph_slam_component SHARED
   apps/hdl_graph_slam_component.cpp
   src/hdl_graph_slam/graph_slam.cpp
   src/hdl_graph_slam/edge.cpp
-  src/hdl_graph_slam/global_id.cpp
   src/hdl_graph_slam/loop_detector.cpp
   src/hdl_graph_slam/keyframe.cpp
   src/hdl_graph_slam/keyframe_updater.cpp
@@ -253,23 +252,23 @@ endif()
 ################################
 ## Multi Robot Communicator ####
 ################################
-add_executable(multi_robot_communicator
-  apps/multi_robot_communicator.cpp
-)
-ament_target_dependencies(multi_robot_communicator
-  rclcpp
-  tf2
-  tf2_ros
-  tf2_eigen
-  vamex_slam_msgs
-  nav_msgs
-  geometry_msgs
-)
-install(TARGETS multi_robot_communicator
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  DESTINATION lib/${PROJECT_NAME}
-)
+# add_executable(multi_robot_communicator
+#   apps/multi_robot_communicator.cpp
+# )
+# ament_target_dependencies(multi_robot_communicator
+#   rclcpp
+#   tf2
+#   tf2_ros
+#   tf2_eigen
+#   vamex_slam_msgs
+#   nav_msgs
+#   geometry_msgs
+# )
+# install(TARGETS multi_robot_communicator
+#   LIBRARY DESTINATION lib
+#   ARCHIVE DESTINATION lib
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 # Here we can export all downstream dependencies and include directories
 # TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892

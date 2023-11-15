@@ -6,7 +6,6 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 
 #include <boost/format.hpp>
-#include <hdl_graph_slam/global_id.hpp>
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <hdl_graph_slam/registrations.hpp>
@@ -47,7 +46,7 @@ public:
      * @brief Construct a new Loop Detector object
      * @param _node Shared pointer to the main node
      */
-    LoopDetector( rclcpp::Node::SharedPtr _node, std::shared_ptr<GlobalIdGenerator> _gid_generator );
+    LoopDetector( rclcpp::Node::SharedPtr _node );
 
     /**
      * @brief detect loops and add them to the pose graph
@@ -56,8 +55,7 @@ public:
      * @param graph_slam      pose graph
      */
     std::vector<Loop::Ptr> detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                                   hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<Edge::Ptr>& edges,
-                                   const std::unordered_map<GlobalId, KeyFrame::Ptr>& gid_keyframe_map );
+                                   hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<Edge::Ptr>& edges );
 
     double get_distance_thresh() const;
 
@@ -79,12 +77,11 @@ private:
      */
     Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
                         hdl_graph_slam::GraphSLAM& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
-                        const std::vector<Edge::Ptr>& edges, const std::unordered_map<GlobalId, KeyFrame::Ptr>& gid_keyframe_map );
+                        const std::vector<Edge::Ptr>& edges );
 
 
 private:
     rclcpp::Node::SharedPtr            node_ros;
-    std::shared_ptr<GlobalIdGenerator> gid_generator;
 
     double distance_thresh,
         distance_thresh_squared;   // estimated distance between new keyframe and candidate be less than this distance, for the candidate to

@@ -104,8 +104,7 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 void
 MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
                            const std::vector<Edge::Ptr>& edges, const KeyFrame::ConstPtr& last_keyframe,
-                           const std::vector<KeyFrame::ConstPtr>& others_last_kf, double loop_detector_distance_thresh,
-                           const GlobalIdGenerator& gid_gen )
+                           const std::vector<KeyFrame::ConstPtr>& others_last_kf, double loop_detector_distance_thresh )
 {
     enum {
         MARKER_NODES,
@@ -118,8 +117,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     };
     // auto                            stamp   = ros::Time::now();
     // Directly declare builtin_interfaces::msg::Time
-    builtin_interfaces::msg::Time        stamp   = node->now().operator builtin_interfaces::msg::Time();
-    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
     markers.markers.resize( __NUM_MARKERS__ );
 
@@ -161,7 +159,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         traj_marker.colors[i].a = 1.0;
         */
 
-        if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
+        if( keyframes[i]->robot_name == own_name ) {
             traj_marker.colors[i] = color_blue;
         } else {
             traj_marker.colors[i] = color_cyan;
@@ -246,15 +244,15 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
             main_edge_marker.points[i * 2 + 1].y = pt2.y();
             main_edge_marker.points[i * 2 + 1].z = pt2.z();
 
-
-            if( gid_gen.getRobotId( edge->gid ) == own_rid ) {
-                if( edge->type == Edge::TYPE_ODOM ) {
+            // TODO should edge contain robot_name? to check who is the original creator of the edge
+            if( edge->from_keyframe->robot_name == own_name && edge->to_keyframe->robot_name == own_name ) {
+                if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red;
                 } else {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple;
                 }
             } else {
-                if( edge->type == Edge::TYPE_ODOM ) {
+                if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_orange;
                 } else {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_pink;
@@ -428,12 +426,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         marker.pose.position.z    = keyframes[i]->estimate().translation().z() + 0.5;
         marker.pose.orientation.w = 1.0;
         marker.id                 = i;
-        if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
-            marker.text  = gid_gen.getHumanReadableId( keyframes[i]->gid );
+        if( keyframes[i]->robot_name == own_name ) {
+            marker.text  = keyframes[i]->readable_id();
             marker.color = color_blue;
         } else {
             marker.color = color_cyan;
-            marker.text  = "+_" + gid_gen.getHumanReadableId( keyframes[i]->gid );
+            marker.text  = "+" + keyframes[i]->readable_id();
         }
     }
 
@@ -442,15 +440,14 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
 
 void
-MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals,
-                                    const GlobalIdGenerator& gid_gen )
+MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals )
 {
     // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
 
     // auto                            stamp   = ros::Time::now();
     // Directly declare builtin_interfaces::msg::Time
-    builtin_interfaces::msg::Time        stamp   = node->now().operator builtin_interfaces::msg::Time();
-    RobotId                              own_rid = gid_gen.getRobotId( own_name );
+    builtin_interfaces::msg::Time stamp = node->now().operator builtin_interfaces::msg::Time();
+    // RobotId                              own_rid = gid_gen.get_robot_id( own_name );
     visualization_msgs::msg::MarkerArray markers;
 
     markers.markers.resize( keyframes.size() );
@@ -467,7 +464,7 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
         marker.type            = visualization_msgs::msg::Marker::SPHERE;
 
         // color
-        if( gid_gen.getRobotId( keyframes[i]->gid ) == own_rid ) {
+        if( keyframes[i]->robot_name == own_name ) {
             marker.color = color_blue;
         } else {
             marker.color = color_cyan;
