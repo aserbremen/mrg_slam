@@ -838,7 +838,7 @@ private:
     }
 
 
-    void publish_slam_pose_broadcast( hdl_graph_slam::KeyFrame::ConstPtr kf )
+    void publish_slam_pose( hdl_graph_slam::KeyFrame::ConstPtr kf )
     {
         vamex_slam_msgs::msg::PoseWithName slam_pose_msg;
         slam_pose_msg.header.stamp    = this->now();
@@ -862,6 +862,7 @@ private:
         double          other_accum_dist      = slam_pose_msg->accum_dist;
         double         &other_last_accum_dist = others_last_accum_dist[other_robot_name];
         others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
+
         if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
             return;
         }
@@ -882,6 +883,7 @@ private:
                 Eigen::Vector2d other_position = Eigen::Vector2d( other_pose.pose.position.x, other_pose.pose.position.y );
                 if( ( own_position - other_position ).squaredNorm() < max_robot_dist_sqr ) {
                     request_graph = true;
+                    others_slam_poses[other_robot_name].clear();
                     break;
                 } else {
                     continue;
@@ -1237,10 +1239,6 @@ private:
         if( !keyframe_updated & !flush_graph_queue()
             & !floor_coeffs_processor.flush( graph_slam, keyframes, keyframe_hash, prev_robot_keyframe->stamp )
             & !gps_processor.flush( graph_slam, keyframes ) & !imu_processor.flush( graph_slam, keyframes, base_frame_id ) ) {
-            // Publish the current slam pose if nothing has been updated
-            if( prev_robot_keyframe != nullptr ) {
-                publish_slam_pose_broadcast( prev_robot_keyframe );
-            }
             optimization_timer->reset();
             return;
         }
@@ -1327,7 +1325,7 @@ private:
         snapshots_mutex.unlock();
 
         // Publish the current optimized slam pose
-        publish_slam_pose_broadcast( prev_robot_keyframe );
+        publish_slam_pose( prev_robot_keyframe );
 
         // if( odom2map_pub.getNumSubscribers() ) {
         if( odom2map_pub->get_subscription_count() ) {
@@ -1361,7 +1359,6 @@ private:
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
-        // std::string directory = req.destination;
         std::string directory = req->destination;
 
         if( directory.empty() ) {
@@ -1377,14 +1374,20 @@ private:
             boost::filesystem::create_directories( directory );
         }
 
-        std::cout << "all data dumped to:" << directory << std::endl;
+        std::cout << "Dumping data to:" << directory << std::endl;
 
         graph_slam->save( directory + "/graph.g2o" );
         for( int i = 0; i < (int)keyframes.size(); i++ ) {
             std::stringstream sst;
-            sst << boost::format( "%s/%06d" ) % directory % i;
+            sst << boost::format( "%s/keyframes/%06d" ) % directory % i;
 
             keyframes[i]->save( sst.str() );
+        }
+        for( int i = 0; i < (int)edges.size(); i++ ) {
+            std::stringstream sst;
+            sst << boost::format( "%s/edges/%06d" ) % directory % i;
+
+            edges[i]->save( sst.str() );
         }
 
         const auto &zero_utm = gps_processor.zero_utm();
@@ -1557,6 +1560,9 @@ private:
                 added_edges++;
             }
             res->graph.edges.resize( added_edges );
+
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Published graph with " << added_keyframes << " keyframes and " << added_edges << " edges" );
         }
     }
 

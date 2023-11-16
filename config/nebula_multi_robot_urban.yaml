@@ -208,7 +208,7 @@ hdl_graph_slam_component:
     min_stddev_q: 0.05
     max_stddev_q: 0.2
       # graph exchange params
-    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity, timer_based]
+    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
     graph_request_min_accum_dist: 15.0

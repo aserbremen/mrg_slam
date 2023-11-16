@@ -206,6 +206,14 @@ hdl_graph_slam_component:
     max_stddev_x: 5.0
     min_stddev_q: 0.05
     max_stddev_q: 0.2
+    # graph exchange params
+    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
+    # CURRENT_PROMIXITY: based on current distance between robots ()
+    # PATH_PROXIMITY: based on already traversed path
+    graph_request_min_accum_dist: 15.0
+    graph_request_max_robot_dist: 25.0
+    graph_request_min_time_delay: 5.0
+    graph_exchange_mode: "PATH_PROXIMITY"
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 10.0
@@ -215,15 +223,15 @@ hdl_graph_slam_component:
 
 
 # Multi robot communicator
-multi_robot_communicator:
-  ros__parameters:
-    enable_multi_robot_communicator: false
-    own_name: "atlas"
-    robot_names: ["atlas", "bestla"]
-    publish_graph_trigger_mode: "slam"
-    graph_request_min_accum_dist: 3.0
-    graph_request_max_robot_dist: 10.0
-    graph_request_min_robot_dist: 2.0
-    graph_request_min_time_delay: 5.0
-    communication_delay: 5
+# multi_robot_communicator:
+#   ros__parameters:
+#     enable_multi_robot_communicator: false
+#     own_name: "atlas"
+#     robot_names: ["atlas", "bestla"]
+#     publish_graph_trigger_mode: "slam"
+#     graph_request_min_accum_dist: 3.0
+#     graph_request_max_robot_dist: 100.0
+#     graph_request_min_robot_dist: 2.0
+#     graph_request_min_time_delay: 5.0
+#     communication_delay: 5
     # remappings are handled in the python respective launch file

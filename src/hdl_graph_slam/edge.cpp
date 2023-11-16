@@ -92,6 +92,27 @@ Edge::information() const
     return edge->information();
 }
 
+void
+Edge::save( const std::string& directory )
+{
+    if( !boost::filesystem::is_directory( directory ) ) {
+        boost::filesystem::create_directories( directory );
+    }
+
+    // Open the file for appending
+    std::ofstream ofs( directory + "/data" );
+
+    ofs << "edge " << readable_id << "\n";
+    ofs << "uuid_str " << uuid_str << "\n";
+    ofs << "from_uuid_str " << from_uuid_str << "\n";
+    ofs << "to_uuid_str " << to_uuid_str << "\n";
+    ofs << "g2o_id " << edge->id() << "\n";
+    ofs << "relative_pose\n";
+    ofs << edge->measurement().matrix() << "\n";
+    ofs << "information_matrix\n";
+    ofs << edge->information().matrix() << "\n";
+}
+
 
 EdgeSnapshot::EdgeSnapshot( const Edge::Ptr& edge ) :
     type( edge->type ), uuid( edge->uuid ), from_uuid( edge->from_uuid ), to_uuid( edge->to_uuid )

@@ -62,7 +62,7 @@ void
 KeyFrame::save( const std::string& directory )
 {
     if( !boost::filesystem::is_directory( directory ) ) {
-        boost::filesystem::create_directory( directory );
+        boost::filesystem::create_directories( directory );
     }
 
     std::ofstream ofs( directory + "/data" );
@@ -76,6 +76,8 @@ KeyFrame::save( const std::string& directory )
     ofs << odom.matrix() << "\n";
 
     ofs << "accum_distance " << accum_distance << "\n";
+
+    ofs << "uuid " << uuid_str << "\n";
 
     if( floor_coeffs ) {
         ofs << "floor_coeffs " << floor_coeffs->transpose() << "\n";
@@ -94,9 +96,8 @@ KeyFrame::save( const std::string& directory )
     }
 
     if( node ) {
-        ofs << "id " << node->id() << "\n";
+        ofs << "g2o_id " << node->id() << "\n";
     }
-
     pcl::io::savePCDFileBinary( directory + "/cloud.pcd", *cloud );
 }
 
