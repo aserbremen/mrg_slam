@@ -23,6 +23,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
+from scipy.spatial.transform import Rotation as R
 
 
 def euler_from_quaternion(x, y, z, w):
@@ -84,20 +85,21 @@ class RosbagProcessor(Node):
         # For analysing pointcloud data
         self.sensor_heights = self.declare_parameter('sensor_heights', [0.7]).get_parameter_value().double_array_value
         self.sensor_clip_range = self.declare_parameter('sensor_clip_range', 1.0).get_parameter_value().double_value
+        self.result_folder = self.declare_parameter('result_folder', '').get_parameter_value().string_value
 
         # The slam status callback and the timer callback need to be reentrant, so that the slam status can be updated while the timer is processed
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
+        # self.setup_playback()
+
+    def setup_playback(self):
         if self.dataset_dir == '':
             print('Please specify the dataset directory parameter <dataset_dir> like this: --ros-args -p dataset_dir:=/path/to/dataset')
             exit(1)
 
         self.data_dict = {}
-        self.setup_playback()
-
-    def setup_playback(self):
         print('Setting up playback for robots: {}'.format(self.robot_names))
         for robot_name in self.robot_names:
             self.setup_robot(robot_name)
@@ -387,6 +389,56 @@ class RosbagProcessor(Node):
 
         exit(0)
 
+    def results_to_pose_file(self):
+        if self.result_folder == '':
+            print('Please specify the result folder parameter <result_folder> like this: --ros-args -p result_folder:=/path/to/result_folder')
+            exit(1)
+        # get all filenames ending with .txt
+        keyframes_folder = os.path.join(self.result_folder, 'keyframes')
+        keyframe_files = [f for f in os.listdir(keyframes_folder) if f.endswith('.txt')]
+        keyframe_files = sorted(keyframe_files)
+        own_robot_name = None
+        stamps_poses = []
+        for keyframe_file in keyframe_files:
+            with open(os.path.join(keyframes_folder, keyframe_file), mode='r') as f:
+                lines = f.readlines()
+                # Get the robot name from the first line
+                robot_name_str = [line for line in lines if line.startswith('robot_name')]
+                robot_name = robot_name_str[0].split(' ')[1]
+                if own_robot_name is None:
+                    own_robot_name = robot_name.rstrip()
+
+                if own_robot_name not in robot_name:
+                    continue
+
+                stamp_str = next((line for line in lines if line.startswith('stamp')), None)
+                stamp_secs = stamp_str.split(' ')[1]
+                stamp_nanosecs = stamp_str.split(' ')[2]
+                # remove new line character if present
+                if stamp_nanosecs.endswith('\n'):
+                    stamp_nanosecs = stamp_nanosecs[:-1]
+                stamp_nanosecs = stamp_nanosecs.zfill(9)
+                stamp = float(stamp_secs + '.' + stamp_nanosecs)
+
+                # get the 4 lines after the one line containing 'estimate'
+                estimate_str = next((line for line in lines if line.startswith('estimate')), None)
+                estimate_lines = lines[lines.index(estimate_str)+1:lines.index(estimate_str)+5]
+                T = np.genfromtxt(estimate_lines)
+                translation = T[:3, 3]
+                rotation = R.from_matrix(T[:3, :3]).as_quat()
+                stamps_poses.append([stamp, translation, rotation])
+
+        # Write the gathered data to a file
+        short_robot_name = own_robot_name[0] + own_robot_name[-1]
+        output_file = os.path.join(self.result_folder, short_robot_name + '.txt')
+        print('Writing poses to file: {}'.format(os.path.abspath(output_file)))
+        for stamp, translation, rotation in stamps_poses:
+            with open(output_file, 'a') as f:
+                f.write('{} {} {} {} {} {} {} {}\n'.format(
+                    stamp, translation[0], translation[1], translation[2], rotation[0], rotation[1], rotation[2], rotation[3]))
+
+        exit(0)
+
 
 def play_rosbags(executor, ros_bag_processor):
     ros_bag_processor.start_playback()
@@ -410,6 +462,11 @@ def print_info(executor, ros_bag_processor):
 
 def write_odom_groundtruth(executor, ros_bag_processor):
     ros_bag_processor.write_odom_groundtruth()
+    spin(executor, ros_bag_processor)
+
+
+def results_to_pose_file(executor, ros_bag_processor):
+    ros_bag_processor.results_to_pose_file()
     spin(executor, ros_bag_processor)
 
 
@@ -437,7 +494,8 @@ def main(args=None):
         'print_initial_poses': lambda: print_initial_poses(executor, rosbag_processor),
         'plot_trajectories': lambda: plot_trajectories(executor, rosbag_processor),
         'print_info': lambda: print_info(executor, rosbag_processor),
-        'write_odom_groundtruth': lambda: write_odom_groundtruth(executor, rosbag_processor)
+        'write_odom_groundtruth': lambda: write_odom_groundtruth(executor, rosbag_processor),
+        'results_to_pose_file': lambda: results_to_pose_file(executor, rosbag_processor),
     })
 
 
