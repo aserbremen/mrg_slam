@@ -319,7 +319,7 @@ class KittiMultiRobotProcessor(Node):
             return
         # call the dumb and save graph service on hdl graph slam
         dump_request = DumpGraph.Request()
-        dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
+        dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'])
         self.robots[robot_name]['dump_graph_requested'] = True
         print(f'Dumping graph at: {dump_request.destination}')
         self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request, robot_name)

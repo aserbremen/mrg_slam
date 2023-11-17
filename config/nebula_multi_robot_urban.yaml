@@ -207,7 +207,7 @@ hdl_graph_slam_component:
     max_stddev_x: 5.0
     min_stddev_q: 0.05
     max_stddev_q: 0.2
-      # graph exchange params
+    # graph exchange params
     # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
@@ -217,7 +217,7 @@ hdl_graph_slam_component:
     graph_exchange_mode: "PATH_PROXIMITY"
     # graph update params
     graph_update_interval: 3.0
-    map_cloud_update_interval: 10.0
+    map_cloud_update_interval: 3.0
     map_cloud_resolution: 0.5
     save_graph: false
     # remappings are handled in the python respective launch file
