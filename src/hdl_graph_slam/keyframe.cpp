@@ -59,25 +59,22 @@ KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals 
 
 
 void
-KeyFrame::save( const std::string& directory )
+KeyFrame::save( const std::string& result_path )
 {
-    if( !boost::filesystem::is_directory( directory ) ) {
-        boost::filesystem::create_directories( directory );
-    }
+    std::ofstream ofs( result_path + ".txt" );
 
-    std::ofstream ofs( directory + "/data" );
     ofs << "robot_name " << robot_name << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
     ofs << node->estimate().matrix() << "\n";
 
+    ofs << "odom_counter " << odom_keyframe_counter << "\n";
+
     ofs << "odom\n";
     ofs << odom.matrix() << "\n";
 
     ofs << "accum_distance " << accum_distance << "\n";
-
-    ofs << "uuid " << uuid_str << "\n";
 
     if( floor_coeffs ) {
         ofs << "floor_coeffs " << floor_coeffs->transpose() << "\n";
@@ -98,12 +95,19 @@ KeyFrame::save( const std::string& directory )
     if( node ) {
         ofs << "g2o_id " << node->id() << "\n";
     }
-    pcl::io::savePCDFileBinary( directory + "/cloud.pcd", *cloud );
+
+    ofs << "uuid " << uuid_str << "\n";
+
+    // Save the point cloud
+    pcl::io::savePCDFileBinary( result_path + ".pcd", *cloud );
 }
 
 bool
 KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
 {
+    // TODO implement with new way of identifying keyframes
+    RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "KeyFrame::load() not implemented with new saving format!!" );
+    return false;
     std::ifstream ifs( directory + "/data" );
     if( !ifs ) {
         return false;

@@ -93,24 +93,32 @@ Edge::information() const
 }
 
 void
-Edge::save( const std::string& directory )
+Edge::save( const std::string& result_path )
 {
-    if( !boost::filesystem::is_directory( directory ) ) {
-        boost::filesystem::create_directories( directory );
-    }
-
-    // Open the file for appending
-    std::ofstream ofs( directory + "/data" );
+    std::ofstream ofs( result_path + ".txt" );
 
     ofs << "edge " << readable_id << "\n";
-    ofs << "uuid_str " << uuid_str << "\n";
-    ofs << "from_uuid_str " << from_uuid_str << "\n";
-    ofs << "to_uuid_str " << to_uuid_str << "\n";
+    std::string type_str;
+    if( type == TYPE_ANCHOR ) {
+        type_str = "anchor";
+    } else if( type == TYPE_ODOM ) {
+        type_str = "odom";
+    } else if( type == TYPE_LOOP ) {
+        type_str = "loop";
+    } else {
+        type_str = "unknown";
+    }
+    ofs << "type " << type_str << "\n";
+    ofs << "from " << from_keyframe->readable_id << "\n";
+    ofs << "to " << to_keyframe->readable_id << "\n";
     ofs << "g2o_id " << edge->id() << "\n";
     ofs << "relative_pose\n";
     ofs << edge->measurement().matrix() << "\n";
     ofs << "information_matrix\n";
     ofs << edge->information().matrix() << "\n";
+    ofs << "uuid_str " << uuid_str << "\n";
+    ofs << "from_uuid_str " << from_uuid_str << "\n";
+    ofs << "to_uuid_str " << to_uuid_str << "\n";
 }
 
 

@@ -40,7 +40,7 @@ public:
     const Eigen::Isometry3d&           relative_pose() const;
     const Eigen::Matrix<double, 6, 6>& information() const;
 
-    void save( const std::string& directory );
+    void save( const std::string& result_path );
 
 public:
     const g2o::EdgeSE3*             edge;           // edge instance

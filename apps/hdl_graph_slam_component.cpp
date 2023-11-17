@@ -1361,6 +1361,30 @@ private:
 
         std::string directory = req->destination;
 
+        std::cout << "Dumping data to:" << directory << std::endl;
+
+        std::string keyframe_directory = directory + "/keyframes";
+        if( !boost::filesystem::is_directory( keyframe_directory ) ) {
+            boost::filesystem::create_directories( keyframe_directory );
+        }
+        // Saving detailed keyframe and edge info
+        for( int i = 0; i < (int)keyframes.size(); i++ ) {
+            std::stringstream ss;
+            ss << boost::format( "%s/%06d" ) % keyframe_directory % i;
+            keyframes[i]->save( ss.str() );
+        }
+
+        std::string edge_directory = directory + "/edges";
+        if( !boost::filesystem::is_directory( edge_directory ) ) {
+            boost::filesystem::create_directories( edge_directory );
+        }
+        for( int i = 0; i < (int)edges.size(); i++ ) {
+            std::stringstream ss;
+            ss << boost::format( "%s/%06d" ) % edge_directory % i;
+            edges[i]->save( ss.str() );
+        }
+
+        // time info not used at the moment
         if( directory.empty() ) {
             std::array<char, 64> buffer;
             buffer.fill( 0 );
@@ -1370,42 +1394,28 @@ private:
             strftime( buffer.data(), sizeof( buffer ), "%d-%m-%Y %H:%M:%S", timeinfo );
         }
 
-        if( !boost::filesystem::is_directory( directory ) ) {
-            boost::filesystem::create_directories( directory );
+        // Saving g2o files
+        std::string g2o_directory = directory + "/g2o";
+        if( !boost::filesystem::is_directory( g2o_directory ) ) {
+            boost::filesystem::create_directories( g2o_directory );
         }
 
-        std::cout << "Dumping data to:" << directory << std::endl;
+        graph_slam->save( g2o_directory + "/graph.g2o" );
+        std::ofstream ofs( g2o_directory + "/special_nodes.csv" );
+        const auto   &floor_plane_node = floor_coeffs_processor.floor_plane_node();
+        ofs << "anchor_node " << ( anchor_node == nullptr ? -1 : anchor_node->id() ) << std::endl;
+        ofs << "anchor_edge " << ( anchor_edge_g2o == nullptr ? -1 : anchor_edge_g2o->id() ) << std::endl;
+        ofs << "floor_node " << ( floor_plane_node == nullptr ? -1 : floor_plane_node->id() ) << std::endl;
 
-        graph_slam->save( directory + "/graph.g2o" );
-        for( int i = 0; i < (int)keyframes.size(); i++ ) {
-            std::stringstream sst;
-            sst << boost::format( "%s/keyframes/%06d" ) % directory % i;
 
-            keyframes[i]->save( sst.str() );
-        }
-        for( int i = 0; i < (int)edges.size(); i++ ) {
-            std::stringstream sst;
-            sst << boost::format( "%s/edges/%06d" ) % directory % i;
-
-            edges[i]->save( sst.str() );
-        }
-
+        // Saving gps data
         const auto &zero_utm = gps_processor.zero_utm();
         if( zero_utm ) {
             std::ofstream zero_utm_ofs( directory + "/zero_utm" );
             zero_utm_ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
 
-        std::ofstream ofs( directory + "/special_nodes.csv" );
-        const auto   &floor_plane_node = floor_coeffs_processor.floor_plane_node();
-        ofs << "anchor_node " << ( anchor_node == nullptr ? -1 : anchor_node->id() ) << std::endl;
-        ofs << "anchor_edge " << ( anchor_edge_g2o == nullptr ? -1 : anchor_edge_g2o->id() ) << std::endl;
-        ofs << "floor_node " << ( floor_plane_node == nullptr ? -1 : floor_plane_node->id() ) << std::endl;
-
-        // res.success = true;
         res->success = true;
-        // ROS2 services are of type void and dont return a bool.
-        // return true;
     }
 
     /**

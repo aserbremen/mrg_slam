@@ -43,7 +43,7 @@ public:
 
     Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
 
-    void save( const std::string& directory );
+    void save( const std::string& result_path );
     bool load( const std::string& directory, g2o::HyperGraph* graph );
 
     long              id() const;
