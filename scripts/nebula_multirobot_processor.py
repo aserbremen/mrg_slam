@@ -105,8 +105,11 @@ class NebulaProcessor(Node):
         self.slam_config = self.declare_parameter('slam_config', 'nebula_multi_robot_urban.yaml').get_parameter_value().string_value
         self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
 
+        self.add_noise = self.declare_parameter('add_noise', True).get_parameter_value().bool_value
+        self.start_position_noise = self.declare_parameter('start_position_noise', 0.2).get_parameter_value().double_value  # in meters
+        self.start_rotation_noise = self.declare_parameter('start_rotation_noise', 2.0).get_parameter_value().double_value  # in degrees
         self.odom_translation_noise = self.declare_parameter('odom_translation_noise', 0.05).get_parameter_value().double_value  # in meters
-        self.odom_rotation_noise = self.declare_parameter('odom_rotation_noise', 0.1).get_parameter_value().double_value  # in degrees
+        self.odom_rotation_noise = self.declare_parameter('odom_rotation_noise', 0.5).get_parameter_value().double_value  # in degrees
 
         # The slam status callback and the timer callback need to be reentrant, so that the slam status can be updated while the timer is processed
         self.reentrant_callback_group = ReentrantCallbackGroup()
@@ -196,18 +199,37 @@ class NebulaProcessor(Node):
             os.makedirs(self.robots[robot_name]['result_dir'])
         else:
             self.get_logger().warn('Result directory {} already exists, overwriting'.format(self.robots[robot_name]['result_dir']))
-
         # Start the slam process with the correct starting position
         start_pos = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.position
         start_quat = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.orientation
         x, y, z = start_pos.x, start_pos.y, start_pos.z
         qx, qy, qz, qw = start_quat.x, start_quat.y, start_quat.z, start_quat.w
         rot = R.from_quat([qx, qy, qz, qw])
+        print(
+            f'Initial position for robot {robot_name} is ({x}, {y}, {z}) with orientation ({np.rad2deg(rot.as_euler("ZYX", degrees=True))})')
+        if self.add_noise:
+            x += np.random.normal(0, self.start_position_noise)
+            y += np.random.normal(0, self.start_position_noise)
+            z += np.random.normal(0, self.start_position_noise)
+            rot = rot * R.from_euler('ZYX',
+                                     [np.random.normal(0, np.deg2rad(self.start_rotation_noise)),
+                                      np.random.normal(0, np.deg2rad(self.start_rotation_noise)),
+                                      np.random.normal(0, np.deg2rad(self.start_rotation_noise))],
+                                     degrees=True)
+            print(
+                f'Initial position for robot {robot_name} with noise is ({x}, {y}, {z}) with orientation ({np.rad2deg(rot.as_euler("ZYX", degrees=True))})    ')
+            # write the additive noise parameters to file
+            with open(os.path.join(self.robots[robot_name]['result_dir'], 'additive_noise.txt'), 'w') as f:
+                f.write(f'start_noise_trans {self.start_position_noise}\n')
+                f.write(f'start_noise_rot {self.start_rotation_noise}\n')
+                f.write(f'odom_noise_trans {self.odom_translation_noise}\n')
+                f.write(f'odom_noise_rot {self.odom_rotation_noise}\n')
         yaw, pitch, roll = rot.as_euler('ZYX', degrees=False)
         print(f'Starting slam process for robot {robot_name} at position ({x}, {y}, {z}) \
                 with orientation ({np.rad2deg( roll)}, {np.rad2deg(pitch)}, {np.rad2deg(yaw)})')
         slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name,
                     'config:=' + self.slam_config, 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z), 'yaw:=' + str(yaw), 'pitch:=' + str(pitch), 'roll:=' + str(roll)]
+
         with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), 'w') as f:
             self.robots[robot_name]['slam_process'] = subprocess.Popen(slam_cmd, stdout=f, stderr=f)
             print(f'Started slam process for robot {robot_name} with pid {self.robots[robot_name]["slam_process"].pid} and cmd')
@@ -262,6 +284,27 @@ class NebulaProcessor(Node):
         clock_msg.clock.nanosec = stamp.nanosec
         self.clock_publisher.publish(clock_msg)
 
+    def add_noise_to_odometry(self, odometry) -> Odometry:
+        result = odometry
+        result.pose.pose.position.x += np.random.normal(0, self.odom_translation_noise)
+        result.pose.pose.position.y += np.random.normal(0, self.odom_translation_noise)
+        result.pose.pose.position.z += np.random.normal(0, self.odom_translation_noise)
+        qx, qy, qz, qw = result.pose.pose.orientation.x, result.pose.pose.orientation.y, \
+            result.pose.pose.orientation.z, result.pose.pose.orientation.w
+        rot = R.from_quat([qx, qy, qz, qw])
+        rot = rot * R.from_euler('ZYX',
+                                 [np.random.normal(0, np.deg2rad(self.odom_rotation_noise)),
+                                  np.random.normal(0, np.deg2rad(self.odom_rotation_noise)),
+                                  np.random.normal(0, np.deg2rad(self.odom_rotation_noise))],
+                                 degrees=True)
+        new_quat = rot.as_quat()
+        result.pose.pose.orientation.x = new_quat[0]
+        result.pose.pose.orientation.y = new_quat[1]
+        result.pose.pose.orientation.z = new_quat[2]
+        result.pose.pose.orientation.w = new_quat[3]
+
+        return result
+
     def playback(self):
         if any(self.robots[robot_name]['slam_status'].in_optimization or
                self.robots[robot_name]['slam_status'].in_loop_closure or
@@ -280,6 +323,8 @@ class NebulaProcessor(Node):
 
         pointcloud = self.robots[robot_name]['scans_msgs'][self.robots[robot_name]['scan_counter']][1].scan  # type: PointCloud2
         odometry = self.robots[robot_name]['odometry_msgs'][closest_odometry_index][1]
+        if self.add_noise:
+            odometry = self.add_noise_to_odometry(odometry)
         # Publish the corresponding pointcloud and odometry message
         if pointcloud.header.frame_id == '':
             pointcloud.header.frame_id = robot_name + '/velodyne'
