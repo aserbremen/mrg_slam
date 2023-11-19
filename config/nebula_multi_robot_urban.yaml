@@ -166,7 +166,7 @@ hdl_graph_slam_component:
     loop_closure_edge_robust_kernel: "Cauchy" # "NONE"
     loop_closure_edge_robust_kernel_size: 0.1 # 1.0
     use_loop_closure_consistency_check: true
-    loop_closure_consistency_max_delta_trans: 0.1  # meter
+    loop_closure_consistency_max_delta_trans: 0.2  # meter
     loop_closure_consistency_max_delta_angle: 3.0  # degree
     # scan matching params, registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
     registration_method: "FAST_GICP"
