@@ -160,7 +160,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
     bool consistency_check_passed = false;
     // First frame is excluded from map and is always used as a loop closure candidate without the consistency check
-    if( use_loop_closure_consistency_check && best_matched->first_keyframe == false ) {
+    if( use_loop_closure_consistency_check && best_matched->first_keyframe == false && best_score < fitness_score_thresh ) {
         std::cout << "Performing loop closure consistency check" << std::endl;
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
         if( best_matched->prev_edge != nullptr ) {
@@ -262,7 +262,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
               << Eigen::Quaternionf( rel_pose_new_to_best_matched.block<3, 3>( 0, 0 ) ).coeffs().transpose() << std::endl;
 
     // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
-    if( new_keyframe->accum_distance >= 0 ) {
+    if( new_keyframe->accum_distance > 0 ) {
         std::cout << "updating last loop edge accum distance for robot " << new_keyframe->robot_name << " to "
                   << new_keyframe->accum_distance << std::endl;
         last_loop_edge_accum_distance_map[new_keyframe->robot_name] = new_keyframe->accum_distance;
