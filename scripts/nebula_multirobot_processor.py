@@ -94,11 +94,12 @@ class NebulaProcessor(Node):
         super().__init__('rosbag_processor')
 
         self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
-        self.robot_names = self.declare_parameter('robot_names', ['husky1', 'husky4', 'spot1']).get_parameter_value().string_array_value
+        self.robot_names = self.declare_parameter(
+            'robot_names', ['husky1', 'husky2', 'husky3', 'husky4']).get_parameter_value().string_array_value
         self.dataset_base_dir = self.declare_parameter('dataset_base_dir', '/data/datasets/nebula').get_parameter_value().string_value
         self.result_dir = self.declare_parameter(
             'result_dir', '/data/Seafile/data/slam_results/nebula/results/').get_parameter_value().string_value
-        self.dataset = self.declare_parameter('dataset', 'urban').get_parameter_value().string_value
+        self.dataset = self.declare_parameter('dataset', 'ku').get_parameter_value().string_value
         self.eval_name = self.declare_parameter('eval_name', 'path_proximity').get_parameter_value().string_value
         # -1.0 means use the resolution from the map, otherwise voxel size in meters
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).get_parameter_value().double_value
@@ -199,6 +200,7 @@ class NebulaProcessor(Node):
             os.makedirs(self.robots[robot_name]['result_dir'])
         else:
             self.get_logger().warn('Result directory {} already exists, overwriting'.format(self.robots[robot_name]['result_dir']))
+
         # Start the slam process with the correct starting position
         start_pos = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.position
         start_quat = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.orientation
@@ -341,10 +343,6 @@ class NebulaProcessor(Node):
 
         if self.enable_floor_detetction:
             self.robots[robot_name]['filtered_points_publisher'].publish(pointcloud)
-            # sleep for some time to give the floor detection node time to process the pointcloud
-        # print('{} scan #{}/{} stamp {:.3f} odom stamp {:.3f}: delta t {:.3f}s, publishing scan, odom'.format(
-        #     robot_name, self.robots[robot_name]['scan_counter'], len(self.robots[robot_name]['scans_stamps']) - 1,
-        #     pointcloud_stamp / 1e9, odometry_stamp / 1e9, (pointcloud_stamp - odometry_stamp) / 1e9))
 
         self.progress_bar.update(1)
 

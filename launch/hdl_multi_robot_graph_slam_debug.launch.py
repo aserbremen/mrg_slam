@@ -17,10 +17,10 @@ To debug one of the nodes for a single robot for the two robot setup with a sing
 We are going to debug the component container for the bestla robot, atlas is going to be run without debugging
 1.  colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
 2.  Launch the the full version of the multi robot launch file for robot atlas in one terminal with the following command:
-    ros2 launch hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=atlas odom_frame_id:=atlas/odom map_frame_id:=atlas/map robot_odom_frame_id:=atlas/robot_odom x:=10.0 y:=-13 z:=-2.15 start_rviz2:=false
+    ros2 launch hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=atlas x:=10.0 y:=-13 z:=-2.15 start_rviz2:=false
 3.  Launch the full version of multi robot launch file for robot bestla in another terminal. We are going to debug the component container in this example.
     We setup a gdbserver at localhost:3000 for the component_container only. This is achieved by adding the following two launch-prefix arguments to the launch command:
-    ros2 launch --launch-prefix 'gdbserver localhost:3000' --launch-prefix-filter \b\w+component_container\b hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=bestla odom_frame_id:=bestla/odom map_frame_id:=bestla/map robot_odom_frame_id:=bestla/robot_odom start_rviz2:=false x:=8.0 y:=-20 z:=-2.05 use_sim_time:=true debug:=yes
+    ros2 launch --launch-prefix 'gdbserver localhost:3000' --launch-prefix-filter \b\w+component_container\b hdl_graph_slam hdl_multi_robot_graph_slam.launch.py model_namespace:=bestla x:=8.0 y:=-20 z:=-2.05 debug:=yes
     Note the debug:=yes argument at the end of the launch command. For now debug just needs to be set. Set the prefix argument in the respective full launch file (step 2)
 4.  In vscode setup your launch.json to launch the debug version of this multi robot launch file, where you comment out all nodes except the component container
     launch.json:
