@@ -115,8 +115,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     registration->setInputTarget( new_keyframe->cloud );
 
-    double          best_score = std::numeric_limits<double>::max();
-    KeyFrame::Ptr   best_matched;
+    double          best_score   = std::numeric_limits<double>::max();
+    KeyFrame::Ptr   best_matched = nullptr;
     Eigen::Matrix4f rel_pose_new_to_best_matched;
 
     std::cout << std::endl;
@@ -244,15 +244,18 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     }
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
-    std::cout << best_matched->readable_id << " best_score: " << boost::format( "%.3f" ) % best_score
-              << " time: " << boost::format( "%.3f" ) % elapsed_ms.count() << "[msec]" << std::endl;
-
+    std::cout << "elapsed time in loop closure: " << elapsed_ms.count() << "[msec]" << std::endl;
     if( best_score > fitness_score_thresh ) {
         std::cout << "loop not found... didnt pass fitness score threshold " << std::endl;
         return nullptr;
     }
 
-    if( use_loop_closure_consistency_check && best_matched->first_keyframe == false && !consistency_check_passed ) {
+    if( best_matched != nullptr ) {
+        std::cout << best_matched->readable_id << " best_score: " << boost::format( "%.3f" ) % best_score << std::endl;
+    }
+
+    if( use_loop_closure_consistency_check && best_matched != nullptr && best_matched->first_keyframe == false
+        && !consistency_check_passed ) {
         std::cout << "didnt pass either consistency check" << std::endl;
         return nullptr;
     }
