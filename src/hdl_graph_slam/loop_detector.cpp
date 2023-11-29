@@ -159,8 +159,14 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which might
     // not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
     bool consistency_check_passed = false;
+
+    if( best_matched != nullptr ) {
+        std::cout << best_matched->readable_id << " best_score: " << boost::format( "%.3f" ) % best_score << std::endl;
+    }
+
     // First frame is excluded from map and is always used as a loop closure candidate without the consistency check
-    if( use_loop_closure_consistency_check && best_matched->first_keyframe == false && best_score < fitness_score_thresh ) {
+    if( use_loop_closure_consistency_check && best_matched != nullptr && best_matched->first_keyframe == false
+        && best_score < fitness_score_thresh ) {
         std::cout << "Performing loop closure consistency check" << std::endl;
         pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
         if( best_matched->prev_edge != nullptr ) {
@@ -246,12 +252,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
     std::cout << "elapsed time in loop closure: " << elapsed_ms.count() << "[msec]" << std::endl;
     if( best_score > fitness_score_thresh ) {
-        std::cout << "loop not found... didnt pass fitness score threshold " << std::endl;
+        std::cout << "loop not found... best score " << best_score << " > " << fitness_score_thresh << " fitness thresh" << std::endl;
         return nullptr;
-    }
-
-    if( best_matched != nullptr ) {
-        std::cout << best_matched->readable_id << " best_score: " << boost::format( "%.3f" ) % best_score << std::endl;
     }
 
     if( use_loop_closure_consistency_check && best_matched != nullptr && best_matched->first_keyframe == false
