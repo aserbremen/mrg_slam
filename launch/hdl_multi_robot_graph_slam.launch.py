@@ -8,6 +8,7 @@ from launch.actions import OpaqueFunction, DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
+import numpy as np
 
 # Parameter type mapping to infer the correct data type from the cli string
 PARAM_MAPPING = {
@@ -270,9 +271,9 @@ def launch_setup(context, *args, **kwargs):
         hdl_graph_slam_params['init_pose'][0] = hdl_graph_slam_params['x']
         hdl_graph_slam_params['init_pose'][1] = hdl_graph_slam_params['y']
         hdl_graph_slam_params['init_pose'][2] = hdl_graph_slam_params['z']
-        hdl_graph_slam_params['init_pose'][3] = hdl_graph_slam_params['yaw']
-        hdl_graph_slam_params['init_pose'][4] = hdl_graph_slam_params['pitch']
-        hdl_graph_slam_params['init_pose'][5] = hdl_graph_slam_params['roll']
+        hdl_graph_slam_params['init_pose'][3] = np.deg2rad(hdl_graph_slam_params['yaw'])
+        hdl_graph_slam_params['init_pose'][4] = np.deg2rad(hdl_graph_slam_params['pitch'])
+        hdl_graph_slam_params['init_pose'][5] = np.deg2rad(hdl_graph_slam_params['roll'])
         # set the correct frame ids according to the model namespace
         hdl_graph_slam_params['map_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['map_frame_id']
         hdl_graph_slam_params['odom_frame_id'] = model_namespace + '/' + hdl_graph_slam_params['odom_frame_id']
