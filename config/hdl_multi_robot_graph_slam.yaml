@@ -14,7 +14,7 @@ lidar2base_publisher:
     lidar2base_y: 0.0
     lidar2base_z: 0.0
     lidar2base_roll: 0.0
-    lidar2base_pitch: 0.261799 # 15 degrees inclined
+    lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
     lidar2base_yaw: 0.0
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
@@ -166,7 +166,7 @@ hdl_graph_slam_component:
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
     use_loop_closure_consistency_check: true
-    loop_closure_consistency_max_delta_trans: 0.1  # meter
+    loop_closure_consistency_max_delta_trans: 0.3  # meter
     loop_closure_consistency_max_delta_angle: 3.0  # degree
     # scan matching params
     registration_method: "FAST_GICP"
@@ -210,15 +210,16 @@ hdl_graph_slam_component:
     # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
-    graph_request_min_accum_dist: 15.0
+    graph_request_min_accum_dist: 10.0
     graph_request_max_robot_dist: 25.0
     graph_request_min_time_delay: 5.0
     graph_exchange_mode: "PATH_PROXIMITY"
     # update params
     graph_update_interval: 3.0
-    map_cloud_update_interval: 10.0
+    map_cloud_update_interval: 3.0
     map_cloud_resolution: 0.05
     save_graph: false
+    result_dir: "/data/Seafile/data/slam_results/nebula/results/gravelpit_tubs/paper_rmse2/"
     # remappings are handled in the python respective launch file
 
 

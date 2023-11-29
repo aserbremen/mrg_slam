@@ -324,6 +324,7 @@ private:
         this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
         this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
         this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
+        this->declare_parameter<std::string>( "result_dir", "" );
 
         // KeyframeUpdater parameters (not directly used by this class)
         this->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
@@ -428,6 +429,10 @@ private:
         graph_request_min_time_delay         = this->get_parameter( "graph_request_min_time_delay" ).as_double();
         std::string graph_exchange_mode_str  = this->get_parameter( "graph_exchange_mode" ).as_string();
         graph_exchange_mode                  = graph_exchange_mode_from_string( graph_exchange_mode_str );
+        result_dir                           = this->get_parameter( "result_dir" ).as_string();
+        if( result_dir.back() == '/' ) {
+            result_dir.pop_back();
+        }
     }
 
     /**
@@ -847,6 +852,34 @@ private:
         slam_pose_msg.robot_name      = own_name;
         slam_pose_msg.accum_dist      = kf->accum_distance;
         slam_pose_broadcast_pub->publish( slam_pose_msg );
+    }
+
+    void save_keyframe_poses()
+    {
+        static int    save_counter = 0;
+        boost::format dir_fmt( "%s/%s" );
+        dir_fmt % result_dir % own_name;
+        if( !boost::filesystem::exists( dir_fmt.str() ) ) {
+            boost::filesystem::create_directories( dir_fmt.str() );
+        }
+        boost::format file_fmt( "%s/%s_%04d_%04d.txt" );
+        file_fmt % dir_fmt.str() % own_name % save_counter % keyframes.size();
+
+        std::ofstream ofs( file_fmt.str() );
+        for( const auto &keyframe : keyframes ) {
+            if( keyframe->node == nullptr ) {
+                continue;
+            }
+            if( keyframe->robot_name != own_name ) {
+                continue;
+            }
+            Eigen::Isometry3d  pose = keyframe->node->estimate();
+            Eigen::Quaterniond q( pose.linear() );
+            Eigen::Vector3d    t( pose.translation() );
+            ofs << keyframe->stamp.sec << "." << std::setfill( '0' ) << std::setw( 9 ) << keyframe->stamp.nanosec << " " << t.x() << " "
+                << t.y() << " " << t.z() << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+        }
+        save_counter++;
     }
 
     void slam_pose_broadcast_callback( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr slam_pose_msg )
@@ -1326,6 +1359,10 @@ private:
 
         // Publish the current optimized slam pose
         publish_slam_pose( prev_robot_keyframe );
+
+        if( result_dir != "" ) {
+            save_keyframe_poses();
+        }
 
         // if( odom2map_pub.getNumSubscribers() ) {
         if( odom2map_pub->get_subscription_count() ) {
@@ -1923,6 +1960,8 @@ private:
     std::unique_ptr<KeyframeUpdater> keyframe_updater;
 
     std::unique_ptr<InformationMatrixCalculator> inf_calclator;
+
+    std::string result_dir;
 };
 
 }  // namespace hdl_graph_slam
