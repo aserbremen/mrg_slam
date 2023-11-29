@@ -439,6 +439,85 @@ class RosbagProcessor(Node):
 
         exit(0)
 
+    def get_robot_name_from_first_edge(self, lines):
+        # Get the line starting with from
+        from_str = next((line for line in lines if line.startswith('from')), None)
+        robot_name = from_str.split(' ')[1]
+        if robot_name[-1] == '\n':
+            robot_name = robot_name[:-1]
+        # remove all characters after the first occurence of '-' including the '-'
+        robot_name = robot_name.split('-')[0]
+        return robot_name
+
+    def get_edge_robot_names(self, lines):
+        # Get the line start with 'from'
+        from_str = next((line for line in lines if line.startswith('from')), None)
+        from_robot_name = from_str.split(' ')[1]
+        if from_robot_name[-1] == '\n':
+            from_robot_name = from_robot_name[:-1]
+        # remove all characters after the first occurence of '-' including the '-'
+        from_robot_name = from_robot_name.split('-')[0]
+        # Get the line start with 'to'
+        to_str = next((line for line in lines if line.startswith('to')), None)
+        to_robot_name = to_str.split(' ')[1]
+        if to_robot_name[-1] == '\n':
+            to_robot_name = to_robot_name[:-1]
+        # remove all characters after the first occurence of '-' including the '-'
+        to_robot_name = to_robot_name.split('-')[0]
+        return from_robot_name, to_robot_name
+
+    def print_results_info(self):
+        if self.result_folder == '':
+            print('Please specify the result folder parameter <result_folder> like this: --ros-args -p result_folder:=/path/to/result_folder')
+            exit(1)
+        # iterate over all the edges of a result directory and print the information
+        edges_folder = os.path.join(self.result_folder, 'edges')
+        edges_files = [f for f in os.listdir(edges_folder) if f.endswith('.txt')]
+        edges_files = sorted(edges_files)
+        edges_dict = {}
+        edges_dict['robot_name'] = None
+        edges_dict['odometry-edges'] = 0
+        edges_dict['edges_names'] = []
+        edges_dict['intra-robot-loops'] = 0
+        edges_dict['inter-robot-loops'] = 0
+        for edges_file in edges_files:
+            with open(os.path.join(edges_folder, edges_file), mode='r') as f:
+                lines = f.readlines()
+                # Get the robot name from the first line
+                if edges_dict['robot_name'] is None:
+                    edges_dict['robot_name'] = self.get_robot_name_from_first_edge(lines)
+                    print('Own robot name: {}'.format(edges_dict['robot_name']))
+
+                # get the line starting with 'edge'
+                edge_str = next((line for line in lines if line.startswith('edge')), None)
+                edge_name = edge_str.split(' ')[1]
+                if edge_name[-1] == '\n':
+                    edge_name = edge_name[:-1]
+
+                # get the line starting with 'type'
+                type_str = next((line for line in lines if line.startswith('type')), None)
+                type = type_str.split(' ')[1]
+                if type[-1] == '\n':
+                    type = type[:-1]
+                if type == 'loop':
+                    edges_dict['edges_names'].append(edge_name)
+                    from_robot_name, to_robot_name = self.get_edge_robot_names(lines)
+                    if from_robot_name == edges_dict['robot_name'] and to_robot_name == edges_dict['robot_name']:
+                        edges_dict['intra-robot-loops'] += 1
+                    if from_robot_name != edges_dict['robot_name'] or to_robot_name != edges_dict['robot_name']:
+                        edges_dict['inter-robot-loops'] += 1
+                elif type == 'odom':
+                    from_robot_name, to_robot_name = self.get_edge_robot_names(lines)
+                    if from_robot_name == edges_dict['robot_name'] and to_robot_name == edges_dict['robot_name']:
+                        edges_dict['odometry-edges'] += 1
+
+        print('Number of odometry edges: {}'.format(edges_dict['odometry-edges']))
+        print('Number of intra-robot loops: {}'.format(edges_dict['intra-robot-loops']))
+        print('Number of inter-robot loops: {}'.format(edges_dict['inter-robot-loops']))
+        for edge_name in edges_dict['edges_names']:
+            print('Edge name: {}'.format(edge_name))
+        exit(0)
+
 
 def play_rosbags(executor, ros_bag_processor):
     ros_bag_processor.start_playback()
@@ -470,6 +549,11 @@ def results_to_pose_file(executor, ros_bag_processor):
     spin(executor, ros_bag_processor)
 
 
+def print_results_info(executor, ros_bag_processor):
+    ros_bag_processor.print_results_info()
+    spin(executor, ros_bag_processor)
+
+
 def spin(executor, node):
     try:
         rclpy.spin(node)
@@ -496,6 +580,7 @@ def main(args=None):
         'print_info': lambda: print_info(executor, rosbag_processor),
         'write_odom_groundtruth': lambda: write_odom_groundtruth(executor, rosbag_processor),
         'results_to_pose_file': lambda: results_to_pose_file(executor, rosbag_processor),
+        'print_results_info': lambda: print_results_info(executor, rosbag_processor),
     })
 
 
