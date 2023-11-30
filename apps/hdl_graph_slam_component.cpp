@@ -1360,7 +1360,8 @@ private:
         // Publish the current optimized slam pose
         publish_slam_pose( prev_robot_keyframe );
 
-        if( result_dir != "" ) {
+        if( !result_dir.empty() ) {
+            std::cout << "Saving keyframe poses with result_dir " << result_dir << std::endl;
             save_keyframe_poses();
         }
 
