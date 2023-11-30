@@ -246,6 +246,19 @@ def launch_setup(context, *args, **kwargs):
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
+    if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
+        remaps = [('/odom', '/' + model_namespace + '/scan_matching_odometry/odom')]
+        odom_to_file_node = Node(
+            name='scan_matching_odom_to_file',
+            package='vamex_sim_rovers',
+            executable='odom_to_file.py',
+            namespace=model_namespace,
+            remappings=remaps,
+            output='screen',
+            parameters=[{'result_file': '/tmp/' + model_namespace + '_scan_matching_odom.txt',
+                         'every_n': 1}],
+        )
+
     remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
               ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
               ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
@@ -335,6 +348,8 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list.append(map2odom_publisher_ros2)
     launch_description_list.append(container)
     launch_description_list.append(load_composable_nodes)
+    if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
+        launch_description_list.append(odom_to_file_node)
 
     # Return nodes
     return launch_description_list
