@@ -31,6 +31,7 @@ import pykitti
 # dataset.gray:       Generator to load monochrome stereo pairs (cam0, cam1)
 # dataset.rgb:        Generator to load RGB stereo pairs (cam2, cam3)
 # dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
+# viable datasets 0, 2, 5, 6 (easy), 7, 8, 9,
 
 
 class Task(Enum):
@@ -62,14 +63,12 @@ class KittiMultiRobotProcessor(Node):
 
         self.robot_names = self.declare_parameter('robot_names', ['atlas', 'bestla']).value
         print(self.robot_names)
-        self.min_times = self.declare_parameter('min_times', [0.0, 0.0]).value
-        self.max_times = self.declare_parameter('max_times', [240.0, 235.0]).value
         self.base_path = self.declare_parameter('base_path', '/data/datasets/kitti/dataset/').value
         self.slam_config = self.declare_parameter('slam_config', 'hdl_multi_robot_graph_slam_kitti.yaml').value
         self.sequence = self.declare_parameter('sequence', 0).value
         self.sequence = str(self.sequence).zfill(2)
-        self.rate = self.declare_parameter('rate', 1.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/home/andi/Seafile/data/slam_results/kitti/sequences/').value
+        self.rate = self.declare_parameter('rate', 10.0).value
+        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         self.eval_name = self.declare_parameter('eval_name', 'reversed').value
         # -1 means all points of the pointcloud, otherwise voxel size
@@ -77,6 +76,10 @@ class KittiMultiRobotProcessor(Node):
         self.start_time = self.declare_parameter('start_time', 0.0).value
         self.end_time = self.declare_parameter('end_time', float('inf')).value
         self.proceed = self.declare_parameter('proceed', True).value
+
+        self.add_noise = self.declare_parameter('add_noise', False).get_parameter_value().bool_value
+        self.start_position_noise = self.declare_parameter('start_position_noise', 0.2).get_parameter_value().double_value  # in meters
+        self.start_rotation_noise = self.declare_parameter('start_rotation_noise', 2.0).get_parameter_value().double_value  # in degrees
 
         self.task = None
 
@@ -94,14 +97,6 @@ class KittiMultiRobotProcessor(Node):
             self.robots[robot_name]['slam_status_sub'] = self.create_subscription(
                 SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['slam_status'] = SlamStatus()  # type: SlamStatus
-            self.robots[robot_name]['min_timestamp'] = self.min_times[self.robot_names.index(robot_name)]
-            self.robots[robot_name]['max_timestamp'] = self.max_times[self.robot_names.index(robot_name)]
-            if self.robots[robot_name]['min_timestamp'] < self.start_time:
-                self.robots[robot_name]['min_timestamp'] = self.start_time
-            if self.robots[robot_name]['max_timestamp'] > self.end_time:
-                self.robots[robot_name]['max_timestamp'] = self.end_time
-            print(
-                f'Robot {robot_name} max timestamp: {self.robots[robot_name]["max_timestamp"]}')
             self.robots[robot_name]['dump_service_client'] = self.create_client(
                 DumpGraph, '/' + robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['save_map_client'] = self.create_client(
@@ -151,15 +146,24 @@ class KittiMultiRobotProcessor(Node):
                 print(f'Creating result dir for robot {robot_name} at {self.robots[robot_name]["result_dir"]}')
                 os.makedirs(self.robots[robot_name]['result_dir'])
             # Start the slam node in a subprocess, set the start position as well
-            idx_min = np.abs(self.timestamps - self.robots[robot_name]['min_timestamp']).argmin()
-            print(f'Found min timestamp {self.timestamps[idx_min]} at index {idx_min}')
-            print(f'Pose for min timestamp\n{self.velo_gt_poses[idx_min]}')
+            idx_min = 0
             if robot_name == 'atlas':
                 x, y, z = self.velo_gt_poses[idx_min][0:3, 3]
                 print(f'rotmat {self.velo_gt_poses[idx_min][0:3, 0:3].reshape(3, 3)}')
                 rotation = R.from_matrix(self.velo_gt_poses[idx_min][0:3, 0:3])  # type: R
-                yaw, pitch, roll = rotation.as_euler('ZYX', degrees=False)
-                print(f'x: {x}, y: {y}, z: {z}, roll: {np.rad2deg(roll)}, pitch: {np.rad2deg(pitch)}, yaw: {np.rad2deg(yaw)}')
+                yaw, pitch, roll = rotation.as_euler('ZYX', degrees=True)
+                print(f'x: {x}, y: {y}, z: {z}, roll: {roll}°, pitch: {pitch}°, yaw: {yaw}°')
+                if self.add_noise:
+                    x += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    y += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    z += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    rotation = rotation * R.from_euler('ZYX', [
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise),
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise),
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise)], degrees=True)
+                    yaw, pitch, roll = rotation.as_euler('ZYX', degrees=True)
+                    print(
+                        f'starting position with added noise\nx: {x}, y: {y}, z: {z}, roll: {roll}°, pitch: {pitch}°, yaw: {yaw}°')
                 slam_cmd = [
                     'ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
                     self.slam_config,
@@ -170,8 +174,19 @@ class KittiMultiRobotProcessor(Node):
                 x, y, z = self.velo_gt_poses[-1][0:3, 3]
                 print(f'rotmat {self.velo_gt_poses[-1][0:3, 0:3].reshape(3, 3)}')
                 rotation = R.from_matrix(self.velo_gt_poses[-1][0:3, 0:3])  # type: R
-                yaw, pitch, roll = rotation.as_euler('ZYX', degrees=False)
-                print(f'x: {x}, y: {y}, z: {z}, roll: {np.rad2deg(roll)}, pitch: {np.rad2deg(pitch)}, yaw: {np.rad2deg(yaw)}')
+                yaw, pitch, roll = rotation.as_euler('ZYX', degrees=True)
+                print(f'x: {x}, y: {y}, z: {z}, roll: {roll}°, pitch: {pitch}°, yaw: {yaw}°')
+                if self.add_noise:
+                    x += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    y += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    z += np.random.uniform(-self.start_position_noise, self.start_position_noise)
+                    rotation = rotation * R.from_euler('ZYX', [
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise),
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise),
+                        np.random.uniform(-self.start_rotation_noise, self.start_rotation_noise)], degrees=True)
+                    yaw, pitch, roll = rotation.as_euler('ZYX', degrees=True)
+                    print(
+                        f'starting position with added noise\nx: {x}, y: {y}, z: {z}, roll: {roll}°, pitch: {pitch}°, yaw: {yaw}°')
                 slam_cmd = [
                     'ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
                     self.slam_config,
@@ -185,10 +200,7 @@ class KittiMultiRobotProcessor(Node):
                 print(' '.join(slam_cmd))
             time.sleep(2)
         print(f'Starting playback with rate {self.rate:.2f}x')
-        idx_max = np.abs(self.timestamps - max(self.max_times)).argmin()
-        print(f'Found max timestamp {self.timestamps[idx_max]} at index {idx_max}')
-        # get the index of the last timestamp that is less than the max timestamp
-        self.progress_bar = tqdm(total=idx_max - self.point_cloud_counter, unit='point clouds', desc='Playback')
+        self.progress_bar = tqdm(total=int((len(self.timestamps)) / 2), unit='point clouds', desc='Playback')
         self.task = Task.PLAYBACK
         self.task_timer = self.create_timer(1.0 / self.rate, self.task_timer_callback, callback_group=self.reentrant_callback_group)
 
@@ -276,7 +288,8 @@ class KittiMultiRobotProcessor(Node):
 
     def playback(self):
         if any([self.robots[robot_name]['slam_status'].in_optimization for robot_name in self.robot_names]) or \
-           any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]):
+           any([self.robots[robot_name]['slam_status'].in_loop_closure for robot_name in self.robot_names]) or \
+           any([self.robots[robot_name]['slam_status'].in_graph_exchange for robot_name in self.robot_names]):
             return
 
         velo = self.dataset.get_velo(self.point_cloud_counter)  # type: np.ndarray
@@ -285,30 +298,26 @@ class KittiMultiRobotProcessor(Node):
         ros_pcl = self.kitti_to_ros_point_cloud(ts, velo)
         ros_pcl_reversed = self.kitti_to_ros_point_cloud(ts, velo_reversed)
 
-        self.publish_clock_msg(ros_pcl.header.stamp)
         # Publish the forward moving pointcloud for atlas
-        if self.robots['atlas']['min_timestamp'] <= ts <= self.robots['atlas']['max_timestamp']:
-            ros_pcl.header.frame_id = 'atlas/velodyne'
-            self.robots['atlas']['point_cloud_pub'].publish(ros_pcl)
-            print(f'Publishing point cloud for robot atlas with ts {ts}')
-            # publish the ground truth path
-            self.publish_ground_truth_path(ts, 'atlas', self.velo_gt_poses[self.point_cloud_counter])
-        if self.robots['bestla']['min_timestamp'] <= ts <= self.robots['bestla']['max_timestamp']:
-            ros_pcl_reversed.header.frame_id = 'bestla/velodyne'
-            ros_pcl_reversed.header.stamp = float_ts_to_ros_ts(ts)
-            print(f'Publishing point cloud for robot bestla with ts {ts}')
-            self.robots['bestla']['point_cloud_pub'].publish(ros_pcl_reversed)
-            # publish the ground truth path
-            self.publish_ground_truth_path(ts, 'bestla', self.velo_gt_poses[self.point_cloud_counter_reversed])
+        ros_pcl.header.frame_id = 'atlas/velodyne'
+        self.robots['atlas']['point_cloud_pub'].publish(ros_pcl)
+        print(f'Publishing point cloud for robot atlas with ts {ts}')
+        # publish the ground truth path
+        self.publish_ground_truth_path(ts, 'atlas', self.velo_gt_poses[self.point_cloud_counter])
+        ros_pcl_reversed.header.frame_id = 'bestla/velodyne'
+        ros_pcl_reversed.header.stamp = float_ts_to_ros_ts(ts)
+        print(f'Publishing point cloud for robot bestla with ts {ts}')
+        self.robots['bestla']['point_cloud_pub'].publish(ros_pcl_reversed)
+        # publish the ground truth path
+        self.publish_ground_truth_path(ts, 'bestla', self.velo_gt_poses[self.point_cloud_counter_reversed])
+        self.publish_clock_msg(ros_pcl.header.stamp)
 
         self.point_cloud_counter += 1
         self.point_cloud_counter_reversed -= 1
 
         self.progress_bar.update(1)
 
-        if self.point_cloud_counter >= len(self.timestamps) or self.timestamps[self.point_cloud_counter] > self.end_time or \
-                self.point_cloud_counter_reversed < 0 or self.timestamps[self.point_cloud_counter_reversed] < self.start_time or \
-                ts >= self.robots['atlas']['max_timestamp'] and ts >= self.robots['bestla']['max_timestamp']:
+        if abs(self.point_cloud_counter - self.point_cloud_counter_reversed) == 1 or abs(self.point_cloud_counter - self.point_cloud_counter_reversed) == 2:
             self.progress_bar.close()
             print('Finished playback and closed progress bar')
             # publish a clock message with an offset to trigger optimization once more
@@ -360,7 +369,7 @@ class KittiMultiRobotProcessor(Node):
             return
         # call the dumb and save graph service on hdl graph slam
         dump_request = DumpGraph.Request()
-        dump_request.destination = os.path.join(self.robots[robot_name]['result_dir'], 'g2o')
+        dump_request.destination = self.robots[robot_name]['result_dir']
         self.robots[robot_name]['dump_graph_requested'] = True
         print(f'Dumping graph at: {dump_request.destination}')
         self.perform_async_service_call(self.robots[robot_name]['dump_service_client'], dump_request, robot_name)
