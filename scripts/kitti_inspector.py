@@ -45,7 +45,8 @@ class KittiMultiRobotProcessor(Node):
         self.sequence = str(self.sequence).zfill(2)
         self.result_dir = self.declare_parameter('result_dir', '/tmp/ground_truth').value
         self.tolerance = self.declare_parameter('tolerance', 4.0).value
-        self.reversed_pose_file = self.declare_parameter('reversed_pose_file', '/tmp/reversed_pose_file.txt').value
+        self.reversed_pose_file = self.declare_parameter('reversed_pose_file', '').value
+        self.reversed_sequence = self.declare_parameter('reversed_sequence', -1).value
 
         self.reentrant_callback_group = ReentrantCallbackGroup()
 
@@ -195,20 +196,15 @@ class KittiMultiRobotProcessor(Node):
         exit(0)
 
     # This function reverses the timestamps of a rover moving backwards through a sequence
-    def reverse_time_stamps(self):
-        # make a copy of the pose file
-        backup_file = self.reversed_pose_file + '.backup'
-        os.system(f'cp {self.reversed_pose_file} {backup_file}')
-        # get the sequence number
-        pattern = r'\b\d{2}\b'
-        matches = re.findall(pattern, self.reversed_pose_file)
-        if len(matches) == 0:
-            print(f'No sequence number found in {self.reversed_pose_file}')
+    def correct_reversed_timestamps(self):
+        if self.reversed_pose_file == '':
+            print(f'Provide reversed_pose_file for reversing timestamps {self.reversed_pose_file}')
             exit(0)
-        elif len(matches) > 1:
-            print(f'Multiple sequence numbers found in {self.reversed_pose_file}, only one is allowed')
+        sequence = self.reversed_sequence
+        sequence = str(sequence).zfill(2)
+        if self.reversed_sequence < 0:
+            print(f'Provide reversed_sequence for reversing timestamps for {self.reversed_pose_file}')
             exit(0)
-        sequence = matches[0]
         dataset = pykitti.odometry(self.base_path, sequence)
         timestamps = dataset.timestamps
         timestamps = np.array([time.total_seconds() for time in timestamps])
@@ -216,9 +212,10 @@ class KittiMultiRobotProcessor(Node):
         if not os.path.exists(self.reversed_pose_file):
             print(f'No pose file found at {self.reversed_pose_file}')
             exit(0)
-        #
-        with open(self.reversed_pose_file, mode='w+') as f, open(backup_file, mode='r') as f_bak:
-            lines = f_bak.readlines()
+
+        corrected_filename = self.reversed_pose_file.replace('.txt', '_corrected.txt')
+        with open(self.reversed_pose_file, mode='r') as f, open(corrected_filename, mode='w') as f_corrected:
+            lines = f.readlines()
             corrected_lines = []
             for i in range(len(lines)):
                 line = lines[i]
@@ -232,7 +229,7 @@ class KittiMultiRobotProcessor(Node):
                 line[0] = str(reversed_timestamps[idx])
                 line = ' '.join(line)
                 corrected_lines.append(line)
-            f.writelines(corrected_lines)
+            f_corrected.writelines(corrected_lines)
         exit(0)
 
 
@@ -251,8 +248,8 @@ def write_ground_truth(executor, kitti_processor: KittiMultiRobotProcessor):
     spin(executor, kitti_processor)
 
 
-def reverse_time_stamps(executor, kitti_processor: KittiMultiRobotProcessor):
-    kitti_processor.reverse_time_stamps()
+def correct_reversed_timestamps(executor, kitti_processor: KittiMultiRobotProcessor):
+    kitti_processor.correct_reversed_timestamps()
     spin(executor, kitti_processor)
 
 
@@ -280,7 +277,7 @@ def main(args=None):
         'plot_trajectories': lambda: plot_trajectories(executor, kitti_processor),
         'print_info': lambda: print_info(executor, kitti_processor),
         'write_ground_truth': lambda: write_ground_truth(executor, kitti_processor),
-        'reverse_time_stamps': lambda: reverse_time_stamps(executor, kitti_processor),
+        'correct_reversed_timestamps': lambda: correct_reversed_timestamps(executor, kitti_processor),
     })
 
 
