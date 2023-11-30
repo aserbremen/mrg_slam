@@ -69,6 +69,7 @@ prefiltering_component:
 scan_matching_odometry_component:
   ros__parameters:
     enable_scan_matching_odometry: true
+    enable_odom_to_file: true
 
     points_topic: "/velodyne_points"
     odom_frame_id: "odom" # default "odom", is prepended by model_namespace
