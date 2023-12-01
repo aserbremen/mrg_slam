@@ -320,6 +320,7 @@ class RosbagProcessor(Node):
         exit(0)
 
     def print_info(self):
+        self.setup_playback()
         for robot_name in self.robot_names:
             print('\nRobot {}'.format(robot_name))
             print('Number of pointclouds: {}'.format(len(self.data_dict[robot_name]['scans_stamps'])))
@@ -356,6 +357,8 @@ class RosbagProcessor(Node):
             print('Average keyframe distance {:.2f}'.format(np.mean(odom_xyz_norms)))
             print('Max keyframe distance {:.2f}'.format(np.max(odom_xyz_norms)))
             print('Min keyframe distance {:.2f}'.format(np.min(odom_xyz_norms)))
+            # calculate the traveled distance
+            print('Total traveled distance {:.2f}'.format(np.sum(odom_xyz_norms)))
 
             # Need w, x, y, z for pyquaternion
             odom_orientations = np.array([
