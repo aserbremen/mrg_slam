@@ -17,13 +17,16 @@ from rclpy.executors import MultiThreadedExecutor
 from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
+from geometry_msgs.msg import Pose, PoseStamped
 from nav_msgs.msg import Path
 from vamex_slam_msgs.srv import DumpGraph, SaveMap
+from visualization_msgs.msg import MarkerArray, Marker
 
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import numpy as np
 import pykitti
+import pcl
 # Some information on the odometry dataset
 # dataset.calib:      Calibration data are accessible as a named tuple
 # dataset.timestamps: Timestamps are parsed into a list of timedelta objects
@@ -32,6 +35,20 @@ import pykitti
 # dataset.gray:       Generator to load monochrome stereo pairs (cam0, cam1)
 # dataset.rgb:        Generator to load RGB stereo pairs (cam2, cam3)
 # dataset.velo:       Generator to load velodyne scans as [x,y,z,reflectance]
+
+
+def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
+    ros_ts = Time()
+    ros_ts.sec = int(pykitti_ts.total_seconds())
+    ros_ts.nanosec = int((pykitti_ts.total_seconds() - ros_ts.sec) * 1e9)
+    return ros_ts
+
+
+def float_ts_to_ros_ts(float_ts: float) -> Time:
+    ros_ts = Time()
+    ros_ts.sec = int(float_ts)
+    ros_ts.nanosec = int((float_ts - ros_ts.sec) * 1e9)
+    return ros_ts
 
 
 class KittiMultiRobotProcessor(Node):
@@ -49,6 +66,15 @@ class KittiMultiRobotProcessor(Node):
         self.reversed_sequence = self.declare_parameter('reversed_sequence', -1).value
 
         self.reentrant_callback_group = ReentrantCallbackGroup()
+
+        self.pose_file = self.declare_parameter('pose_file', '').value
+        self.pose_file2 = self.declare_parameter('pose_file2', '').value
+        self.pcl_filename = self.declare_parameter('pcl_filename', '').value
+        self.pcl_pub = self.create_publisher(PointCloud2, self.robot_name + '/map_points', 10, callback_group=self.reentrant_callback_group)
+        self.marker_pub_rob1 = self.create_publisher(Marker, self.robot_name + '/path_markers',
+                                                     10, callback_group=self.reentrant_callback_group)
+        self.marker_pub_rob2 = self.create_publisher(Marker, self.robot_name + '/path_markers2',
+                                                     10, callback_group=self.reentrant_callback_group)
 
         point_cloud_topic = self.robot_name + '/velodyne_points'
         self.point_cloud_pub = self.create_publisher(PointCloud2, point_cloud_topic, 10, callback_group=self.reentrant_callback_group)
@@ -136,6 +162,37 @@ class KittiMultiRobotProcessor(Node):
         self.timestamps = [time.total_seconds() for time in self.timestamps]
         print(f'total time {self.timestamps[-1] - self.timestamps[0]}')
         print(f'average time between timestamps {(self.timestamps[-1] - self.timestamps[0]) / len(self.timestamps)}')
+
+        step = 1000
+        small_step = 10
+        velo = self.dataset.get_velo(0)
+        num_points = velo.shape[0]
+        extra_num_points = num_points % step
+        # remove the extra points so that the point cloud is divisible by 1000
+        velo = velo[:-extra_num_points]
+        print(f'number of points in first point cloud {velo.shape[0]}')
+        points = []
+        sizes = []
+        while velo.shape[0] > 0:
+            ros_pcl = self.kitti_to_ros_point_cloud(self.timestamps[0], velo)
+            # print the number of bytes in the point cloud
+            points.append(ros_pcl.width)
+            sizes.append(sys.getsizeof(ros_pcl.data))
+            print(f'ros pcl size {sys.getsizeof(ros_pcl.data)} ros pcl len {len(ros_pcl.data)} velo size {velo.shape[0]}')
+            if velo.shape[0] <= step:
+                velo = velo[:-small_step]
+            else:
+                velo = velo[:-step]
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(points, sizes, 'o')
+        ax.set_xlabel('number of points')
+        ax.set_ylabel('size in bytes')
+        ax.grid(True)
+        plt.tight_layout()
+        plt.show()
+
         print('calculating velodyne point information, this may take some time')
         num_pcl_points = [velo.shape[0] for velo in self.dataset.velo]
         print(f'mean number of points pcl {np.mean(num_pcl_points)} std {np.std(num_pcl_points)}')
@@ -232,6 +289,177 @@ class KittiMultiRobotProcessor(Node):
             f_corrected.writelines(corrected_lines)
         exit(0)
 
+    def publish_pcl_and_path(self):
+        if self.pcl_filename == '':
+            print(f'Provide pcl_filename for publishing {self.pcl_filename}')
+            exit(0)
+        if not os.path.exists(self.pcl_filename):
+            print(f'No point cloud file found at {self.pcl_filename}')
+            exit(0)
+        if self.pose_file == '':
+            print(f'Provide pose_file for publishing {self.pose_file}')
+            exit(0)
+        if not os.path.exists(self.pose_file):
+            print(f'No pose file found at {self.pose_file}')
+            exit(0)
+
+        point_cloud = pcl.load_XYZI(self.pcl_filename)  # type: pcl.PointCloud
+        print(f'point cloud size {point_cloud.size}')
+
+        # print(point_cloud.to_array().tobytes())
+
+        dummy_size = point_cloud.size
+        point_cloud_step = 10
+        print(f'array {point_cloud.to_array().shape}')
+        array = point_cloud.to_array()
+        array = array[0:dummy_size:point_cloud_step, :]
+        print(f'array {array.shape}')
+        array_size = array.shape[0]
+        pc2_msg = PointCloud2()
+        pc2_msg.header.frame_id = 'map'
+        pc2_msg.header.stamp = self.get_clock().now().to_msg()
+        pc2_msg.height = 1
+        pc2_msg.width = array_size
+        pc2_msg.is_dense = False
+        pc2_msg.is_bigendian = False
+        pc2_msg.fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
+        # Float 32 is 4 bytes and there are 4 fields
+        pc2_msg.point_step = len(pc2_msg.fields) * 4
+        pc2_msg.row_step = pc2_msg.point_step * array_size
+        # pc2_msg.data = point_cloud.to_array().tobytes()
+        pc2_msg.data = array.tobytes()
+
+        print(f'publishing point cloud with {array_size} points on topic {self.robot_name + "/map_points"}')
+        self.pcl_pub.publish(pc2_msg)
+
+        # timestamp x y z qx qy qz qw
+        stamps_poses = []
+        with open(self.pose_file, 'r') as f:
+            for line in f.readlines():
+                if line.startswith('#'):
+                    continue
+                line = line.split(' ')
+                stamp_pose = [float(val) for val in line]
+                stamps_poses.append(stamp_pose)
+
+        path = Path()
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.header.frame_id = 'map'
+        self.path_pub = self.create_publisher(Path, self.robot_name + '/path', 10, callback_group=self.reentrant_callback_group)
+        for stamp_pose in stamps_poses:
+            # pose = stamp_pose[1:]
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp = float_ts_to_ros_ts(stamp_pose[0])
+            pose_stamped.header.frame_id = 'map'
+            pose_stamped.pose.position.x = stamp_pose[1]
+            pose_stamped.pose.position.y = stamp_pose[2]
+            pose_stamped.pose.position.z = stamp_pose[3]
+            pose_stamped.pose.orientation.x = stamp_pose[4]
+            pose_stamped.pose.orientation.y = stamp_pose[5]
+            pose_stamped.pose.orientation.z = stamp_pose[6]
+            pose_stamped.pose.orientation.w = stamp_pose[7]
+
+            path.poses.append(pose_stamped)
+
+        print(f'publishing path with {len(path.poses)} poses on topic {self.robot_name + "/path"}')
+        self.path_pub.publish(path)
+
+        # publish the path as markers but as a line
+        line_list = Marker()
+        color = [1.0, 0.0, 0.0]  # green
+        line_list.header.frame_id = 'map'
+        line_list.header.stamp = self.get_clock().now().to_msg()
+        line_list.ns = 'path'
+        line_list.action = Marker.ADD
+        line_list.pose.orientation.w = 1.0
+        line_list.id = 0
+        line_list.type = Marker.LINE_STRIP
+        line_list.scale.x = 2.5
+        line_list.color.a = 1.0
+        line_list.color.r = color[0]
+        line_list.color.g = color[1]
+        line_list.color.b = color[2]
+        for pose_stamped in path.poses:
+            line_list.points.append(pose_stamped.pose.position)
+        print(f'publishing path as markers with {len(line_list.points)} points on topic {self.robot_name + "/path_markers"}')
+        self.marker_pub_rob1.publish(line_list)
+
+        if self.pose_file2 != '':
+            print(f'publishing path as markers with {len(line_list.points)} points on topic {self.robot_name + "/path_markers2"}')
+
+        stamps_poses2 = []
+        if self.pose_file2 != '':
+            with open(self.pose_file2, 'r') as f:
+                for line in f.readlines():
+                    if line.startswith('#'):
+                        continue
+                    line = line.split(' ')
+                    stamp_pose = [float(val) for val in line]
+                    stamps_poses2.append(stamp_pose)
+
+        line_list2 = Marker()
+        color2 = [255 / 255.0, 165 / 255.0, 0.0]  # orange
+        line_list2.header.frame_id = 'map'
+        line_list2.header.stamp = self.get_clock().now().to_msg()
+        line_list2.ns = 'path'
+        line_list2.action = Marker.ADD
+        line_list2.pose.orientation.w = 1.0
+        line_list2.id = 0
+        line_list2.type = Marker.LINE_STRIP
+        line_list2.scale.x = 2.5
+        line_list2.color.a = 1.0
+        line_list2.color.r = color2[0]
+        line_list2.color.g = color2[1]
+        line_list2.color.b = color2[2]
+        for stamp_pose in stamps_poses2:
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp = float_ts_to_ros_ts(stamp_pose[0])
+            pose_stamped.header.frame_id = 'map'
+            pose_stamped.pose.position.x = stamp_pose[1]
+            pose_stamped.pose.position.y = stamp_pose[2]
+            pose_stamped.pose.position.z = stamp_pose[3]
+            pose_stamped.pose.orientation.x = stamp_pose[4]
+            pose_stamped.pose.orientation.y = stamp_pose[5]
+            pose_stamped.pose.orientation.z = stamp_pose[6]
+            pose_stamped.pose.orientation.w = stamp_pose[7]
+            line_list2.points.append(pose_stamped.pose.position)
+
+        print(f'publishing path as markers with {len(line_list2.points)} points on topic {self.robot_name + "/path_markers2"}')
+        self.marker_pub_rob2.publish(line_list2)
+
+        exit(0)
+
+    def kitti_to_ros_point_cloud(self, ts: datetime.timedelta, velo: np.ndarray) -> PointCloud2:
+        # create a ROS2 PointCloud2 message
+        ros_pcl = PointCloud2()
+        if isinstance(ts, datetime.timedelta):
+            ros_pcl.header.stamp = pykitti_ts_to_ros_ts(ts)
+        else:
+            ros_pcl.header.stamp = float_ts_to_ros_ts(ts)
+        # ros_pcl.header.frame_id = self.robot_name + '/velodyne'
+        num_points = velo.shape[0]
+        ros_pcl.height = 1
+        ros_pcl.width = num_points
+        ros_pcl.is_dense = False
+        ros_pcl.is_bigendian = False
+        ros_pcl.fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
+        # Float 32 is 4 bytes and there are 4 fields
+        ros_pcl.point_step = len(ros_pcl.fields) * 4
+        ros_pcl.row_step = ros_pcl.point_step * num_points
+        ros_pcl.data = velo.tobytes()
+
+        return ros_pcl
+
 
 def plot_trajectories(executor, kitti_processor: KittiMultiRobotProcessor):
     kitti_processor.plot_trajectories()
@@ -250,6 +478,11 @@ def write_ground_truth(executor, kitti_processor: KittiMultiRobotProcessor):
 
 def correct_reversed_timestamps(executor, kitti_processor: KittiMultiRobotProcessor):
     kitti_processor.correct_reversed_timestamps()
+    spin(executor, kitti_processor)
+
+
+def publish_pcl_and_path(executor, kitti_processor: KittiMultiRobotProcessor):
+    kitti_processor.publish_pcl_and_path()
     spin(executor, kitti_processor)
 
 
@@ -278,6 +511,7 @@ def main(args=None):
         'print_info': lambda: print_info(executor, kitti_processor),
         'write_ground_truth': lambda: write_ground_truth(executor, kitti_processor),
         'correct_reversed_timestamps': lambda: correct_reversed_timestamps(executor, kitti_processor),
+        'publish_pcl_and_path': lambda: publish_pcl_and_path(executor, kitti_processor),
     })
 
 
