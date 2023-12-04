@@ -220,19 +220,6 @@ hdl_graph_slam_component:
     map_cloud_update_interval: 3.0
     map_cloud_resolution: 0.5
     save_graph: false
+    result_dir: ""
     # remappings are handled in the python respective launch file
 
-
-# Multi robot communicator
-# multi_robot_communicator:
-#   ros__parameters:
-#     enable_multi_robot_communicator: false
-#     own_name: "husky1"
-#     robot_names: ["husky1", "husky4"]
-#     publish_graph_trigger_mode: "slam"
-#     graph_request_min_accum_dist: 3.0
-#     graph_request_max_robot_dist: 10.0
-#     graph_request_min_robot_dist: 2.0
-#     graph_request_min_time_delay: 5.0
-#     communication_delay: 5
-#     # remappings are handled in the python respective launch file

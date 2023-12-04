@@ -33,6 +33,7 @@ PARAM_MAPPING = {
     'pitch': float,
     'yaw': float,
     'init_pose_topic': str,
+    'result_dir': str,
 }
 
 
