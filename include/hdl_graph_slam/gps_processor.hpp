@@ -7,10 +7,6 @@
 #include <nmea_msgs/msg/sentence.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
-// #include <geographic_msgs/GeoPointStamped.h>
-// #include <nmea_msgs/Sentence.h>
-// #include <ros/ros.h>
-// #include <sensor_msgs/NavSatFix.h>
 
 #include <boost/optional.hpp>
 #include <deque>
@@ -26,7 +22,6 @@ class GpsProcessor {
 public:
     GpsProcessor() {}
 
-    // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr _node );
 
     void nmea_callback( const nmea_msgs::msg::Sentence::SharedPtr nmea_msg );

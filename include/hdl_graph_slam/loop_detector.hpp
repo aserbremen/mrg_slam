@@ -36,12 +36,6 @@ class LoopDetector {
 public:
     typedef pcl::PointXYZI PointT;
 
-    // /**
-    //  * @brief constructor
-    //  * @param pnh
-    //  */
-    // LoopDetector( ros::NodeHandle& pnh );
-
     /**
      * @brief Construct a new Loop Detector object
      * @param _node Shared pointer to the main node
@@ -81,7 +75,7 @@ private:
 
 
 private:
-    rclcpp::Node::SharedPtr            node_ros;
+    rclcpp::Node::SharedPtr node_ros;
 
     double distance_thresh,
         distance_thresh_squared;   // estimated distance between new keyframe and candidate be less than this distance, for the candidate to

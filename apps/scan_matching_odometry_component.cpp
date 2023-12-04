@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <pcl/filters/approximate_voxel_grid.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/exceptions.h>
 #include <tf2_ros/buffer.h>
@@ -8,44 +11,22 @@
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <nav_msgs/msg/odometry.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <vamex_slam_msgs/msg/scan_matching_status.hpp>
-// #include <ros/ros.h>
-// #include <geometry_msgs/PoseWithCovarianceStamped.h>
-// #include <geometry_msgs/TransformStamped.h>
-// #include <nav_msgs/Odometry.h>
-// #include <sensor_msgs/PointCloud2.h>
-// #include <hdl_graph_slam/ScanMatchingStatus.h>
-// #include <nodelet/nodelet.h>
-// #include <pcl_ros/point_cloud.h>
-// #include <ros/duration.h>
-// #include <ros/time.h>
-// #include <std_msgs/Time.h>
-// #include <tf/transform_broadcaster.h>
-// #include <tf/transform_listener.h>
-// #include <tf_conversions/tf_eigen.h>
-// #include <pluginlib/class_list_macros.h>
-
-#include <pcl/filters/approximate_voxel_grid.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/filters/voxel_grid.h>
-
 #include <hdl_graph_slam/registrations.hpp>
 #include <hdl_graph_slam/ros_utils.hpp>
 #include <iostream>
 #include <memory>
+#include <nav_msgs/msg/odometry.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <vamex_slam_msgs/msg/scan_matching_status.hpp>
 
 namespace hdl_graph_slam {
 
-// class ScanMatchingOdometryComponent : public nodelet::Nodelet {
 class ScanMatchingOdometryComponent : public rclcpp::Node {
 public:
     typedef pcl::PointXYZI PointT;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    // ScanMatchingOdometryComponent() {}
     // We need to pass NodeOptions in ROS2 to register a component
     ScanMatchingOdometryComponent( const rclcpp::NodeOptions&            options,
                                    const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
@@ -183,30 +164,8 @@ private:
      * @brief callback for point clouds
      * @param cloud_msg  point cloud msg
      */
-    // void cloud_callback(  sensor_msgs::msg::PointCloud2ConstPtr& cloud_msg )
-    // {
-    //     if( !ros::ok() ) {
-    //         return;
-    //     }
-
-    //     pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-    //     pcl::fromROSMsg( *cloud_msg, *cloud );
-
-    //     Eigen::Matrix4f pose = matching( cloud_msg->header.stamp, cloud );
-    //     publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
-
-    //     // In offline estimation, point clouds until the published time will be supplied
-    //     std_msgs::HeaderPtr read_until( new std_msgs::Header() );
-    //     read_until->frame_id = points_topic;
-    //     read_until->stamp    = cloud_msg->header.stamp + ros::Duration( 1, 0 );
-    //     read_until_pub.publish( read_until );
-
-    //     read_until->frame_id = "/filtered_points";
-    //     read_until_pub.publish( read_until );
-    // }
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
-        // if( !ros::ok() ) {
         if( !rclcpp::ok() ) {
             return;
         }
@@ -218,14 +177,6 @@ private:
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
 
         // In offline estimation, point clouds until the published time will be supplied
-        // std_msgs::HeaderPtr read_until( new std_msgs::Header() );
-        // read_until->frame_id = points_topic;
-        // read_until->stamp    = cloud_msg->header.stamp + ros::Duration( 1, 0 );
-        // read_until_pub.publish( read_until );
-
-        // read_until->frame_id = "/filtered_points";
-        // read_until_pub.publish( read_until );
-        // TODO: ROS2 we use Header msgs instead of Header::Ptr, verify
         std_msgs::msg::Header read_until;
         read_until.frame_id = points_topic;
         read_until.stamp = ( rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 ) ).operator builtin_interfaces::msg::Time();
@@ -235,7 +186,6 @@ private:
         read_until_pub->publish( read_until );
     }
 
-    // void msf_pose_callback( const geometry_msgs::PoseWithCovarianceStampedConstPtr& pose_msg, bool after_update )
     void msf_pose_callback( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg, bool after_update )
     {
         if( after_update ) {
@@ -269,7 +219,6 @@ private:
      * @param cloud  the input cloud
      * @return the relative pose between the input cloud and the keyframe cloud
      */
-    // Eigen::Matrix4f matching( const ros::Time& stamp, const pcl::PointCloud<PointT>::ConstPtr& cloud )
     Eigen::Matrix4f matching( const rclcpp::Time& stamp, const pcl::PointCloud<PointT>::ConstPtr& cloud )
     {
         if( !keyframe ) {
@@ -289,10 +238,7 @@ private:
         std::string       msf_source;
         Eigen::Isometry3f msf_delta = Eigen::Isometry3f::Identity();
 
-        // if( private_nh.param<bool>( "enable_imu_frontend", false ) ) {
         if( enable_imu_frontend ) {
-            // if( msf_pose && msf_pose->header.stamp > keyframe_stamp && msf_pose_after_update
-            //     && msf_pose_after_update->header.stamp > keyframe_stamp ) {
             if( msf_pose && rclcpp::Time( msf_pose->header.stamp ) > keyframe_stamp && msf_pose_after_update
                 && rclcpp::Time( msf_pose_after_update->header.stamp ) > keyframe_stamp ) {
                 Eigen::Isometry3d pose0 = pose2isometry( msf_pose_after_update->pose.pose );
@@ -304,20 +250,8 @@ private:
             } else {
                 std::cerr << "msf data is too old" << std::endl;
             }
-            // } else if( private_nh.param<bool>( "enable_robot_odometry_init_guess", false ) && !prev_time.isZero() ) {
         } else if( enable_robot_odometry_init_guess && !( prev_time.nanoseconds() == 0 ) ) {
-            // tf::StampedTransform transform;
             geometry_msgs::msg::TransformStamped transform;
-            // if( tf_listener.waitForTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
-            //                                   ros::Duration( 0 ) ) ) {
-            //     tf_listener.lookupTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
-            //                                  transform );
-            // } else if( tf_listener.waitForTransform( cloud->header.frame_id, ros::Time( 0 ), cloud->header.frame_id, prev_time,
-            //                                          robot_odom_frame_id, ros::Duration( 0 ) ) ) {
-            //     tf_listener.lookupTransform( cloud->header.frame_id, ros::Time( 0 ), cloud->header.frame_id, prev_time,
-            //     robot_odom_frame_id,
-            //                                  transform );
-            // }
             // According to https://answers.ros.org/question/312648/could-not-find-waitfortransform-function-in-tf2-package-of-ros2/ the
             // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout, TODO, verify
             if( tf_buffer->canTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
@@ -346,7 +280,6 @@ private:
                 }
             }
 
-            // if( transform.stamp_.isZero() ) {
             if( rclcpp::Time( transform.header.stamp ).nanoseconds() == 0 ) {
                 RCLCPP_WARN_STREAM( this->get_logger(),
                                     "failed to look up transform between " << cloud->header.frame_id << " and " << robot_odom_frame_id );
@@ -363,7 +296,6 @@ private:
 
         if( !registration->hasConverged() ) {
             RCLCPP_INFO_STREAM( this->get_logger(), "scan matching has not converged!!" );
-            // NODELET_INFO_STREAM( "ignore this frame(" << stamp << ")" );
             RCLCPP_INFO_STREAM( this->get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
             return keyframe_pose * prev_trans;
         }
@@ -378,7 +310,6 @@ private:
 
             if( dx > max_acceptable_trans || da > max_acceptable_angle ) {
                 RCLCPP_INFO_STREAM( this->get_logger(), "too large transform!!  " << dx << "[m] " << da << "[rad]" );
-                // NODELET_INFO_STREAM( "ignore this frame(" << stamp << ")" );
                 RCLCPP_INFO_STREAM( this->get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
                 return keyframe_pose * prev_trans;
             }
@@ -390,13 +321,11 @@ private:
         // broadcast keyframe with namespace aware topic name
         std::string keyframe_str   = this->get_effective_namespace() == "/" ? "keyframe" : this->get_effective_namespace() + "/keyframe";
         auto        keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
-        // keyframe_broadcaster.sendTransform( keyframe_trans );
         keyframe_broadcaster->sendTransform( keyframe_trans );
 
         double delta_trans = trans.block<3, 1>( 0, 3 ).norm();
         double delta_angle = std::acos( Eigen::Quaternionf( trans.block<3, 3>( 0, 0 ) ).w() );
-        // double delta_time  = ( stamp - keyframe_stamp ).toSec();
-        double delta_time = ( stamp - keyframe_stamp ).seconds();
+        double delta_time  = ( stamp - keyframe_stamp ).seconds();
         if( delta_trans > keyframe_delta_trans || delta_angle > keyframe_delta_angle || delta_time > keyframe_delta_time ) {
             keyframe = filtered;
             registration->setInputTarget( keyframe );
@@ -407,13 +336,11 @@ private:
             prev_trans.setIdentity();
         }
 
-        // if( aligned_points_pub.getNumSubscribers() > 0 ) {
         if( aligned_points_pub->get_subscription_count() > 0 ) {
             pcl::transformPointCloud( *cloud, *aligned, odom );
             aligned->header.frame_id = odom_frame_id;
             sensor_msgs::msg::PointCloud2 aligned_ros2;
             pcl::toROSMsg( *aligned, aligned_ros2 );
-            // aligned_points_pub.publish( *aligned );
             aligned_points_pub->publish( aligned_ros2 );
         }
 
@@ -425,21 +352,16 @@ private:
      * @param stamp  timestamp
      * @param pose   odometry pose to be published
      */
-    // void publish_odometry( const ros::Time& stamp, const std::string& base_frame_id, const Eigen::Matrix4f& pose )
     void publish_odometry( const rclcpp::Time& stamp, const std::string& base_frame_id, const Eigen::Matrix4f& pose )
     {
         // publish transform stamped for IMU integration
-        // geometry_msgs::TransformStamped odom_trans = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
         geometry_msgs::msg::TransformStamped odom_trans = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
-        // trans_pub.publish( odom_trans );
         trans_pub->publish( odom_trans );
 
         // broadcast the transform over tf
-        // odom_broadcaster.sendTransform( odom_trans );
         odom_broadcaster->sendTransform( odom_trans );
 
         // publish the transform
-        // nav_msgs::Odometry odom;
         nav_msgs::msg::Odometry odom;
         odom.header.stamp    = stamp.operator builtin_interfaces::msg::Time();
         odom.header.frame_id = odom_frame_id;
@@ -454,7 +376,6 @@ private:
         odom.twist.twist.linear.y  = 0.0;
         odom.twist.twist.angular.z = 0.0;
 
-        // odom_pub.publish( odom );
         // TODO transform odometry into correct frame for displaying it correctly in rviz?
         odom_pub->publish( odom );
     }
@@ -463,12 +384,10 @@ private:
     /**
      * @brief publish scan matching status
      */
-    // void publish_scan_matching_status( const ros::Time& stamp, const std::string& frame_id,
     void publish_scan_matching_status( const rclcpp::Time& stamp, const std::string& frame_id,
                                        pcl::PointCloud<pcl::PointXYZI>::ConstPtr aligned, const std::string& msf_source,
                                        const Eigen::Isometry3f& msf_delta )
     {
-        // if( !status_pub.getNumSubscribers() ) {
         if( !status_pub->get_subscription_count() ) {
             return;
         }
@@ -504,37 +423,21 @@ private:
             status.prediction_errors[0] = isometry2pose( error.cast<double>() );
         }
 
-        // status_pub.publish( status );
         status_pub->publish( status );
     }
 
 
 private:
-    // ROS topics
-    // ros::NodeHandle nh;
-    // ros::NodeHandle private_nh;
-
-    // ros::Subscriber points_sub;
-    // ros::Subscriber msf_pose_sub;
-    // ros::Subscriber msf_pose_after_update_sub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr                 points_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_after_update_sub;
 
-    // ros::Publisher           odom_pub;
-    // ros::Publisher           trans_pub;
-    // ros::Publisher           aligned_points_pub;
-    // ros::Publisher           status_pub;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                  odom_pub;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr     trans_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::ScanMatchingStatus>::SharedPtr status_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr            aligned_points_pub;
-    // ros::Publisher read_until_pub;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr read_until_pub;
+    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                    read_until_pub;
 
-    // tf::TransformListener    tf_listener;
-    // tf::TransformBroadcaster odom_broadcaster;
-    // tf::TransformBroadcaster keyframe_broadcaster;
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
     std::unique_ptr<tf2_ros::TransformBroadcaster> odom_broadcaster;
@@ -544,8 +447,6 @@ private:
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose;
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose_after_update;
 
-    // ros::Time                         prev_time;
-    // ros::Time                         keyframe_stamp;  // keyframe time
     rclcpp::Time                      prev_time;
     Eigen::Matrix4f                   prev_trans;      // previous estimated transform from keyframe
     Eigen::Matrix4f                   keyframe_pose;   // keyframe pose

@@ -19,7 +19,6 @@ public:
      * @brief constructor
      * @param sharedptr to the node
      */
-    // TODO pass correct node handle
     KeyframeUpdater( rclcpp::Node::SharedPtr _node );
 
     /**

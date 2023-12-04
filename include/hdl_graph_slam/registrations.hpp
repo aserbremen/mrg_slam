@@ -4,17 +4,9 @@
 #define HDL_GRAPH_SLAM_REGISTRATIONS_HPP
 
 #include <pcl/registration/registration.h>
-// #include <ros/ros.h>
 #include <rclcpp/rclcpp.hpp>
 
 namespace hdl_graph_slam {
-
-/**
- * @brief select a scan matching algorithm according to rosparams
- * @param pnh
- * @return selected scan matching
- */
-// pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr select_registration_method( ros::NodeHandle& pnh );
 
 /**
  * @brief select a pcl scan matching algorithm according to rosparams

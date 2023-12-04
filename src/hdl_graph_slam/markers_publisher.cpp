@@ -7,19 +7,10 @@
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
 #include <hdl_graph_slam/markers_publisher.hpp>
-// #include <visualization_msgs/MarkerArray.h>
 #include <rclcpp/logging.hpp>
 
 
 namespace hdl_graph_slam {
-
-// void
-// MarkersPublisher::onInit( ros::NodeHandle& nh, ros::NodeHandle& mt_nh, ros::NodeHandle& private_nh )
-// {
-//     markers_pub           = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers", 16 );
-//     markers_marginals_pub = mt_nh.advertise<visualization_msgs::MarkerArray>( "/hdl_graph_slam/markers_covariance", 16 );
-//     map_frame_id          = private_nh.param<std::string>( "map_frame_id", "map" );
-//     own_name              = private_nh.param<std::string>( "own_name", "atlas" );
 
 void
 MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
@@ -32,8 +23,6 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     markers_marginals_pub  = node->create_publisher<visualization_msgs::msg::MarkerArray>( "hdl_graph_slam/markers_covariance",
                                                                                           rclcpp::QoS( 16 ) );
 
-    // map_frame_id = private_nh.param<std::string>( "map_frame_id", "map" );
-    // own_name     = private_nh.param<std::string>( "own_name", "atlas" );
     // Declare only once across all nodes
     map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
     own_name     = node->get_parameter( "own_name" ).as_string();
@@ -115,8 +104,6 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         MARKER_MISC_EDGES,
         __NUM_MARKERS__,
     };
-    // auto                            stamp   = ros::Time::now();
-    // Directly declare builtin_interfaces::msg::Time
     builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
     markers.markers.resize( __NUM_MARKERS__ );

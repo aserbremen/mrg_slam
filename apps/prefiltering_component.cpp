@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <pcl/filters/approximate_voxel_grid.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2/exceptions.h>
 #include <tf2_ros/buffer.h>
@@ -11,28 +18,10 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-// #include <nodelet/nodelet.h>
-// #include <pcl_ros/point_cloud.h>
-// #include <pcl_ros/transforms.h>
-// #include <ros/ros.h>
-// #include <ros/time.h>
-// #include <sensor_msgs/Imu.h>
-// #include <sensor_msgs/PointCloud2.h>
-// #include <tf/transform_listener.h>
-// #include <pluginlib/class_list_macros.h>
-#include <pcl/filters/approximate_voxel_grid.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/filters/radius_outlier_removal.h>
-#include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-
 #include <string>
 
 namespace hdl_graph_slam {
 
-// class PrefilteringNodelet : public nodelet::Nodelet {
 class PrefilteringComponent : public rclcpp::Node {
 public:
     typedef pcl::PointXYZI PointT;
@@ -82,7 +71,6 @@ public:
         }
 
         if( use_deskewing ) {
-            // TODO: QOS? sensordata qos?
             imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1 ),
                                                                         std::bind( &PrefilteringComponent::imu_callback, this,
                                                                                    std::placeholders::_1 ) );
@@ -149,36 +137,26 @@ private:
         base_link_frame = this->get_parameter( "base_link_frame" ).as_string();
     }
 
-    // void imu_callback( const sensor_msgs::ImuConstPtr& imu_msg ) { imu_queue.push_back( imu_msg ); }
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
 
-    // void cloud_callback( const pcl::PointCloud<PointT>& src_cloud_r )
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros )
     {
         // Convert to pcl pointcloud from ros PointCloud2
-        // pcl::PointCloud<PointT>::Ptr src_cloud = boost::make_shared<pcl::PointCloud<PointT>>();
         pcl::PointCloud<PointT>::Ptr src_cloud = std::make_shared<pcl::PointCloud<PointT>>();
         pcl::fromROSMsg( *src_cloud_ros, *src_cloud );
-        // src_cloud_ros is already a shared ptr with msg type
-        // pcl::PointCloud<PointT>::ConstPtr src_cloud = src_cloud_r.makeShared();
         if( src_cloud->empty() ) {
             return;
         }
 
-        // auto src_cloud = deskewing( src_cloud_r );
         src_cloud = deskewing( src_cloud );
 
         // if base_link_frame is defined, transform the input cloud to the frame
         if( !base_link_frame.empty() ) {
-            // if( !tf_listener.canTransform( base_link_frame, src_cloud->header.frame_id, ros::Time( 0 ) ) ) {
             if( !tf_buffer->canTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ) ) ) {
                 std::cerr << "failed to find transform between " << base_link_frame << " and " << src_cloud->header.frame_id << std::endl;
             }
 
-            // tf::StampedTransform transform;
             geometry_msgs::msg::TransformStamped transform;
-            // tf_listener.waitForTransform( base_link_frame, src_cloud->header.frame_id, ros::Time( 0 ), ros::Duration( 2.0 ) );
-            // tf_listener.lookupTransform( base_link_frame, src_cloud->header.frame_id, ros::Time( 0 ), transform );
             try {
                 // lookupTransform contains a Duration as parameter
                 transform = tf_buffer->lookupTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ),
@@ -187,7 +165,6 @@ private:
                 RCLCPP_WARN( this->get_logger(), "Could not transform source frame %s to target frame %s: %s",
                              src_cloud->header.frame_id.c_str(), base_link_frame.c_str(), ex.what() );
                 RCLCPP_WARN( this->get_logger(), "Returning early in cloud_callback from prefiltering component" );
-                // TODO return here?
                 return;
             }
 
@@ -204,7 +181,6 @@ private:
         sensor_msgs::msg::PointCloud2 filtered_ros;
         pcl::toROSMsg( *filtered, filtered_ros );
 
-        // points_pub.publish( *filtered );
         points_pub->publish( filtered_ros );
     }
 
@@ -259,18 +235,14 @@ private:
         return filtered;
     }
 
-    // pcl::PointCloud<PointT>::ConstPtr deskewing( const pcl::PointCloud<PointT>::ConstPtr& cloud )
-    // For ROS2 pass shared_ptr and return shared_ptr instead of const shared_ptr, since we need to convert to sensor_msgs::
     pcl::PointCloud<PointT>::Ptr deskewing( const pcl::PointCloud<PointT>::Ptr& cloud )
     {
-        // ros::Time stamp = pcl_conversions::fromPCL( cloud->header.stamp );
         rclcpp::Time stamp = pcl_conversions::fromPCL( cloud->header.stamp );
         if( imu_queue.empty() ) {
             return cloud;
         }
 
         // the color encodes the point number in the point sequence
-        // if( colored_pub.getNumSubscribers() ) {
         if( colored_pub->get_subscription_count() ) {
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored( new pcl::PointCloud<pcl::PointXYZRGB>() );
             colored->header   = cloud->header;
@@ -288,17 +260,14 @@ private:
             }
             sensor_msgs::msg::PointCloud2 colored_ros;
             pcl::toROSMsg( *colored, colored_ros );
-            // colored_pub.publish( *colored );
             colored_pub->publish( colored_ros );
         }
 
-        // sensor_msgs::ImuConstPtr imu_msg = imu_queue.front();
         sensor_msgs::msg::Imu::ConstSharedPtr imu_msg = imu_queue.front();
 
         auto loc = imu_queue.begin();
         for( ; loc != imu_queue.end(); loc++ ) {
             imu_msg = ( *loc );
-            // if( ( *loc )->header.stamp > stamp ) {
             if( rclcpp::Time( ( *loc )->header.stamp ) > stamp ) {
                 break;
             }
@@ -316,7 +285,6 @@ private:
         deskewed->height   = cloud->height;
         deskewed->resize( cloud->size() );
 
-        // double scan_period = private_nh.param<double>( "scan_period", 0.1 );
         for( int i = 0; i < (int)cloud->size(); i++ ) {
             const auto& pt = cloud->at( i );
 
@@ -333,22 +301,14 @@ private:
     }
 
 private:
-    // ros::NodeHandle nh;
-    // ros::NodeHandle private_nh;
-
-    // ros::Subscriber                       imu_sub;
-    // std::vector<sensor_msgs::ImuConstPtr> imu_queue;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
     std::vector<sensor_msgs::msg::Imu::ConstSharedPtr>     imu_queue;
 
-    // ros::Subscriber points_sub;
-    // ros::Publisher  points_pub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    points_pub;
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr colored_pub;
 
-    // tf::TransformListener tf_listener;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     std::unique_ptr<tf2_ros::Buffer>            tf_buffer;
 
@@ -376,7 +336,6 @@ private:
 
 }  // namespace hdl_graph_slam
 
-// PLUGINLIB_EXPORT_CLASS( hdl_graph_slam::PrefilteringComponent, nodelet::Nodelet )
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.

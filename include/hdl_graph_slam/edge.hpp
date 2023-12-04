@@ -65,7 +65,6 @@ public:
     using Ptr = std::shared_ptr<EdgeSnapshot>;
 
     EdgeSnapshot( const Edge::Ptr& edge );
-    // EdgeSnapshot(...);
 
     ~EdgeSnapshot();
 

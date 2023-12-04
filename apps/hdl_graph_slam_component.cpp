@@ -1,45 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <angles/angles.h>
-#include <pcl_conversions/pcl_conversions.h>
-
-#include <chrono>
-#include <functional>
-#include <nav_msgs/msg/odometry.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <std_msgs/msg/string.hpp>
-#include <tf2_eigen/tf2_eigen.hpp>
-#include <vamex_slam_msgs/msg/graph_ros.hpp>
-#include <vamex_slam_msgs/msg/pose_with_name.hpp>
-#include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
-#include <vamex_slam_msgs/msg/slam_status.hpp>
-#include <vamex_slam_msgs/srv/dump_graph.hpp>
-#include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
-#include <vamex_slam_msgs/srv/get_graph_gids.hpp>
-#include <vamex_slam_msgs/srv/get_map.hpp>
-#include <vamex_slam_msgs/srv/publish_graph.hpp>
-#include <vamex_slam_msgs/srv/request_graphs.hpp>
-#include <vamex_slam_msgs/srv/save_gids.hpp>
-#include <vamex_slam_msgs/srv/save_map.hpp>
-// #include <pcl_ros/point_cloud.h>
-// #include <pluginlib/class_list_macros.h>
-// #include <ros/ros.h>
-// #include <sensor_msgs/PointCloud2.h>
-// #include <std_msgs/Time.h>
-// #include <tf_conversions/tf_eigen.h>
-// #include <eigen_conversions/eigen_msg.h>
-// #include <hdl_graph_slam/DumpGraph.h>
-// #include <hdl_graph_slam/GetGraphEstimate.h>
-// #include <hdl_graph_slam/GetMap.h>
-// #include <hdl_graph_slam/GraphRos.h>
-// #include <hdl_graph_slam/PoseWithName.h>
-// #include <hdl_graph_slam/PoseWithNameArray.h>
-// #include <hdl_graph_slam/PublishGraph.h>
-// #include <hdl_graph_slam/SaveMap.h>
-// #include <nav_msgs/Odometry.h>
-// #include <nodelet/nodelet.h>
-
 #include <g2o/types/slam3d/edge_se3.h>
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <message_filters/subscriber.h>
@@ -47,6 +8,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <Eigen/Dense>
 #include <atomic>
@@ -54,7 +16,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
+#include <chrono>
 #include <ctime>
+#include <functional>
 #include <g2o/edge_se3_plane.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
@@ -74,28 +38,37 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <nav_msgs/msg/odometry.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include <unordered_map>
 #include <unordered_set>
+#include <vamex_slam_msgs/msg/graph_ros.hpp>
+#include <vamex_slam_msgs/msg/pose_with_name.hpp>
+#include <vamex_slam_msgs/msg/pose_with_name_array.hpp>
+#include <vamex_slam_msgs/msg/slam_status.hpp>
+#include <vamex_slam_msgs/srv/dump_graph.hpp>
+#include <vamex_slam_msgs/srv/get_graph_estimate.hpp>
+#include <vamex_slam_msgs/srv/get_graph_gids.hpp>
+#include <vamex_slam_msgs/srv/get_map.hpp>
+#include <vamex_slam_msgs/srv/publish_graph.hpp>
+#include <vamex_slam_msgs/srv/request_graphs.hpp>
+#include <vamex_slam_msgs/srv/save_gids.hpp>
+#include <vamex_slam_msgs/srv/save_map.hpp>
 // boost uuid
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-// TODO add visbility control? https://gcc.gnu.org/wiki/Visibility
-// #include "hdl_graph_slam/visibility_control.h"
-
-// TODO go over all callbacks and decide whether to pass const msg::SharedPtr or ConstSharedPtr
 
 namespace hdl_graph_slam {
-// class HdlGraphSlamNodelet : public nodelet::Nodelet {
 class HdlGraphSlamComponent : public rclcpp::Node {
 public:
-    // TODO add visibility control? https://gcc.gnu.org/wiki/Visibility
-    // COMPOSITION_PUBLIC
     typedef pcl::PointXYZI                                                                                          PointT;
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
-    // HdlGraphSlamComponent() {}
     HdlGraphSlamComponent( const rclcpp::NodeOptions            &options,
                            const std::vector<rclcpp::Parameter> &_param_vec = std::vector<rclcpp::Parameter>() ) :
         Node( "hdl_graph_slam_component", options ), param_vec( _param_vec )
@@ -144,9 +117,7 @@ public:
         odom_sub.subscribe( node_ros, odom_sub_topic, qos );
         qos.depth = 32;
         cloud_sub.subscribe( node_ros, cloud_sub_topic, qos );
-        // sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), *odom_sub, *cloud_sub ) );
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
-        // sync->registerCallback( boost::bind( &HdlGraphSlamComponent::cloud_callback, this, _1, _2 ) );
         sync->registerCallback( std::bind( &HdlGraphSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
         odom_broadcast_sub = this->create_subscription<vamex_slam_msgs::msg::PoseWithName>(
@@ -169,7 +140,6 @@ public:
                 others_last_graph_exchange_time[robot_name] = -1.0;
             }
         }
-
 
         if( init_pose_topic != "NONE" ) {
             init_pose_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_pose_topic, rclcpp::QoS( 32 ),
@@ -440,10 +410,8 @@ private:
      * @param odom_msg
      * @param cloud_msg
      */
-    // void cloud_callback( const nav_msgs::OdometryConstPtr &odom_msg, const sensor_msgs::PointCloud2::ConstPtr &cloud_msg )
     void cloud_callback( nav_msgs::msg::Odometry::ConstSharedPtr odom_msg, sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
-        // const ros::Time  &stamp = cloud_msg->header.stamp;
         const builtin_interfaces::msg::Time &stamp = cloud_msg->header.stamp;
         Eigen::Isometry3d                    odom  = odom2isometry( odom_msg );
 
@@ -457,13 +425,10 @@ private:
         if( !update_required ) {
             if( keyframe_queue.empty() ) {
                 std_msgs::msg::Header read_until;
-                // read_until.stamp    =  stamp + ros::Duration( 10, 0 ); // ROS1
                 read_until.stamp    = ( rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
                 read_until.frame_id = points_topic;
-                // read_until_pub.publish( read_until );
                 read_until_pub->publish( read_until );
                 read_until.frame_id = "/filtered_points";
-                // read_until_pub.publish( read_until );
                 read_until_pub->publish( read_until );
             }
         } else {
@@ -496,7 +461,7 @@ private:
             if( !others_positions.empty() ) {
                 Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
 
-                // transform other robots' positions to sensro frame
+                // transform other robots' positions to sensor frame
                 std::vector<Eigen::Vector3f> others_positions_sensor;
                 others_positions_sensor.resize( others_positions.size() );
                 for( size_t i = 0; i < others_positions.size(); i++ ) {
@@ -530,7 +495,6 @@ private:
                 // create ROS cloud to be stored within the keyframe
                 sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg_tmp( new sensor_msgs::msg::PointCloud2 );
                 pcl::toROSMsg( *cloud, *cloud_msg_tmp );
-                // TODO does this work? as cloud_msg_filtered is assigned above as well
                 cloud_msg_filtered = cloud_msg_tmp;
             }
 
@@ -549,7 +513,6 @@ private:
         pose_msg.robot_name = own_name;
         pose_msg.pose       = odom_msg->pose.pose;
         pose_msg.accum_dist = accum_d;
-        // odom_broadcast_pub.publish( pose_msg );
         odom_broadcast_pub->publish( pose_msg );
     }
 
@@ -570,7 +533,6 @@ private:
             Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
             if( init_pose != nullptr ) {
                 Eigen::Isometry3d pose;
-                // tf::poseMsgToEigen( init_pose->pose.pose, pose );
                 tf2::fromMsg( init_pose->pose.pose, pose );
                 pose = pose * keyframe_queue[0]->odom.inverse();  // "remove" odom (which will be added later again) such that the init
                                                                   // pose actually corresponds to the received pose
@@ -661,8 +623,6 @@ private:
             RCLCPP_INFO_STREAM( this->get_logger(),
                                 "added " << edge->readable_id << " as prev edge to keyframe " << keyframe->readable_id );
             keyframe->prev_edge = edge;
-            // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
-            //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
             graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
             prev_robot_keyframe = keyframe;
         }
@@ -683,7 +643,6 @@ private:
      * @brief received graph from other robots are added to #graph_queue
      * @param graph_msg
      */
-    // void graph_callback( const hdl_graph_slam::GraphRos::ConstPtr &graph_msg )
     void graph_callback( vamex_slam_msgs::msg::GraphRos::ConstSharedPtr graph_msg )
     {
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
@@ -784,7 +743,6 @@ private:
             }
 
             Eigen::Isometry3d relpose;
-            // tf::poseMsgToEigen( edge_ros->relative_pose, relpose );
             tf2::fromMsg( edge_ros->relative_pose, relpose );
             Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros->information.data() );
             auto      graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
@@ -811,12 +769,8 @@ private:
 
 
             if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
-                // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "odometry_edge_robust_kernel", "NONE" ),
-                //                                private_nh.param<double>( "odometry_edge_robust_kernel_size", 1.0 ) );
                 graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
             } else if( edge->type == Edge::TYPE_LOOP ) {
-                // graph_slam->add_robust_kernel( graph_edge, private_nh.param<std::string>( "loop_closure_edge_robust_kernel", "NONE" ),
-                //                                private_nh.param<double>( "loop_closure_edge_robust_kernel_size", 1.0 ) );
                 graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
             }
         }
@@ -824,8 +778,7 @@ private:
         for( const auto &latest_keyframe : latest_robot_keyframes ) {
             auto &kf = others_prev_robot_keyframes[latest_keyframe.first];
             kf.first = uuid_keyframe_map[latest_keyframe.second.first];  // pointer to keyframe
-            // tf::poseMsgToEigen( *latest_keyframe.second.second, kf.second );  // odometry
-            tf2::fromMsg( *latest_keyframe.second.second, kf.second );  // odometry
+            tf2::fromMsg( *latest_keyframe.second.second, kf.second );   // odometry
         }
 
         graph_queue.clear();
@@ -983,14 +936,12 @@ private:
      * @brief received odom msgs from other robots proccessed
      * @param graph_msg
      */
-    // void odom_broadcast_callback( const hdl_graph_slam::PoseWithName::ConstPtr &pose_msg )
     void odom_broadcast_callback( vamex_slam_msgs::msg::PoseWithName::ConstSharedPtr pose_msg )
     {
         if( pose_msg->robot_name == own_name ) {
             return;
         }
 
-        // PoseWithNameArray pose_array_msg;
         // TODO it seems that other poses are not updated and the first frame is published all the time, fix?
         vamex_slam_msgs::msg::PoseWithNameArray pose_array_msg;
         pose_array_msg.header.stamp    = pose_msg->header.stamp;
@@ -1005,7 +956,6 @@ private:
             const auto                  iter = others_odom2map.find( other_name );
             if( iter != others_odom2map.end() ) {
                 auto &odom_pose = others_odom_poses[other_name];
-                // tf::poseMsgToEigen( pose_msg->pose, odom_pose.first );
                 tf2::fromMsg( pose_msg->pose, odom_pose.first );
                 update_pose( iter->second, odom_pose );
 
@@ -1024,7 +974,6 @@ private:
 
         // publish this information
         if( !pose_array_msg.poses.empty() ) {
-            // others_poses_pub.publish( pose_array_msg );
             others_poses_pub->publish( pose_array_msg );
         }
     }
@@ -1034,7 +983,6 @@ private:
      * @brief receive anchor node pose from topic
      * @param
      */
-    // void init_pose_callback( const nav_msgs::Odometry::ConstPtr &msg )
     void init_pose_callback( const nav_msgs::msg::Odometry::ConstSharedPtr msg )
     {
         std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
@@ -1096,10 +1044,8 @@ private:
      * @brief generate map point cloud and publish it
      * @param event
      */
-    // void map_points_publish_timer_callback( const ros::WallTimerEvent &event )
     void map_points_publish_timer_callback()
     {
-        // if( !map_points_pub.getNumSubscribers() ) {
         if( !map_points_pub->get_subscription_count() ) {
             return;
         }
@@ -1114,7 +1060,6 @@ private:
             return;
         }
 
-        // map_points_pub.publish( cloud_msg );
         map_points_pub->publish( *cloud_msg );
     }
 
@@ -1124,7 +1069,6 @@ private:
      * @param res
      * @return
      */
-    // bool get_map_service( hdl_graph_slam::GetMapRequest &req, hdl_graph_slam::GetMapResponse &res )
     // TODO test this service
     void get_map_service( vamex_slam_msgs::srv::GetMap::Request::ConstSharedPtr req, vamex_slam_msgs::srv::GetMap::Response::SharedPtr res )
     {
@@ -1133,24 +1077,16 @@ private:
         update_cloud_msg();
 
         if( !cloud_msg ) {
-            // ROS2 services are of type void and dont return a bool.
-            // return false;
             return;
         }
 
         // == and != operators are defined for builtin_interfaces::msg::Time
         if( req->last_stamp != cloud_msg->header.stamp ) {
-            // res.updated   = true;
-            // res.cloud_map = *cloud_msg;
             res->updated   = true;
             res->cloud_map = *cloud_msg;
         } else {
-            // res.updated = false;
             res->updated = false;
         }
-
-        // ROS2 services are of type void and dont return a bool.
-        // return true;
     }
 
     /**
@@ -1159,7 +1095,6 @@ private:
      * @param res
      * @return
      */
-    // bool get_graph_estimate_service( hdl_graph_slam::GetGraphEstimateRequest &req, hdl_graph_slam::GetGraphEstimateResponse &res )
     void get_graph_estimate_service( vamex_slam_msgs::srv::GetGraphEstimate::Request::ConstSharedPtr req,
                                      vamex_slam_msgs::srv::GetGraphEstimate::Response::SharedPtr     res )
     {
@@ -1167,13 +1102,10 @@ private:
 
         if( graph_estimate_msg_update_required ) {
             if( keyframes_snapshot.empty() || edges_snapshot.empty() ) {
-                // ROS2 services are of type void and dont return a bool.
-                // return false;
                 return;
             }
 
             if( !graph_estimate_msg ) {
-                // graph_estimate_msg = hdl_graph_slam::GraphEstimatePtr( new hdl_graph_slam::GraphEstimate() );
                 graph_estimate_msg = vamex_slam_msgs::msg::GraphEstimate::SharedPtr( new vamex_slam_msgs::msg::GraphEstimate() );
             }
 
@@ -1188,7 +1120,6 @@ private:
             }
 
             graph_estimate_msg->header.frame_id = map_frame_id;
-            // pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_msg->header.stamp );
             rclcpp::Time graph_estimate_stamp;
             pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_stamp );
             graph_estimate_msg->header.stamp = graph_estimate_stamp.operator builtin_interfaces::msg::Time();
@@ -1206,11 +1137,10 @@ private:
             }
 
             for( size_t i = 0; i < keyframes_snapshot_tmp.size(); i++ ) {
-                auto &keyframe_out    = graph_estimate_msg->keyframes[i];
-                auto &keyframe_in     = keyframes_snapshot_tmp[i];
-                keyframe_out.uuid_str = boost::uuids::to_string( keyframe_in->uuid );
-                keyframe_out.stamp    = keyframe_in->stamp;
-                // tf::poseEigenToMsg( keyframe_in->pose, keyframe_out.estimate.pose );
+                auto &keyframe_out         = graph_estimate_msg->keyframes[i];
+                auto &keyframe_in          = keyframes_snapshot_tmp[i];
+                keyframe_out.uuid_str      = boost::uuids::to_string( keyframe_in->uuid );
+                keyframe_out.stamp         = keyframe_in->stamp;
                 keyframe_out.estimate.pose = tf2::toMsg( keyframe_in->pose );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> covMap( keyframe_out.estimate.covariance.data() );
                 covMap = keyframe_in->covariance;
@@ -1220,38 +1150,25 @@ private:
         }
 
         if( !graph_estimate_msg ) {
-            // ROS2 services are of type void and dont return a bool.
-            // return false;
             return;
         }
 
-        // if( req.last_stamp != graph_estimate_msg->header.stamp ) {
-        //     res.updated        = true;
-        //     res.graph_estimate = *graph_estimate_msg;
-        // } else {
-        //     res.updated = false;
-        // }
         if( req->last_stamp != graph_estimate_msg->header.stamp ) {
             res->updated        = true;
             res->graph_estimate = *graph_estimate_msg;
         } else {
             res->updated = false;
         }
-
-        // ROS2 services are of type void and dont return a bool.
-        // return true;
     }
 
     /**
      * @brief this methods adds all the data in the queues to the pose graph, and then optimizes the pose graph
      * @param event
      */
-    // void optimization_timer_callback( const ros::WallTimerEvent &event )
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-        // Cancel the timer and reset it whenever this function returns in order to avoid overlapping callbacks in case of very long
-        // optimizations
+        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of very long optimizations
         optimization_timer->cancel();
 
         // add keyframes and floor coeffs in the queues to the pose graph
@@ -1259,13 +1176,10 @@ private:
 
         if( !keyframe_updated ) {
             std_msgs::msg::Header read_until;
-            // read_until.stamp    = ros::Time::now() + ros::Duration( 30, 0 );
             read_until.stamp    = ( this->now() + rclcpp::Duration( 30, 0 ) ).operator builtin_interfaces::msg::Time();
             read_until.frame_id = points_topic;
-            // read_until_pub->publish( read_until );
             read_until_pub->publish( read_until );
             read_until.frame_id = "/filtered_points";
-            // read_until_pub.publish( read_until );
             read_until_pub->publish( read_until );
         }
 
@@ -1295,10 +1209,9 @@ private:
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
 
-        // move the first node anchor position to the current estimate of the first node pose
-        // so the first node moves freely while trying to stay around the origin
-        // Fixing the first node adaptively with initial positions that are not the identity transform, leads to the fixed node moving at
-        // every optimization
+        // move the first node anchor position to the current estimate of the first node pose, so the first node moves freely while trying
+        // to stay around the origin. Fixing the first node adaptively with initial positions that are not the identity transform, leads to
+        // the fixed node moving at every optimization (not implemented atm)
         if( anchor_node && fix_first_node_adaptive ) {
             Eigen::Isometry3d anchor_target = static_cast<g2o::VertexSE3 *>( anchor_edge_g2o->vertices()[1] )->estimate();
             anchor_node->setEstimate( anchor_target );
@@ -1310,7 +1223,6 @@ private:
         }
 
         // optimize the pose graph
-        // int num_iterations = private_nh.param<int>( "g2o_solver_num_iterations", 1024 );
         slam_status_msg.in_loop_closure = false;
         slam_status_msg.in_optimization = true;
         slam_status_publisher->publish( slam_status_msg );
@@ -1323,14 +1235,8 @@ private:
         trans_odom2map = trans.matrix().cast<float>();
         others_last_kf.reserve( others_prev_robot_keyframes.size() );
         for( const auto &other_prev_kf : others_prev_robot_keyframes ) {
-            //                                                node pointer                      odometry (not stored in kf for other
-            //                                                robots)
             Eigen::Isometry3d other_trans        = other_prev_kf.second.first->node->estimate() * other_prev_kf.second.second.inverse();
             others_odom2map[other_prev_kf.first] = other_trans;
-            // RCLCPP_INFO_STREAM( this->get_logger(), other_prev_kf.first );
-            // RCLCPP_INFO_STREAM( this->get_logger(), "estimate:\n" << other_prev_kf.second.first->node->estimate().matrix() );
-            // RCLCPP_INFO_STREAM( this->get_logger(), "odom:\n" << other_prev_kf.second.second.matrix() );
-            // RCLCPP_INFO_STREAM( this->get_logger(), "trans:\n" << other_trans.matrix() );
 
             auto iter = others_odom_poses.find( other_prev_kf.first );
 
@@ -1365,11 +1271,9 @@ private:
             save_keyframe_poses();
         }
 
-        // if( odom2map_pub.getNumSubscribers() ) {
         if( odom2map_pub->get_subscription_count() ) {
             geometry_msgs::msg::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(),
                                                                         map_frame_id, odom_frame_id );
-            // odom2map_pub.publish( ts );
             odom2map_pub->publish( ts );
         }
 
@@ -1391,7 +1295,6 @@ private:
     //  * @param res
     //  * @return
     //  */
-    // bool dump_service( hdl_graph_slam::DumpGraphRequest &req, hdl_graph_slam::DumpGraphResponse &res )
     void dump_service( vamex_slam_msgs::srv::DumpGraph::Request::ConstSharedPtr req,
                        vamex_slam_msgs::srv::DumpGraph::Response::SharedPtr     res )
     {
@@ -1462,7 +1365,6 @@ private:
      * @param res
      * @return
      */
-    // bool save_map_service( hdl_graph_slam::SaveMapRequest &req, hdl_graph_slam::SaveMapResponse &res )
     void save_map_service( vamex_slam_msgs::srv::SaveMap::Request::ConstSharedPtr req,
                            vamex_slam_msgs::srv::SaveMap::Response::SharedPtr     res )
     {
@@ -1472,18 +1374,13 @@ private:
         snapshot = keyframes_snapshot;
         snapshots_mutex.unlock();
 
-        // auto cloud = map_cloud_generator->generate( snapshot, req.resolution, req.count_threshold );
         auto cloud = map_cloud_generator->generate( snapshot, req->resolution, req->count_threshold );
         if( !cloud ) {
-            // res.success = false;
             res->success = false;
-            // ROS2 services are of type void and dont return a bool.
-            // return true;
             return;
         }
 
         const auto &zero_utm = gps_processor.zero_utm();
-        // if( zero_utm && req.utm ) {
         if( zero_utm && req->utm ) {
             for( auto &pt : cloud->points ) {
                 pt.getVector3fMap() += ( *zero_utm ).cast<float>();
@@ -1494,13 +1391,10 @@ private:
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         if( zero_utm ) {
-            // std::ofstream ofs( req.destination + ".utm" );
             std::ofstream ofs( req->destination + ".utm" );
             ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
 
-        // int ret     = pcl::io::savePCDFileBinary( req.destination, *cloud );
-        // res.success = ret == 0;
         auto dir = boost::filesystem::path( req->destination ).remove_filename();
         if( !boost::filesystem::is_directory( dir ) ) {
             boost::filesystem::create_directories( dir );
@@ -1515,9 +1409,6 @@ private:
             std::cout << "failed to save " << cloud->points.size() << " with resolution " << req->resolution << " points to "
                       << req->destination << std::endl;
         }
-
-        // ROS2 services are of type void and dont return a bool.
-        // return true;
     }
 
 
@@ -1527,8 +1418,6 @@ private:
      * @param res
      * @return
      */
-    // bool publish_graph_service( hdl_graph_slam::PublishGraphRequest &req, hdl_graph_slam::PublishGraphResponse &res )
-    // TODO ROS2 test this
     void publish_graph_service( vamex_slam_msgs::srv::PublishGraph::Request::ConstSharedPtr req,
                                 vamex_slam_msgs::srv::PublishGraph::Response::SharedPtr     res )
     {
@@ -1536,8 +1425,6 @@ private:
             std::lock_guard<std::mutex> lock( main_thread_mutex );
 
             if( keyframes.empty() ) {
-                // ROS2 services are of type void and dont return a bool.
-                // return false;
                 return;
             }
 
@@ -1565,7 +1452,6 @@ private:
                     RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " publishing" );
                 }
 
-                // auto &dst = res->graph.keyframes[i];
                 vamex_slam_msgs::msg::KeyFrameRos dst;
                 dst.robot_name     = src->robot_name;
                 dst.uuid_str       = src->uuid_str;
@@ -1573,9 +1459,8 @@ private:
                 dst.odom_counter   = src->odom_keyframe_counter;
                 dst.first_keyframe = src->first_keyframe;
                 dst.accum_distance = src->accum_distance;
-                // tf::poseEigenToMsg( src->estimate(), dst.estimate );
-                dst.estimate = tf2::toMsg( src->estimate() );
-                dst.cloud    = *src->cloud_msg;
+                dst.estimate       = tf2::toMsg( src->estimate() );
+                dst.cloud          = *src->cloud_msg;
                 res->graph.keyframes.push_back( std::move( dst ) );
                 added_keyframes++;
             }
@@ -1600,7 +1485,6 @@ private:
                 dst.uuid_str      = src->uuid_str;
                 dst.from_uuid_str = src->from_uuid_str;
                 dst.to_uuid_str   = src->to_uuid_str;
-                // tf::poseEigenToMsg( src->relative_pose(), dst.relative_pose );
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();
@@ -1782,27 +1666,17 @@ private:
             throw std::runtime_error( "Unknown graph exchange mode: " + str );
         }
     }
-    // ROS
-    // ros::NodeHandle nh;
-    // ros::NodeHandle mt_nh;
-    // ros::NodeHandle private_nh;
-    // ros::WallTimer optimization_timer;
-    // ros::WallTimer map_publish_timer;
+    // timers
     rclcpp::TimerBase::SharedPtr one_shot_initalization_timer;
     rclcpp::TimerBase::SharedPtr optimization_timer;
     rclcpp::TimerBase::SharedPtr map_publish_timer;
 
-    // std::unique_ptr<message_filters::Subscriber<nav_msgs::Odometry>>       odom_sub;
-    // std::unique_ptr<message_filters::Subscriber<sensor_msgs::PointCloud2>> cloud_sub;
-    // std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>>       sync;
     std::string                                                      odom_sub_topic;
     message_filters::Subscriber<nav_msgs::msg::Odometry>             odom_sub;
     std::string                                                      cloud_sub_topic;
     message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub;
     std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>> sync;
 
-    // ros::Subscriber graph_broadcast_sub;
-    // ros::Publisher  graph_broadcast_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr                               slam_pose_broadcast_pub;
     std::unordered_map<std::string, rclcpp::Client<vamex_slam_msgs::srv::PublishGraph>::SharedPtr> request_graph_service_clients;
     std::unordered_map<std::string, std::vector<vamex_slam_msgs::msg::PoseWithName>>               others_slam_poses;
@@ -1818,36 +1692,22 @@ private:
     double                                  graph_request_min_time_delay;
     GraphExchangeMode                       graph_exchange_mode;
 
-    // ros::Subscriber odom_broadcast_sub;
-    // ros::Publisher  odom_broadcast_pub;
-    // ros::Publisher  others_poses_pub;
     // This counter is used to identify all odom keyframes of a robot in the graph (starting from 1), anchor keyframe = 0
     int                                                                   odom_keyframe_counter = 1;
     rclcpp::Subscription<vamex_slam_msgs::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
 
-    std::mutex      trans_odom2map_mutex;
-    Eigen::Matrix4f trans_odom2map;
-    // ros::Publisher                                     odom2map_pub;
+    std::mutex                                                         trans_odom2map_mutex;
+    Eigen::Matrix4f                                                    trans_odom2map;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr odom2map_pub;
     std::unordered_map<std::string, Eigen::Isometry3d>                 others_odom2map;  // odom2map transform for other robots
-    // std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::Pose>> others_odom_poses;
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
 
-
-    // ros::Publisher read_until_pub;
-    // ros::Publisher map_points_pub;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
-    // std::unordered_map<std::string, ros::ServiceClient> request_graph_service_clients;
-    // ros::ServiceServer                                  dump_service_server;
-    // ros::ServiceServer                                  save_map_service_server;
-    // ros::ServiceServer                                  get_map_service_server;
-    // ros::ServiceServer                                  get_graph_estimate_service_server;
-    // ros::ServiceServer                                  publish_graph_service_server;
-
+    // Services
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr             request_robot_graph_sub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr                request_robot_graph_pub;
     rclcpp::Service<vamex_slam_msgs::srv::DumpGraph>::SharedPtr        dump_service_server;
@@ -1857,8 +1717,7 @@ private:
     rclcpp::Service<vamex_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<vamex_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
-
-    rclcpp::Service<vamex_slam_msgs::srv::SaveGids>::SharedPtr save_gids_service_server;
+    rclcpp::Service<vamex_slam_msgs::srv::SaveGids>::SharedPtr         save_gids_service_server;
 
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
@@ -1867,23 +1726,19 @@ private:
     MarkersPublisher markers_pub;
 
     // latest point cloud map
-    std::mutex       cloud_msg_mutex;
-    std::atomic_bool cloud_msg_update_required;
-    // sensor_msgs::PointCloud2Ptr cloud_msg;
+    std::mutex                               cloud_msg_mutex;
+    std::atomic_bool                         cloud_msg_update_required;
     sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg;
 
     // latest graph estimate
-    std::mutex       graph_estimate_msg_mutex;
-    std::atomic_bool graph_estimate_msg_update_required;
-    // hdl_graph_slam::GraphEstimatePtr graph_estimate_msg;
+    std::mutex                                     graph_estimate_msg_mutex;
+    std::atomic_bool                               graph_estimate_msg_update_required;
     vamex_slam_msgs::msg::GraphEstimate::SharedPtr graph_estimate_msg;
 
     // getting init pose from topic
-    // ros::Subscriber init_pose_sub;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr init_pose_sub;
     std::string                                              init_pose_topic;
-    // nav_msgs::Odometry::ConstPtr init_pose;  // should be accessed with keyframe_queue_mutex locked
-    nav_msgs::msg::Odometry::ConstSharedPtr init_pose;  // should be accessed with keyframe_queue_mutex locked
+    nav_msgs::msg::Odometry::ConstSharedPtr                  init_pose;  // should be accessed with keyframe_queue_mutex locked
 
     // keyframe queue
     std::string               base_frame_id;
@@ -1891,8 +1746,7 @@ private:
     std::deque<KeyFrame::Ptr> keyframe_queue;
 
     // graph queue
-    std::mutex graph_queue_mutex;
-    // std::deque<hdl_graph_slam::GraphRosConstPtr> graph_queue;
+    std::mutex                                                 graph_queue_mutex;
     std::deque<vamex_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
 
     // for map cloud generation and graph publishing
@@ -1912,6 +1766,7 @@ private:
     std::string              own_name;
     std::vector<std::string> robot_names;
     std::string              model_namespace;
+    std::string              result_dir;
 
     float               robot_remove_points_radius;
     std::vector<double> init_pose_vec;
@@ -1961,13 +1816,10 @@ private:
     std::unique_ptr<KeyframeUpdater> keyframe_updater;
 
     std::unique_ptr<InformationMatrixCalculator> inf_calclator;
-
-    std::string result_dir;
 };
 
 }  // namespace hdl_graph_slam
 
-// PLUGINLIB_EXPORT_CLASS( hdl_graph_slam::HdlGraphSlamNodelet, nodelet::Nodelet )
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.

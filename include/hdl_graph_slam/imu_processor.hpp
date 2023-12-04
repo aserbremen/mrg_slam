@@ -7,16 +7,12 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/imu.hpp>
-// #include <ros/ros.h>
-// #include <sensor_msgs/Imu.h>
-// #include <tf/transform_listener.h>
-
 #include <deque>
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
 #include <mutex>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 
 
 namespace hdl_graph_slam {
@@ -25,7 +21,6 @@ class ImuProcessor {
 public:
     ImuProcessor() {}
 
-    // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr &_node );
 
     void imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg );
@@ -35,8 +30,6 @@ public:
 private:
     rclcpp::Node::SharedPtr                                node;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
-    // ros::NodeHandle *private_nh;
-    // ros::Subscriber imu_sub;
 
     // https://docs.ros.org/en/foxy/Tutorials/Intermediate/Tf2/Writing-A-Tf2-Listener-Cpp.html
     std::unique_ptr<tf2_ros::Buffer>            tf2_buffer;

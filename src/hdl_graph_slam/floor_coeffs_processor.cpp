@@ -42,9 +42,6 @@ FloorCoeffsProcessor::floor_coeffs_callback( vamex_slam_msgs::msg::FloorCoeffs::
  * @return if true, at least one floor plane edge is added to the pose graph
  */
 bool
-// FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
-//                              const std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-//                              const ros::Time                                                 &latest_keyframe_stamp )
 FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
                              const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
                              const builtin_interfaces::msg::Time                                                 &latest_keyframe_stamp )
@@ -76,8 +73,6 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
         Eigen::Vector4d coeffs( floor_coeffs->coeffs[0], floor_coeffs->coeffs[1], floor_coeffs->coeffs[2], floor_coeffs->coeffs[3] );
         Eigen::Matrix3d information = Eigen::Matrix3d::Identity() * ( 1.0 / floor_edge_stddev );
         auto            edge        = graph_slam->add_se3_plane_edge( keyframe->node, floor_plane_node_ptr, coeffs, information );
-        // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>("floor_edge_robust_kernel", "NONE" ),
-        //                                private_nh->param<double>( "floor_edge_robust_kernel_size", 1.0 ) );
         graph_slam->add_robust_kernel( edge, floor_edge_robust_kernel, floor_edge_robust_kernel_size );
 
         keyframe->floor_coeffs = coeffs;
@@ -85,11 +80,6 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
         updated = true;
     }
 
-    // TODO: verify
-    // auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), latest_keyframe_stamp,
-    //                                     [=]( const ros::Time &stamp, const hdl_graph_slam::FloorCoeffsConstPtr &coeffs ) {
-    //                                         return stamp < coeffs->header.stamp;
-    //                                     } );
     auto remove_loc = std::upper_bound( floor_coeffs_queue.begin(), floor_coeffs_queue.end(), rclcpp::Time( latest_keyframe_stamp ),
                                         [=]( const rclcpp::Time &stamp, const vamex_slam_msgs::msg::FloorCoeffs::ConstSharedPtr &coeffs ) {
                                             return stamp < rclcpp::Time( coeffs->header.stamp );

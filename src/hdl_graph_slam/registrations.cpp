@@ -21,7 +21,6 @@
 namespace hdl_graph_slam {
 
 pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr
-// select_registration_method( ros::NodeHandle& pnh )
 select_registration_method( rclcpp::Node* node_raw_ptr )
 {
     using PointT = pcl::PointXYZI;

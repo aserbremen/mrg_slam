@@ -19,9 +19,6 @@ GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
     nmea_parser.reset( new NmeaSentenceParser() );
 
-    // gps_time_offset    = private_nh->param<double>( "gps_time_offset", 0.0 );
-    // gps_edge_stddev_xy = private_nh->param<double>( "gps_edge_stddev_xy", 10000.0 );
-    // gps_edge_stddev_z  = private_nh->param<double>( "gps_edge_stddev_z", 10.0 );
     enable_gps         = _node->get_parameter( "enable_gps" ).as_bool();
     gps_time_offset    = _node->get_parameter( "gps_time_offset" ).as_double();
     gps_edge_stddev_xy = _node->get_parameter( "gps_edge_stddev_xy" ).as_double();
@@ -42,24 +39,6 @@ GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 }
 
 
-// void
-// GpsProcessor::nmea_callback( const nmea_msgs::SentenceConstPtr& nmea_msg )
-// {
-//     GPRMC grmc = nmea_parser->parse( nmea_msg->sentence );
-
-//     if( grmc.status != 'A' ) {
-//         return;
-//     }
-
-//     geographic_msgs::GeoPointStampedPtr gps_msg( new geographic_msgs::GeoPointStamped() );
-//     gps_msg->header             = nmea_msg->header;
-//     gps_msg->position.latitude  = grmc.latitude;
-//     gps_msg->position.longitude = grmc.longitude;
-//     gps_msg->position.altitude  = NAN;
-
-//     gps_callback( gps_msg );
-// }
-
 void
 GpsProcessor::nmea_callback( const nmea_msgs::msg::Sentence::SharedPtr nmea_msg )
 {
@@ -79,16 +58,6 @@ GpsProcessor::nmea_callback( const nmea_msgs::msg::Sentence::SharedPtr nmea_msg 
 }
 
 
-// void
-// GpsProcessor::navsat_callback( const sensor_msgs::NavSatFixConstPtr& navsat_msg )
-// {
-//     geographic_msgs::GeoPointStampedPtr gps_msg( new geographic_msgs::GeoPointStamped() );
-//     gps_msg->header             = navsat_msg->header;
-//     gps_msg->position.latitude  = navsat_msg->latitude;
-//     gps_msg->position.longitude = navsat_msg->longitude;
-//     gps_msg->position.altitude  = navsat_msg->altitude;
-//     gps_callback( gps_msg );
-// }
 void
 GpsProcessor::navsat_callback( const sensor_msgs::msg::NavSatFix::SharedPtr navsat_msg )
 {
@@ -100,13 +69,6 @@ GpsProcessor::navsat_callback( const sensor_msgs::msg::NavSatFix::SharedPtr navs
     gps_callback( gps_msg );
 }
 
-// void
-// GpsProcessor::gps_callback( const geographic_msgs::GeoPointStampedPtr& gps_msg )
-// {
-//     std::lock_guard<std::mutex> lock( gps_queue_mutex );
-//     gps_msg->header.stamp += ros::Duration( gps_time_offset );
-//     gps_queue.push_back( gps_msg );
-// }
 /**
  * @brief received gps data is added to #gps_queue
  * @param gps_msg
@@ -188,8 +150,6 @@ GpsProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             information_matrix( 2, 2 ) /= gps_edge_stddev_z;
             edge = graph_slam->add_se3_prior_xyz_edge( keyframe->node, xyz, information_matrix );
         }
-        // graph_slam->add_robust_kernel( edge, private_nh->param<std::string>( "gps_edge_robust_kernel", "NONE" ),
-        //                                private_nh->param<double>( "gps_edge_robust_kernel_size", 1.0 ) );
         graph_slam->add_robust_kernel( edge, gps_edge_robust_kernel, gps_edge_robust_kernel_size );
 
         updated = true;

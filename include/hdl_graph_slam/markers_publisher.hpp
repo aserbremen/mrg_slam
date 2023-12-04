@@ -3,8 +3,6 @@
 #ifndef MARKER_PUBLISHER_HPP
 #define MARKER_PUBLISHER_HPP
 
-// #include <ros/ros.h>
-// #include <std_msgs/ColorRGBA.h>
 #include <hdl_graph_slam/edge.hpp>
 #include <hdl_graph_slam/graph_slam.hpp>
 #include <hdl_graph_slam/keyframe.hpp>
@@ -16,7 +14,6 @@ namespace hdl_graph_slam {
 
 class MarkersPublisher {
 public:
-    // void onInit( ros::NodeHandle &nh, ros::NodeHandle &mt_nh, ros::NodeHandle &private_nh );
     void onInit( rclcpp::Node::SharedPtr _node );
 
     void publish( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes, const std::vector<Edge::Ptr> &edges,
@@ -25,15 +22,11 @@ public:
 
     void publishMarginals( const std::vector<KeyFrame::Ptr> &keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX> &marginals );
 
-    // uint32_t getNumSubscribers() const { return markers_pub.getNumSubscribers(); }
-    // uint32_t getNumMarginalsSubscribers() const { return markers_marginals_pub.getNumSubscribers(); }
     size_t getNumSubscribers() const { return markers_pub->get_subscription_count(); }
     size_t getNumMarginalsSubscribers() const { return markers_marginals_pub->get_subscription_count(); }
 
 
 private:
-    // ros::Publisher markers_pub;
-    // ros::Publisher markers_marginals_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_node_names_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_marginals_pub;

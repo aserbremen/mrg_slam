@@ -1,41 +1,29 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <pcl_conversions/pcl_conversions.h>  //
-
-#include <hdl_graph_slam/ros_utils.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
-#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
-// #include <hdl_graph_slam/FloorCoeffs.h>
-// #include <nodelet/nodelet.h>
-// #include <ros/ros.h>
-// #include <ros/time.h>
-// #include <sensor_msgs/PointCloud2.h>
-// #include <std_msgs/Time.h>
-// #include <pcl_ros/point_cloud.h>
-// #include <pluginlib/class_list_macros.h>  // deprecated
 #include <pcl/common/transforms.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl_conversions/pcl_conversions.h>  //
 
 #include <boost/optional.hpp>
+#include <hdl_graph_slam/ros_utils.hpp>
 #include <iostream>
 #include <memory>
 #include <pcl/filters/impl/plane_clipper3D.hpp>
 #include <pcl/search/impl/search.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 
 namespace hdl_graph_slam {
 
-// class FloorDetectionComponent : public nodelet::Nodelet {
 class FloorDetectionComponent : public rclcpp::Node {
 public:
     typedef pcl::PointXYZI PointT;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    // FloorDetectionComponent() {}
-    // For ROS2 components it is necessary to pass rclcpp::NodeOptions
     FloorDetectionComponent( const rclcpp::NodeOptions&            options,
                              const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
         Node( "floor_detection_component", options )
@@ -98,48 +86,13 @@ private:
         points_topic         = this->get_parameter( "points_topic" ).as_string();
     }
 
-    // /**
-    //  * @brief callback for point clouds
-    //  * @param cloud_msg  point cloud msg
-    //  */
-    // void cloud_callback( const sensor_msgs::PointCloud2ConstPtr& cloud_msg )
-    // {
-    //     pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-    //     pcl::fromROSMsg( *cloud_msg, *cloud );
-
-    //     if( cloud->empty() ) {
-    //         return;
-    //     }
-
-    //     // floor detection
-    //     boost::optional<Eigen::Vector4f> floor = detect( cloud );
-
-    //     // publish the detected floor coefficients
-    //     hdl_graph_slam::FloorCoeffs coeffs;
-    //     coeffs.header = cloud_msg->header;
-    //     if( floor ) {
-    //         coeffs.coeffs.resize( 4 );
-    //         for( int i = 0; i < 4; i++ ) {
-    //             coeffs.coeffs[i] = ( *floor )[i];
-    //         }
-    //     }
-
-    //     floor_pub.publish( coeffs );
-
-    //     // for offline estimation
-    //     std_msgs::HeaderPtr read_until( new std_msgs::Header() );
-    //     read_until->frame_id = points_topic;
-    //     read_until->stamp    = cloud_msg->header.stamp + ros::Duration( 1, 0 );
-    //     read_until_pub.publish( read_until );
-
-    //     read_until->frame_id = "/filtered_points";
-    //     read_until_pub.publish( read_until );
-    // }
-
+    /**
+     * @brief callback for point clouds
+     * @param cloud_msg  point cloud msg
+     */
     void cloud_callback( const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg )
     {
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-        // TODO: use PointCloud2 messages instead? Verfiy this
         pcl::fromROSMsg( *cloud_msg, *cloud );
 
         if( cloud->empty() ) {
@@ -194,10 +147,6 @@ private:
 
         pcl::transformPointCloud( *filtered, *filtered, static_cast<Eigen::Matrix4f>( tilt_matrix.inverse() ) );
 
-        // if( floor_filtered_pub.getNumSubscribers() ) {
-        //     filtered->header = cloud->header;
-        //     floor_filtered_pub.publish( *filtered );
-        // }
         if( floor_filtered_pub->get_subscription_count() ) {
             filtered->header = cloud->header;
             sensor_msgs::msg::PointCloud2 filtered_ros;
@@ -321,24 +270,17 @@ private:
     }
 
 private:
-    // ros::NodeHandle nh;
-    // ros::NodeHandle private_nh;
-
     // ROS topics
-    // ros::Subscriber points_sub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
 
-    // ros::Publisher floor_pub;
     rclcpp::Publisher<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_points_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_filtered_pub;
 
-    std::string points_topic;
-    // ros::Publisher read_until_pub;
+    std::string                                         points_topic;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr read_until_pub;
 
     // floor detection parameters
-    // see initialize_params() for the details
     double tilt_deg;
     double sensor_height;
     double height_clip_range;
