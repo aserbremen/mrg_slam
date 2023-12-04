@@ -843,10 +843,10 @@ private:
 
         std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
 
-        Eigen::Vector2d own_position          = prev_robot_keyframe->estimate().translation().head( 2 );
-        const auto     &other_robot_name      = slam_pose_msg->robot_name;
-        double          other_accum_dist      = slam_pose_msg->accum_dist;
-        double         &other_last_accum_dist = others_last_accum_dist[other_robot_name];
+        // Eigen::Vector2d own_position          = prev_robot_keyframe->estimate().translation().head( 2 );
+        const auto &other_robot_name      = slam_pose_msg->robot_name;
+        double      other_accum_dist      = slam_pose_msg->accum_dist;
+        double     &other_last_accum_dist = others_last_accum_dist[other_robot_name];
         others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
 
         if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
@@ -861,18 +861,22 @@ private:
         double max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
         if( graph_exchange_mode == CURRENT_PROXIMITY ) {
             Eigen::Vector2d other_position = Eigen::Vector2d( slam_pose_msg->pose.position.x, slam_pose_msg->pose.position.y );
+            Eigen::Vector2d own_position   = prev_robot_keyframe->estimate().translation().head( 2 );
             if( ( own_position - other_position ).squaredNorm() < max_robot_dist_sqr ) {
                 request_graph = true;
             }
         } else if( graph_exchange_mode == PATH_PROXIMITY ) {
-            for( const auto &other_pose : others_slam_poses[other_robot_name] ) {
-                Eigen::Vector2d other_position = Eigen::Vector2d( other_pose.pose.position.x, other_pose.pose.position.y );
-                if( ( own_position - other_position ).squaredNorm() < max_robot_dist_sqr ) {
-                    request_graph = true;
-                    others_slam_poses[other_robot_name].clear();
-                    break;
-                } else {
-                    continue;
+            for( const auto &keyframe : keyframes ) {
+                Eigen::Vector2d own_position = keyframe->estimate().translation().head( 2 );
+                for( const auto &other_pose : others_slam_poses[other_robot_name] ) {
+                    Eigen::Vector2d other_position = Eigen::Vector2d( other_pose.pose.position.x, other_pose.pose.position.y );
+                    if( ( own_position - other_position ).squaredNorm() < max_robot_dist_sqr ) {
+                        request_graph = true;
+                        others_slam_poses[other_robot_name].clear();
+                        break;
+                    } else {
+                        continue;
+                    }
                 }
             }
         }
@@ -924,6 +928,17 @@ private:
             RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << other_robot_name << " successful" );
         }
         auto result = result_future.get();
+        // collect some statistics
+        int graph_bytes = 0;
+        for( const auto &keyframe : result->graph.keyframes ) {
+            graph_bytes += keyframe.cloud.data.size();
+            graph_bytes += 7 * sizeof( double );
+        }
+        for( const auto &edge : result->graph.edges ) {
+            graph_bytes += 7 * sizeof( double );   // relative_pose
+            graph_bytes += 36 * sizeof( double );  // information
+        }
+        received_graph_bytes.push_back( graph_bytes );
         // Fill the graph queue with the received graph
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
         graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
@@ -1190,6 +1205,9 @@ private:
             return;
         }
 
+        // Measure loop closure time
+        auto start = std::chrono::high_resolution_clock::now();
+
         // loop detection
         slam_status_msg.in_loop_closure = true;
         slam_status_publisher->publish( slam_status_msg );
@@ -1209,6 +1227,9 @@ private:
         std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
         new_keyframes.clear();
 
+        auto end = std::chrono::high_resolution_clock::now();
+        loop_closure_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
+
         // move the first node anchor position to the current estimate of the first node pose, so the first node moves freely while trying
         // to stay around the origin. Fixing the first node adaptively with initial positions that are not the identity transform, leads to
         // the fixed node moving at every optimization (not implemented atm)
@@ -1226,7 +1247,10 @@ private:
         slam_status_msg.in_loop_closure = false;
         slam_status_msg.in_optimization = true;
         slam_status_publisher->publish( slam_status_msg );
+        start = std::chrono::high_resolution_clock::now();
         graph_slam->optimize( g2o_solver_num_iterations, this->get_parameter( "g2o_verbose" ).as_bool() );
+        end = std::chrono::high_resolution_clock::now();
+        graph_optimization_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
 
         // get transformations between map and robots
         Eigen::Isometry3d               trans = prev_robot_keyframe->node->estimate() * prev_robot_keyframe->odom.inverse();
@@ -1355,6 +1379,52 @@ private:
             std::ofstream zero_utm_ofs( directory + "/zero_utm" );
             zero_utm_ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
+
+        // Write some network statistics
+        std::ofstream network_stats_ofs( directory + "/network_stats.txt" );
+        network_stats_ofs << "received_graph_bytes";
+        for( const auto &bytes : received_graph_bytes ) {
+            network_stats_ofs << " " << bytes;
+        }
+        network_stats_ofs << std::endl;
+        network_stats_ofs << "total_received_bytes " << std::accumulate( received_graph_bytes.begin(), received_graph_bytes.end(), 0 )
+                          << std::endl;
+        network_stats_ofs << "sent_graph_bytes";
+        for( const auto &bytes : sent_graph_bytes ) {
+            network_stats_ofs << " " << bytes;
+        }
+        network_stats_ofs << std::endl;
+        network_stats_ofs << "total_sent_bytes " << std::accumulate( sent_graph_bytes.begin(), sent_graph_bytes.end(), 0 ) << std::endl;
+
+        // Write some timing statistics
+        std::ofstream timing_stats_ofs( directory + "/timing_stats.txt" );
+        timing_stats_ofs << "loop_closure_times_us";
+        for( const auto &time : loop_closure_times ) {
+            timing_stats_ofs << " " << time;
+        }
+        timing_stats_ofs << std::endl;
+        timing_stats_ofs << "total_loop_closure_time_us " << std::accumulate( loop_closure_times.begin(), loop_closure_times.end(), 0 )
+                         << std::endl;
+        timing_stats_ofs << "loop_closure_candidates";
+        for( const auto &candidates : loop_detector->loop_candidates_sizes ) {
+            timing_stats_ofs << " " << candidates;
+        }
+        timing_stats_ofs << std::endl;
+        int total_candidates = std::accumulate( loop_detector->loop_candidates_sizes.begin(), loop_detector->loop_candidates_sizes.end(),
+                                                0 );
+        timing_stats_ofs << "average_candidates " << total_candidates / loop_detector->loop_candidates_sizes.size() << std::endl;
+        double total_loop_detector_times = std::accumulate( loop_detector->loop_detection_times.begin(),
+                                                            loop_detector->loop_detection_times.end(), 0 );
+        timing_stats_ofs << "average_time_per_candidate_us " << total_loop_detector_times / total_candidates << std::endl;
+
+        timing_stats_ofs << "graph_optimization_times_us";
+        for( const auto &time : graph_optimization_times ) {
+            timing_stats_ofs << " " << time;
+        }
+        timing_stats_ofs << std::endl;
+        timing_stats_ofs << "total_graph_optimization_time_us "
+                         << std::accumulate( graph_optimization_times.begin(), graph_optimization_times.end(), 0 ) << std::endl;
+
 
         res->success = true;
     }
@@ -1493,6 +1563,19 @@ private:
             }
             res->graph.edges.resize( added_edges );
 
+            // Collect some network statistics
+            int graph_bytes = 0;
+            for( const auto &keyframe : res->graph.keyframes ) {
+                graph_bytes += keyframe.cloud.data.size();
+                graph_bytes += 7 * 8;  // 7 doubles for the pose
+            }
+            for( const auto &edge : res->graph.edges ) {
+                graph_bytes += 7 * 8;   // 7 doubles for the relative pose
+                graph_bytes += 36 * 8;  // 36 doubles for the information matrix
+            }
+            sent_graph_bytes.push_back( graph_bytes );
+
+
             RCLCPP_INFO_STREAM( this->get_logger(),
                                 "Published graph with " << added_keyframes << " keyframes and " << added_edges << " edges" );
         }
@@ -1548,6 +1631,19 @@ private:
             auto result = result_future.get();
             // Fill the graph queue with the received graph
             std::lock_guard<std::mutex> lock( graph_queue_mutex );
+
+            // Get the syze of megabytes of the received graph
+            int graph_size_bytes = 0;
+            for( const auto &keyframe : result->graph.keyframes ) {
+                graph_size_bytes += keyframe.cloud.data.size();
+                graph_size_bytes += 7 * 8;  // 7 doubles for the pose
+            }
+            for( const auto &edge : result->graph.edges ) {
+                graph_size_bytes += 7 * 8;   // 7 doubles for the relative pose
+                graph_size_bytes += 36 * 8;  // 36 doubles for the information matrix
+            }
+            received_graph_bytes.push_back( graph_size_bytes );
+
             graph_queue.push_back( std::make_shared<vamex_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
 
             others_last_accum_dist[robot_name] = others_slam_poses[robot_name].back().accum_dist;
@@ -1783,6 +1879,12 @@ private:
     double              graph_update_interval;
     double              map_cloud_update_interval;
 
+
+    // Statistics
+    std::vector<int64_t> loop_closure_times;
+    std::vector<int64_t> graph_optimization_times;
+    std::vector<int>     received_graph_bytes;
+    std::vector<int>     sent_graph_bytes;
 
     // graph slam
     // all the below members must be accessed after locking main_thread_mutex

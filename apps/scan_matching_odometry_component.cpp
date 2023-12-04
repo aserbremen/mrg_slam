@@ -134,6 +134,7 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+        this->declare_parameter<std::string>( "result_dir", "" );
 
         // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
         if( !param_vec.empty() ) {
@@ -158,6 +159,10 @@ private:
 
         enable_robot_odometry_init_guess = this->get_parameter( "enable_robot_odometry_init_guess" ).as_bool();
         enable_imu_frontend              = this->get_parameter( "enable_imu_frontend" ).as_bool();
+        result_dir                       = this->get_parameter( "result_dir" ).as_string();
+        if( result_dir.back() == '/' ) {
+            result_dir.pop_back();
+        }
     }
 
     /**
@@ -166,6 +171,7 @@ private:
      */
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg )
     {
+        static int counter = 0;
         if( !rclcpp::ok() ) {
             return;
         }
@@ -173,7 +179,19 @@ private:
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
         pcl::fromROSMsg( *cloud_msg, *cloud );
 
-        Eigen::Matrix4f pose = matching( cloud_msg->header.stamp, cloud );
+        auto            start = std::chrono::high_resolution_clock::now();
+        Eigen::Matrix4f pose  = matching( cloud_msg->header.stamp, cloud );
+        auto            end   = std::chrono::high_resolution_clock::now();
+        registration_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
+        cloud_sizes.push_back( cloud->size() );
+        if( counter % 100 == 0 ) {
+            std::cout << "Average scan matching odom registration time: "
+                      << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 ) / registration_times.size() << "us"
+                      << std::endl;
+            std::cout << "average scan matching odom cloud size: "
+                      << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 ) / cloud_sizes.size() << std::endl;
+        }
+
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
 
         // In offline estimation, point clouds until the published time will be supplied
@@ -184,6 +202,8 @@ private:
 
         read_until.frame_id = "/filtered_points";
         read_until_pub->publish( read_until );
+
+        counter++;
     }
 
     void msf_pose_callback( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg, bool after_update )
@@ -477,6 +497,10 @@ private:
 
     std::string downsample_method;
     double      downsample_resolution;
+
+    std::string         result_dir;
+    std::vector<double> registration_times;
+    std::vector<int>    cloud_sizes;
 };
 
 }  // namespace hdl_graph_slam

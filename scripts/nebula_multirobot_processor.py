@@ -95,11 +95,11 @@ class NebulaProcessor(Node):
 
         self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
         self.robot_names = self.declare_parameter(
-            'robot_names', ['husky1', 'husky2', 'husky3', 'husky4']).get_parameter_value().string_array_value
+            'robot_names', ['husky1', 'husky4', 'spot1']).get_parameter_value().string_array_value
         self.dataset_base_dir = self.declare_parameter('dataset_base_dir', '/data/datasets/nebula').get_parameter_value().string_value
         self.result_dir = self.declare_parameter(
-            'result_dir', '/data/Seafile/data/slam_results/nebula/results/').get_parameter_value().string_value
-        self.dataset = self.declare_parameter('dataset', 'ku').get_parameter_value().string_value
+            'result_dir', '/data/slam_results/nebula').get_parameter_value().string_value
+        self.dataset = self.declare_parameter('dataset', 'urban').get_parameter_value().string_value
         self.eval_name = self.declare_parameter('eval_name', 'path_proximity').get_parameter_value().string_value
         # -1.0 means use the resolution from the map, otherwise voxel size in meters
         self.map_resolution = self.declare_parameter('map_resolution', -1.0).get_parameter_value().double_value
@@ -199,7 +199,8 @@ class NebulaProcessor(Node):
         if not os.path.exists(self.robots[robot_name]['result_dir']):
             os.makedirs(self.robots[robot_name]['result_dir'])
         else:
-            self.get_logger().warn('Result directory {} already exists, overwriting'.format(self.robots[robot_name]['result_dir']))
+            self.get_logger().error('Result directory {} already exists, overwriting'.format(self.robots[robot_name]['result_dir']))
+            exit(1)
 
         # Start the slam process with the correct starting position
         start_pos = self.robots[robot_name]['odometry_msgs'][0][1].pose.pose.position

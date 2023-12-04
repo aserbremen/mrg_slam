@@ -44,10 +44,18 @@ LoopDetector::detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::de
 {
     std::vector<Loop::Ptr> detected_loops;
     for( const auto& new_keyframe : new_keyframes ) {
+        auto start = std::chrono::high_resolution_clock::now();
+
         auto candidates = find_candidates( keyframes, new_keyframe );
         auto loop       = matching( candidates, new_keyframe, graph_slam, keyframes, edges );
         if( loop ) {
             detected_loops.push_back( loop );
+        }
+
+        if( candidates.size() > 0 ) {
+            loop_candidates_sizes.push_back( candidates.size() );
+            auto end = std::chrono::high_resolution_clock::now();
+            loop_detection_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
         }
     }
 

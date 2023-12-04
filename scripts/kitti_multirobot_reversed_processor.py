@@ -41,6 +41,7 @@ class Task(Enum):
     SAVE_MAP = 3
     SHUTDOWN_SLAM = 4
     SHUTDOWN_NODE = 5
+    NOTHING = 6
 
 
 def pykitti_ts_to_ros_ts(pykitti_ts: datetime.timedelta) -> Time:
@@ -68,7 +69,7 @@ class KittiMultiRobotProcessor(Node):
         self.sequence = self.declare_parameter('sequence', 0).value
         self.sequence = str(self.sequence).zfill(2)
         self.rate = self.declare_parameter('rate', 10.0).value
-        self.result_dir = self.declare_parameter('result_dir', '/data/Seafile/data/slam_results/kitti/sequences/').value
+        self.result_dir = self.declare_parameter('result_dir', '/data/slam_results/kitti/').value
         self.playback_length = self.declare_parameter('playback_length', -1).value
         self.eval_name = self.declare_parameter('eval_name', 'reversed').value
         # -1 means all points of the pointcloud, otherwise voxel size
@@ -77,7 +78,7 @@ class KittiMultiRobotProcessor(Node):
         self.end_time = self.declare_parameter('end_time', float('inf')).value
         self.proceed = self.declare_parameter('proceed', True).value
 
-        self.add_noise = self.declare_parameter('add_noise', False).get_parameter_value().bool_value
+        self.add_noise = self.declare_parameter('add_noise', True).get_parameter_value().bool_value
         self.start_position_noise = self.declare_parameter('start_position_noise', 0.2).get_parameter_value().double_value  # in meters
         self.start_rotation_noise = self.declare_parameter('start_rotation_noise', 2.0).get_parameter_value().double_value  # in degrees
 
@@ -220,6 +221,8 @@ class KittiMultiRobotProcessor(Node):
                 self.shutdown_slam()
             elif self.task == Task.SHUTDOWN_NODE:
                 self.shutdown_node()
+            elif self.task == Task.NOTHING:
+                pass
             else:
                 print('Unknown task')
         else:
@@ -322,7 +325,8 @@ class KittiMultiRobotProcessor(Node):
             print('Finished playback and closed progress bar')
             # publish a clock message with an offset to trigger optimization once more
             self.publish_clock_msg(Time(sec=ros_pcl.header.stamp.sec + 2, nanosec=ros_pcl.header.stamp.nanosec))
-            self.task = Task.WAIT_SLAM_DONE
+            # self.task = Task.WAIT_SLAM_DONE
+            self.task = Task.NOTHING
 
     def perform_async_service_call(self, client, request, robot_name):
         while client.wait_for_service(timeout_sec=1.0) is False:

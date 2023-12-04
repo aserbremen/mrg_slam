@@ -22,7 +22,7 @@ lidar2base_publisher:
 # Transform between map and robotmap for the multi robot scenario
 map2robotmap_publisher:
   ros__parameters:
-    enable_map2robotmap_publisher: true
+    enable_map2robotmap_publisher: false
     map2robotmap_x: 0.0
     map2robotmap_y: 0.0
     map2robotmap_z: 0.0
@@ -44,7 +44,7 @@ prefiltering_component:
 
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
-    downsample_resolution: 0.2
+    downsample_resolution: 0.4
     
     # Outlier removal method options [STATISTICAL, RADIUS, NONE]
     outlier_removal_method: "RADIUS" 

@@ -26,7 +26,6 @@ from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import numpy as np
 import pykitti
-import pcl
 # Some information on the odometry dataset
 # dataset.calib:      Calibration data are accessible as a named tuple
 # dataset.timestamps: Timestamps are parsed into a list of timedelta objects
@@ -282,7 +281,7 @@ class KittiMultiRobotProcessor(Node):
                 forward_ts = line[0]
                 # associate the index of the forward timestamp with the reversed timestamp
                 idx = np.argmin(np.abs(timestamps - float(forward_ts)))
-                print(f'forward ts {forward_ts} idx {idx} reversed ts {reversed_timestamps[idx]}')
+                # print(f'forward ts {forward_ts} idx {idx} reversed ts {reversed_timestamps[idx]}')
                 line[0] = str(reversed_timestamps[idx])
                 line = ' '.join(line)
                 corrected_lines.append(line)
@@ -290,6 +289,7 @@ class KittiMultiRobotProcessor(Node):
         exit(0)
 
     def publish_pcl_and_path(self):
+        import pcl
         if self.pcl_filename == '':
             print(f'Provide pcl_filename for publishing {self.pcl_filename}')
             exit(0)

@@ -95,8 +95,12 @@ private:
 
     std::unordered_map<std::string, double> last_loop_edge_accum_distance_map;
 
-
     pcl::Registration<PointT, PointT>::Ptr registration;
+
+public:
+    // Statistics
+    std::vector<int64_t> loop_detection_times;
+    std::vector<int>     loop_candidates_sizes;
 };
 
 }  // namespace hdl_graph_slam
