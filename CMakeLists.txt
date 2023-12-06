@@ -54,7 +54,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components)
 find_package(rcutils REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(vamex_slam_msgs REQUIRED)
+find_package(mrg_slam_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -113,7 +113,7 @@ ament_target_dependencies(floor_detection_component
   geometry_msgs
   sensor_msgs
   nav_msgs
-  vamex_slam_msgs
+  mrg_slam_msgs
   ndt_omp
   fast_gicp
 )
@@ -154,7 +154,7 @@ ament_target_dependencies(scan_matching_odometry_component
   geometry_msgs
   sensor_msgs
   nav_msgs
-  vamex_slam_msgs
+  mrg_slam_msgs
   ndt_omp
   fast_gicp
 )
@@ -258,7 +258,7 @@ ament_target_dependencies(mrg_slam_component
   nav_msgs
   geographic_msgs
   visualization_msgs
-  vamex_slam_msgs
+  mrg_slam_msgs
   fast_gicp
   ndt_omp
 )

@@ -22,8 +22,8 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py.point_cloud2 import read_points
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import TransformStamped
-from vamex_slam_msgs.msg import SlamStatus
-from vamex_slam_msgs.srv import DumpGraph, SaveMap
+from mrg_slam_msgs.msg import SlamStatus
+from mrg_slam_msgs.srv import DumpGraph, SaveMap
 
 import numpy as np
 import math

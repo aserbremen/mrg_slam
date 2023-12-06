@@ -28,7 +28,7 @@
   <depend>nav_msgs</depend>
   <depend>geographic_msgs</depend>
   <depend>visualization_msgs</depend>
-  <depend>vamex_slam_msgs</depend>
+  <depend>mrg_slam_msgs</depend>
   <!-- ROS2 python dependencies -->
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>rclpy</depend>
@@ -38,7 +38,7 @@
   <exec_depend condition="$ROS_PYTHON_VERSION == 2">python-progressbar</exec_depend>
   <exec_depend condition="$ROS_PYTHON_VERSION == 3">python3-progressbar</exec_depend>
 
-  <export>
+  <export> 
     <build_type>ament_cmake</build_type>
   </export>
 </package>

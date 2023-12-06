@@ -19,7 +19,7 @@ from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from geometry_msgs.msg import Pose, PoseStamped
 from nav_msgs.msg import Path
-from vamex_slam_msgs.srv import DumpGraph, SaveMap
+from mrg_slam_msgs.srv import DumpGraph, SaveMap
 from visualization_msgs.msg import MarkerArray, Marker
 
 from scipy.spatial.transform import Rotation as R

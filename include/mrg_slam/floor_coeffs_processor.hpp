@@ -12,7 +12,7 @@
 // ROS2 migration
 #include <builtin_interfaces/msg/time.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
+#include <mrg_slam_msgs/msg/floor_coeffs.hpp>
 
 namespace mrg_slam {
 
@@ -22,7 +22,7 @@ public:
 
     void onInit( rclcpp::Node::SharedPtr _node );
 
-    void floor_coeffs_callback( vamex_slam_msgs::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg );
+    void floor_coeffs_callback( mrg_slam_msgs::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg );
 
     bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
                 const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
@@ -31,13 +31,13 @@ public:
     const g2o::VertexPlane *floor_plane_node() const { return floor_plane_node_ptr; }
 
 private:
-    rclcpp::Subscription<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_sub;
+    rclcpp::Subscription<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_sub;
 
     double                                                        floor_edge_stddev;
     std::string                                                   floor_edge_robust_kernel;
     double                                                        floor_edge_robust_kernel_size;
     std::mutex                                                    floor_coeffs_queue_mutex;
-    std::deque<vamex_slam_msgs::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue;
+    std::deque<mrg_slam_msgs::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue;
 
     g2o::VertexPlane *floor_plane_node_ptr;
 };

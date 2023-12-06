@@ -17,8 +17,8 @@ from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
-from vamex_slam_msgs.msg import SlamStatus
-from vamex_slam_msgs.srv import DumpGraph, SaveMap
+from mrg_slam_msgs.msg import SlamStatus
+from mrg_slam_msgs.srv import DumpGraph, SaveMap
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R

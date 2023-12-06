@@ -8,14 +8,14 @@
 #include <pcl_conversions/pcl_conversions.h>  //
 
 #include <boost/optional.hpp>
-#include <mrg_slam/ros_utils.hpp>
 #include <iostream>
 #include <memory>
+#include <mrg_slam/ros_utils.hpp>
+#include <mrg_slam_msgs/msg/floor_coeffs.hpp>
 #include <pcl/filters/impl/plane_clipper3D.hpp>
 #include <pcl/search/impl/search.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 
 namespace mrg_slam {
 
@@ -36,7 +36,7 @@ public:
                                                                                std::bind( &FloorDetectionComponent::cloud_callback, this,
                                                                                           std::placeholders::_1 ) );
 
-        floor_pub = this->create_publisher<vamex_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub = this->create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
         read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
         floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
@@ -103,7 +103,7 @@ private:
         boost::optional<Eigen::Vector4f> floor = detect( cloud );
 
         // publish the detected floor coefficients
-        vamex_slam_msgs::msg::FloorCoeffs coeffs;
+        mrg_slam_msgs::msg::FloorCoeffs coeffs;
         coeffs.header = cloud_msg->header;
         if( floor ) {
             coeffs.coeffs.resize( 4 );
@@ -273,9 +273,9 @@ private:
     // ROS topics
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
 
-    rclcpp::Publisher<vamex_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_points_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr     floor_filtered_pub;
+    rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_points_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_filtered_pub;
 
     std::string                                         points_topic;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr read_until_pub;
