@@ -13,14 +13,14 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <hdl_graph_slam/ros_utils.hpp>
+#include <mrg_slam/ros_utils.hpp>
 #include <pcl_ros/transforms.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <string>
 
-namespace hdl_graph_slam {
+namespace mrg_slam {
 
 class PrefilteringComponent : public rclcpp::Node {
 public:
@@ -334,10 +334,10 @@ private:
     pcl::Filter<PointT>::Ptr outlier_removal_filter;
 };
 
-}  // namespace hdl_graph_slam
+}  // namespace mrg_slam
 
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.
 #include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE( hdl_graph_slam::PrefilteringComponent )
+RCLCPP_COMPONENTS_REGISTER_NODE( mrg_slam::PrefilteringComponent )

@@ -118,7 +118,7 @@ floor_detection_component:
     # remappings are handled in the python respective launch file
 
 # HDL graph slam component parameters
-hdl_graph_slam_component:
+mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
     own_name: "husky1"

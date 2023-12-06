@@ -83,7 +83,7 @@ class KittiMultiRobotProcessor(Node):
         self.gt_path = Path()
         self.gt_path.header.frame_id = 'map'
 
-        slam_status_topic = '/' + self.robot_name + '/hdl_graph_slam/slam_status'
+        slam_status_topic = '/' + self.robot_name + '/mrg_slam/slam_status'
         self.slam_status_sub = self.create_subscription(
             SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
         self.slam_status = SlamStatus()  # type: SlamStatus
@@ -98,9 +98,9 @@ class KittiMultiRobotProcessor(Node):
         self.velo_gt_poses = np.array([pose @ np.linalg.inv(self.velo_gt_poses[0]) for pose in self.velo_gt_poses])
 
         self.dump_service_client = self.create_client(
-            DumpGraph, '/' + self.robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
+            DumpGraph, '/' + self.robot_name + '/mrg_slam/dump', callback_group=self.reentrant_callback_group)
         self.save_map_client = self.create_client(
-            SaveMap, '/' + self.robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
+            SaveMap, '/' + self.robot_name + '/mrg_slam/save_map', callback_group=self.reentrant_callback_group)
 
         self.slam_process = None  # type: subprocess.Popen
         self.progress_bar = None  # type: tqdm
@@ -112,7 +112,7 @@ class KittiMultiRobotProcessor(Node):
         if not os.path.exists(os.path.join(self.result_dir, self.sequence)):
             os.makedirs(os.path.join(self.result_dir, self.sequence))
         # Start the slam node in a subprocess
-        slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py',
+        slam_cmd = ['ros2', 'launch', 'mrg_slam', 'hdl_multi_robot_graph_slam.launch.py',
                     'mode_namespace:=' + self.robot_name, 'config:=' + self.slam_config]
         with open(os.path.join(self.result_dir, self.sequence, 'slam.log'), mode='w') as slam_log:
             self.slam_process = subprocess.Popen(slam_cmd, stdout=slam_log, stderr=slam_log)

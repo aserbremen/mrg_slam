@@ -8,7 +8,7 @@
 #include <pcl_conversions/pcl_conversions.h>  //
 
 #include <boost/optional.hpp>
-#include <hdl_graph_slam/ros_utils.hpp>
+#include <mrg_slam/ros_utils.hpp>
 #include <iostream>
 #include <memory>
 #include <pcl/filters/impl/plane_clipper3D.hpp>
@@ -17,7 +17,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <vamex_slam_msgs/msg/floor_coeffs.hpp>
 
-namespace hdl_graph_slam {
+namespace mrg_slam {
 
 class FloorDetectionComponent : public rclcpp::Node {
 public:
@@ -292,11 +292,11 @@ private:
     double normal_filter_thresh;
 };
 
-}  // namespace hdl_graph_slam
+}  // namespace mrg_slam
 
 
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.
 #include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE( hdl_graph_slam::FloorDetectionComponent )
+RCLCPP_COMPONENTS_REGISTER_NODE( mrg_slam::FloorDetectionComponent )

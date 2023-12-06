@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 cmake_minimum_required(VERSION 3.5)
-project(hdl_graph_slam)
+project(mrg_slam)
 
 # Can we use C++17 in indigo?
 add_definitions(-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2 -DNDEBUG)
@@ -48,16 +48,293 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-sign
 # Enable debug flags (use if you want to debug in gdb)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -Wall -Wuninitialized -fno-omit-frame-pointer")
 
-# Find ROS version!
-find_package(catkin QUIET COMPONENTS roscpp)
-find_package(ament_cmake QUIET)
-if (catkin_FOUND)
-  message(STATUS "ROS *1* version found, building ROS1.cmake")
-  include(ROS1.cmake)
-elseif (ament_cmake_FOUND)
-  message(STATUS "ROS *2* version found, building ROS2.cmake")
-  include(ROS2.cmake)
-else ()
-  message(STATUS "No ROS versions found, trying to build ROS1.cmake")
-  include(ROS1.cmake)
+# Find necessary ROS2 packages
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components)
+find_package(rcutils REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(vamex_slam_msgs REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(geodesy REQUIRED)
+find_package(nmea_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(geographic_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(interactive_markers REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(ndt_omp REQUIRED)
+find_package(fast_gicp REQUIRED)
+# ROS2 python depencencies
+find_package(ament_cmake_python REQUIRED)
+find_package(rclpy REQUIRED)
+
+if (ament_cmake_FOUND)
+  add_definitions(-DROS_AVAILABLE=2)
+endif ()
+
+###########
+## Build ##
+###########
+# create ament index resource which references the libraries in the binary dir
+# TODO what is this actually for?
+set(node_plugins "")
+
+# Include local mrg_slam headers
+include_directories(include)
+include_directories(
+  ${PCL_INCLUDE_DIRS}
+)
+
+###############################
+## Floor Detection Component ##
+###############################
+add_library(floor_detection_component SHARED
+  apps/floor_detection_component.cpp
+  src/mrg_slam/registrations.cpp
+)
+# Link non ament packages
+target_link_libraries(floor_detection_component
+  ${PCL_LIBRARIES}
+)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(floor_detection_component
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+  vamex_slam_msgs
+  ndt_omp
+  fast_gicp
+)
+# Make the component depend on custom messages in its own package.
+# rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# Register the component as part of mrg_slam (project) ComponentManager
+rclcpp_components_register_nodes(floor_detection_component "mrg_slam::FloorDetectionComponent")
+set(node_plugins "{node_plugins}mrg_slam::FloorDetectionComponent;$<TARGET_FILE:floor_detection_component>\n")
+
+# Install the floor_detection_component (libfloor_detection_component.so) in workspace install folder
+install(
+  TARGETS floor_detection_component
+  EXPORT floor_detection_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+######################################
+## Scan Matching Odometry Component ##
+######################################
+add_library(scan_matching_odometry_component SHARED
+  apps/scan_matching_odometry_component.cpp
+  src/mrg_slam/registrations.cpp
+)
+# Link non ament packages
+target_link_libraries(scan_matching_odometry_component
+  ${PCL_LIBRARIES}
+)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(scan_matching_odometry_component
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+  vamex_slam_msgs
+  ndt_omp
+  fast_gicp
+)
+# Register the component as part of mrg_slam (project) ComponentManager
+rclcpp_components_register_nodes(scan_matching_odometry_component "mrg_slam::ScanMatchingOdometryComponent")
+set(node_plugins "{node_plugins}mrg_slam::ScanMatchingOdometryComponent;$<TARGET_FILE:scan_matching_odometry_component>\n")
+
+# Install the scan_matching_odometry_component (scan_matching_odometry_component.so) in workspace install folder
+install(
+  TARGETS scan_matching_odometry_component
+  EXPORT scan_matching_odometry_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+############################
+## Prefiltering Component ##
+############################
+add_library(prefiltering_component SHARED
+  apps/prefiltering_component.cpp
+)
+# Link non ament packages
+target_link_libraries(prefiltering_component
+  ${PCL_LIBRARIES}
+)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(prefiltering_component
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+  ndt_omp
+  fast_gicp
+)
+# Register the component as part of mrg_slam (project) ComponentManager
+rclcpp_components_register_nodes(prefiltering_component "mrg_slam::PrefilteringComponent")
+set(node_plugins "{node_plugins}mrg_slam::PrefilteringComponent;$<TARGET_FILE:prefiltering_component>\n")
+
+# Install the prefiltering_component (prefiltering_component.so) in workspace install folder
+install(
+  TARGETS prefiltering_component
+  EXPORT prefiltering_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+##############################
+## HDL Graph Slam Component ##
+##############################
+add_library(mrg_slam_component SHARED
+  apps/mrg_slam_component.cpp
+  src/mrg_slam/graph_slam.cpp
+  src/mrg_slam/edge.cpp
+  src/mrg_slam/loop_detector.cpp
+  src/mrg_slam/keyframe.cpp
+  src/mrg_slam/keyframe_updater.cpp
+  src/mrg_slam/map_cloud_generator.cpp
+  src/mrg_slam/registrations.cpp
+  src/mrg_slam/information_matrix_calculator.cpp
+  src/mrg_slam/imu_processor.cpp
+  src/mrg_slam/gps_processor.cpp
+  src/mrg_slam/floor_coeffs_processor.cpp
+  src/mrg_slam/markers_publisher.cpp
+  src/g2o/robust_kernel_io.cpp
+)
+# Link non ament packages
+target_link_libraries(mrg_slam_component
+  ${PCL_LIBRARIES}
+  ${G2O_TYPES_DATA}
+  ${G2O_CORE_LIBRARY}
+  ${G2O_STUFF_LIBRARY}
+  ${G2O_SOLVER_PCG}
+  ${G2O_SOLVER_CSPARSE}   # be aware of that CSPARSE is released under LGPL
+  ${G2O_SOLVER_CHOLMOD}   # be aware of that cholmod is released under GPL
+  ${G2O_TYPES_SLAM3D}
+  ${G2O_TYPES_SLAM3D_ADDONS}
+)
+# Handles includes and linking of other ament targets
+ament_target_dependencies(mrg_slam_component
+  rclcpp
+  rclcpp_components
+  pcl_ros
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  tf2_eigen
+  geodesy
+  message_filters
+  builtin_interfaces
+  std_msgs
+  nmea_msgs
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  geographic_msgs
+  visualization_msgs
+  vamex_slam_msgs
+  fast_gicp
+  ndt_omp
+)
+# Register the component as part of mrg_slam (project) ComponentManager
+rclcpp_components_register_nodes(mrg_slam_component "mrg_slam::MrgSlamComponent")
+set(node_plugins "{node_plugins}mrg_slam::MrgSlamComponent;$<TARGET_FILE:mrg_slam_component>\n")
+# Install the mrg_slam_component (mrg_slam_component.so) in workspace install folder
+install(
+  TARGETS mrg_slam_component
+  EXPORT mrg_slam_component
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+#######################################
+## HDL Graph Slam manual composition ##
+#######################################
+option(BUILD_MANUAL_COMPOSITION "Build manual composition of components" OFF)
+# only build if debugging mrg_slam is needed, saving compile time
+if (BUILD_MANUAL_COMPOSITION)
+  add_executable(mrg_slam_manual_composition
+    apps/mrg_slam_manual_composition.cpp
+  )
+  target_link_libraries(mrg_slam_manual_composition
+    prefiltering_component
+    scan_matching_odometry_component
+    floor_detection_component
+    mrg_slam_component
+  )
+  ament_target_dependencies(mrg_slam_manual_composition
+    rclcpp
+  )
+  install(TARGETS mrg_slam_manual_composition
+    DESTINATION lib/${PROJECT_NAME}
+  )
 endif()
+
+# Here we can export all downstream dependencies and include directories
+# TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
+# TODO export package for downstream packages to use see: https://discourse.ros.org/t/ament-best-practice-for-sharing-libraries/3602/2
+# also see: https://answers.ros.org/question/331277/ament_cmake-confused-about-ament_export_dependencies-and-ament_export_interfaces/
+# ament_export_libraries(${PROJECT_NAME})
+# ament_export_interfaces(${PROJECT_NAME})
+ament_export_dependencies(rosidl_default_runtime)
+ament_export_include_directories(include)
+
+# Install necessary directories to install folder
+install(DIRECTORY 
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install ROS2 launch files
+install(PROGRAMS
+  launch/mrg_slam.launch.py
+  launch/mrg_slam_debug.launch.py
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
+# Install ROS2 rviz configs
+install(FILES
+  rviz/mrg_slam.rviz
+  rviz/nebula.rviz
+  DESTINATION share/${PROJECT_NAME}/rviz
+)
+
+# Install python nodes
+ament_python_install_package(scripts)
+
+# Install python nodes
+install(PROGRAMS
+  scripts/map2odom_publisher_ros2.py
+  scripts/clock_publisher_ros2.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Finally create a pacakge
+ament_package()

@@ -89,7 +89,7 @@ class KittiMultiRobotProcessor(Node):
             point_cloud_topic = robot_name + '/velodyne_points'
             self.robots[robot_name]['point_cloud_pub'] = self.create_publisher(
                 PointCloud2, point_cloud_topic, 10, callback_group=self.reentrant_callback_group)
-            slam_status_topic = '/' + robot_name + '/hdl_graph_slam/slam_status'
+            slam_status_topic = '/' + robot_name + '/mrg_slam/slam_status'
             self.robots[robot_name]['slam_status_sub'] = self.create_subscription(
                 SlamStatus, slam_status_topic, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['slam_status'] = SlamStatus()  # type: SlamStatus
@@ -102,9 +102,9 @@ class KittiMultiRobotProcessor(Node):
             print(
                 f'Robot {robot_name} min timestamp: {self.robots[robot_name]["min_timestamp"]} max timestamp: {self.robots[robot_name]["max_timestamp"]}')
             self.robots[robot_name]['dump_service_client'] = self.create_client(
-                DumpGraph, '/' + robot_name + '/hdl_graph_slam/dump', callback_group=self.reentrant_callback_group)
+                DumpGraph, '/' + robot_name + '/mrg_slam/dump', callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['save_map_client'] = self.create_client(
-                SaveMap, '/' + robot_name + '/hdl_graph_slam/save_map', callback_group=self.reentrant_callback_group)
+                SaveMap, '/' + robot_name + '/mrg_slam/save_map', callback_group=self.reentrant_callback_group)
             self.robots[robot_name]['slam_process'] = None  # type: subprocess.Popen
             self.robots[robot_name]['dump_graph_requested'] = False
             self.robots[robot_name]['dump_graph_done'] = False
@@ -162,7 +162,7 @@ class KittiMultiRobotProcessor(Node):
             yaw, pitch, roll = rotation.as_euler('ZYX', degrees=False)
             print(f'x: {x}, y: {y}, z: {z}, roll: {np.rad2deg(roll)}, pitch: {np.rad2deg(pitch)}, yaw: {np.rad2deg(yaw)}')
             slam_cmd = [
-                'ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
+                'ros2', 'launch', 'mrg_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' +
                 self.slam_config,
                 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z),
                 'roll:=' + str(roll), 'pitch:=' + str(pitch), 'yaw:=' + str(yaw)]

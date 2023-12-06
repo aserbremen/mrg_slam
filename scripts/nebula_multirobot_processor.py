@@ -170,7 +170,7 @@ class NebulaProcessor(Node):
         print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
 
         # Create the subscription to the slam status in order to stop playback when the algorithms are optimizing or loop closing
-        slam_status_topic_name = '/' + robot_name + '/hdl_graph_slam/slam_status'
+        slam_status_topic_name = '/' + robot_name + '/mrg_slam/slam_status'
         self.robots[robot_name]['slam_status_subscription'] = self.create_subscription(
             SlamStatus, slam_status_topic_name, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
         self.robots[robot_name]['slam_status'] = SlamStatus()
@@ -184,12 +184,12 @@ class NebulaProcessor(Node):
         self.robots[robot_name]['slam_process'] = None  # type: subprocess.Popen
         self.robots[robot_name]['dump_graph_requested'] = False
         self.robots[robot_name]['dump_graph_done'] = False
-        dump_graph_topic = '/' + robot_name + '/hdl_graph_slam/dump'
+        dump_graph_topic = '/' + robot_name + '/mrg_slam/dump'
         self.robots[robot_name]['dump_service_client'] = self.create_client(
             DumpGraph, dump_graph_topic, callback_group=self.reentrant_callback_group)
         self.robots[robot_name]['save_map_requested'] = False
         self.robots[robot_name]['save_map_done'] = False
-        save_map_topic = '/' + robot_name + '/hdl_graph_slam/save_map'
+        save_map_topic = '/' + robot_name + '/mrg_slam/save_map'
         self.robots[robot_name]['save_map_client'] = self.create_client(
             SaveMap, save_map_topic, callback_group=self.reentrant_callback_group)
         result_dir_str = os.path.join(self.result_dir, self.dataset, ''.join(
@@ -230,8 +230,8 @@ class NebulaProcessor(Node):
         yaw, pitch, roll = rot.as_euler('ZYX', degrees=False)
         print(f'Starting slam process for robot {robot_name} at position ({x}, {y}, {z}) \
                 with orientation ({np.rad2deg( roll)}, {np.rad2deg(pitch)}, {np.rad2deg(yaw)})')
-        slam_cmd = ['ros2', 'launch', 'hdl_graph_slam', 'hdl_multi_robot_graph_slam.launch.py', 'model_namespace:=' + robot_name,
-                    'config:=' + self.slam_config, 'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z), 'yaw:=' + str(yaw), 'pitch:=' + str(pitch), 'roll:=' + str(roll)]
+        slam_cmd = ['ros2', 'launch', 'mrg_slam', 'mrg_slam.launch.py', 'model_namespace:=' + robot_name, 'config:=' + self.slam_config,
+                    'x:=' + str(x), 'y:=' + str(y), 'z:=' + str(z), 'yaw:=' + str(yaw), 'pitch:=' + str(pitch), 'roll:=' + str(roll)]
 
         with open(os.path.join(self.robots[robot_name]['result_dir'], 'slam.log'), 'w') as f:
             self.robots[robot_name]['slam_process'] = subprocess.Popen(slam_cmd, stdout=f, stderr=f)

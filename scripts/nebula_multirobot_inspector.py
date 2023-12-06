@@ -146,7 +146,7 @@ class RosbagProcessor(Node):
         print('Setting up Odometry publisher on topic {}'.format(odometry_topic_name))
 
         # Create the subscription to the slam status in order to stop playback when the algorithms are optimizing or loop closing
-        slam_status_topic_name = '/' + robot_name + '/hdl_graph_slam/slam_status'
+        slam_status_topic_name = '/' + robot_name + '/mrg_slam/slam_status'
         self.data_dict[robot_name]['slam_status_subscription'] = self.create_subscription(
             SlamStatus, slam_status_topic_name, self.slam_status_callback, 10, callback_group=self.reentrant_callback_group)
         self.data_dict[robot_name]['slam_status'] = SlamStatus()
@@ -519,6 +519,47 @@ class RosbagProcessor(Node):
         print('Number of inter-robot loops: {}'.format(edges_dict['inter-robot-loops']))
         for edge_name in edges_dict['edges_names']:
             print('Edge name: {}'.format(edge_name))
+
+        keyframes_folder = os.path.join(self.result_folder, 'keyframes')
+        keyframe_files = [f for f in os.listdir(keyframes_folder) if f.endswith('.txt')]
+        keyframe_files = sorted(keyframe_files)
+        keyframes_dict = {}
+        keyframes_dict['robot_name'] = edges_dict['robot_name']
+        keyframes_dict['stamps_poses'] = []
+        for keyframe_file in keyframe_files:
+            with open(os.path.join(keyframes_folder, keyframe_file), mode='r') as f:
+                lines = f.readlines()
+                # get the the line containint 'robot_name'
+                robot_name_str = [line for line in lines if line.startswith('robot_name')]
+                robot_name = robot_name_str[0].split(' ')[1]
+                if keyframes_dict['robot_name'] not in robot_name:
+                    continue
+
+                # get the line starting with 'stamp'
+                stamp_str = next((line for line in lines if line.startswith('stamp')), None)
+                stamp_secs = stamp_str.split(' ')[1]
+                stamp_nanosecs = stamp_str.split(' ')[2]
+                # remove new line character if present
+                if stamp_nanosecs.endswith('\n'):
+                    stamp_nanosecs = stamp_nanosecs[:-1]
+                stamp_nanosecs = stamp_nanosecs.zfill(9)
+                stamp = float(stamp_secs + '.' + stamp_nanosecs)
+
+                # get the line starting with 'estimate'
+                estimate_str = next((line for line in lines if line.startswith('estimate')), None)
+                estimate_lines = lines[lines.index(estimate_str)+1:lines.index(estimate_str)+5]
+                T = np.genfromtxt(estimate_lines)
+                translation = T[:3, 3]
+                rotation = R.from_matrix(T[:3, :3]).as_quat()
+                keyframes_dict['stamps_poses'].append([stamp, translation, rotation])
+
+        traveled_distance = 0
+        for i, (stamp, translation, rotation) in enumerate(keyframes_dict['stamps_poses']):
+            if i == 0:
+                continue
+            prev_translation = keyframes_dict['stamps_poses'][i-1][1]
+            traveled_distance += np.linalg.norm(translation - prev_translation)
+        print('Traveled distance: {:.2f}'.format(traveled_distance))
         exit(0)
 
 

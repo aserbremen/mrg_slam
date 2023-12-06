@@ -8,8 +8,9 @@ from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import Imu
 from rosgraph_msgs.msg import Clock
 
+
 class ClockPublisherRos2(Node):
-    # Use this node to publish the clock from the hdl_graph_slam_400 rosbag (containing imu messages) to the /clock topic.
+    # Use this node to publish the clock from the mrg_slam_400 rosbag (containing imu messages) to the /clock topic.
     def __init__(self):
         super().__init__('clock_publisher_ros2')
         self.declare_parameter("imu_topic", "/imu/data")

@@ -11,16 +11,16 @@
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include <hdl_graph_slam/registrations.hpp>
-#include <hdl_graph_slam/ros_utils.hpp>
 #include <iostream>
 #include <memory>
+#include <mrg_slam/registrations.hpp>
+#include <mrg_slam/ros_utils.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <vamex_slam_msgs/msg/scan_matching_status.hpp>
 
-namespace hdl_graph_slam {
+namespace mrg_slam {
 
 class ScanMatchingOdometryComponent : public rclcpp::Node {
 public:
@@ -503,11 +503,11 @@ private:
     std::vector<int>    cloud_sizes;
 };
 
-}  // namespace hdl_graph_slam
+}  // namespace mrg_slam
 
 
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.
 #include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE( hdl_graph_slam::ScanMatchingOdometryComponent )
+RCLCPP_COMPONENTS_REGISTER_NODE( mrg_slam::ScanMatchingOdometryComponent )
