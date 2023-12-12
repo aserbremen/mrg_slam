@@ -17,9 +17,9 @@ from rclpy.executors import MultiThreadedExecutor
 from rosgraph_msgs.msg import Clock
 from builtin_interfaces.msg import Time
 from sensor_msgs.msg import PointCloud2, PointField
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped, Point
 from nav_msgs.msg import Path
-from mrg_slam_msgs.srv import DumpGraph, SaveMap
+from vamex_slam_msgs.srv import DumpGraph, SaveMap
 from visualization_msgs.msg import MarkerArray, Marker
 
 from scipy.spatial.transform import Rotation as R
@@ -50,6 +50,11 @@ def float_ts_to_ros_ts(float_ts: float) -> Time:
     return ros_ts
 
 
+class Loop(Enum):
+    INTRA_ROBOT = 0
+    INTER_ROBOT = 1
+
+
 class KittiMultiRobotProcessor(Node):
     def __init__(self) -> None:
         super().__init__('kitti_multirobot_processor')
@@ -69,9 +74,19 @@ class KittiMultiRobotProcessor(Node):
         self.pose_file = self.declare_parameter('pose_file', '').value
         self.pose_file2 = self.declare_parameter('pose_file2', '').value
         self.pcl_filename = self.declare_parameter('pcl_filename', '').value
+        self.edges_dir = self.declare_parameter('edges_dir', '').value
+        self.keyframes_dir = self.declare_parameter('keyframes_dir', '').value
         self.pcl_pub = self.create_publisher(PointCloud2, self.robot_name + '/map_points', 10, callback_group=self.reentrant_callback_group)
+        self.markers_pub_intra_loops_spheres = self.create_publisher(
+            Marker, self.robot_name + '/intra_loop_markers_spheres', 10, callback_group=self.reentrant_callback_group)
+        self.markers_pub_inter_loops_spheres = self.create_publisher(
+            Marker, self.robot_name + '/inter_loop_markers_spheres', 10, callback_group=self.reentrant_callback_group)
         self.marker_pub_rob1 = self.create_publisher(Marker, self.robot_name + '/path_markers',
                                                      10, callback_group=self.reentrant_callback_group)
+        self.markers_pub_inter_loops_lines = self.create_publisher(
+            Marker, self.robot_name + '/inter_loop_markers_lines', 10, callback_group=self.reentrant_callback_group)
+        self.markers_pub_intra_loops_lines = self.create_publisher(
+            Marker, self.robot_name + '/intra_loop_markers_lines', 10, callback_group=self.reentrant_callback_group)
         self.marker_pub_rob2 = self.create_publisher(Marker, self.robot_name + '/path_markers2',
                                                      10, callback_group=self.reentrant_callback_group)
 
@@ -162,7 +177,7 @@ class KittiMultiRobotProcessor(Node):
         print(f'total time {self.timestamps[-1] - self.timestamps[0]}')
         print(f'average time between timestamps {(self.timestamps[-1] - self.timestamps[0]) / len(self.timestamps)}')
 
-        # print some speed statistics
+        # prnt some speed statistics
         speeds = []
         prev_pose = None
         prev_ts = None
@@ -315,6 +330,79 @@ class KittiMultiRobotProcessor(Node):
             f_corrected.writelines(corrected_lines)
         exit(0)
 
+    def get_keyframes(self, keyframes_folder):
+        # get all filenames ending with .txt
+        keyframes_filenames = [os.path.join(keyframes_folder, filename)
+                               for filename in os.listdir(keyframes_folder) if filename.endswith('.txt')]
+        keyframes_filenames = sorted(keyframes_filenames)
+        keyframes = {}
+        for keyframe_file in keyframes_filenames:
+            with open(keyframe_file, 'r') as f:
+                lines = f.readlines()
+                # get the line which starts with 'robot_name'
+                robot_name_line = next((line for line in lines if line.startswith('robot_name')), None)
+                robot_name = robot_name_line.split(' ')[1]
+                if robot_name[-1] == '\n':
+                    robot_name = robot_name[:-1]
+                # if robot_name not in keyframes:
+                #     keyframes[robot_name] = {}
+                # get the line that starts with odom_counter and get the number
+                odom_counter_line = next((line for line in lines if line.startswith('odom_counter')), None)
+                odom_counter = int(odom_counter_line.split(' ')[1])
+                # get the line that starts with estimate
+                estimate_line = next((line for line in lines if line.startswith('estimate')), None)
+                # the 4 lines after estimate contain the pose with the format of a 4x4 transformation matrix
+                estimate_lines = lines[lines.index(estimate_line) + 1:lines.index(estimate_line) + 5]
+                mat = np.genfromtxt(estimate_lines)
+                position = mat[0:3, 3]
+                keyframe_name = robot_name + '-' + str(odom_counter)
+                keyframes[keyframe_name] = position
+
+        return keyframes
+
+    def get_edges(self, edges_folder):
+        # get all filenames ending with .txt
+        edges_filenames = [os.path.join(edges_folder, filename)
+                           for filename in os.listdir(edges_folder) if filename.endswith('.txt')]
+        edges_filenames = sorted(edges_filenames)
+        edges = {}
+        for edge_file in edges_filenames:
+            with open(edge_file, 'r') as f:
+                lines = f.readlines()
+                # get the line which starts with 'type'
+                type_line = next((line for line in lines if line.startswith('type')), None)
+                if 'loop' not in type_line:
+                    continue
+                # get the line which starts with 'edge'
+                edge_line = next((line for line in lines if line.startswith('edge')), None)
+                edge = edge_line.split(' ')[1]
+                if edge[-1] == '\n':
+                    edge = edge[:-1]
+                # get the line which starts with to
+                to_line = next((line for line in lines if line.startswith('to')), None)
+                to_keyframe = to_line.split(' ')[1]
+                if to_keyframe[-1] == '\n':
+                    to_keyframe = to_keyframe[:-1]
+                to_robot_name = to_keyframe.split('-')[0]
+                # get the line which starts with from
+                from_line = next((line for line in lines if line.startswith('from')), None)
+                from_keyframe = from_line.split(' ')[1]
+                from_robot_name = from_keyframe.split('-')[0]
+                if from_keyframe[-1] == '\n':
+                    from_keyframe = from_keyframe[:-1]
+                # get the line which starts with 'relative_pose'
+                relative_pose_line = next((line for line in lines if line.startswith('relative_pose')), None)
+                # the 4 lines after relative_pose contain the pose with the format of a 4x4 transformation matrix
+                relative_pose_lines = lines[lines.index(relative_pose_line) + 1:lines.index(relative_pose_line) + 5]
+                mat = np.genfromtxt(relative_pose_lines)
+                if from_robot_name == to_robot_name:
+                    loop_type = Loop.INTRA_ROBOT
+                else:
+                    loop_type = Loop.INTER_ROBOT
+                edges[edge] = [from_keyframe, to_keyframe, mat, loop_type]
+
+        return edges
+
     def publish_pcl_and_path(self):
         import pcl
         if self.pcl_filename == '':
@@ -396,9 +484,102 @@ class KittiMultiRobotProcessor(Node):
         print(f'publishing path with {len(path.poses)} poses on topic {self.robot_name + "/path"}')
         self.path_pub.publish(path)
 
+        # Publish the loop edges as lines between from and to keyframes
+        if self.edges_dir != '':
+            if self.keyframes_dir == '':
+                print(f'Provide keyframes_dir for publishing {self.keyframes_dir}')
+                exit(0)
+            if not os.path.exists(self.keyframes_dir):
+                print(f'No keyframes folder found at {self.keyframes_dir}')
+                exit(0)
+
+            keyframes = self.get_keyframes(self.keyframes_dir)
+            edges = self.get_edges(self.edges_dir)
+
+            # Sphere list
+            sphere_scale = 9.0
+            line_scale = 1.5
+            line_threshold = 5.0  # whether to draw a line between two keyframes or a sphere
+            intra_robot_color = [25/255.0, 255/255.0, 14/255.0]
+            inter_robot_color = [255/255.0, 105/255.0, 180/255.0]
+            intra_robot_loop_sphere_list = Marker()
+            inter_robot_loop_sphere_list = Marker()
+            intra_robot_loop_line_list = Marker()
+            inter_robot_loop_line_list = Marker()
+            intra_robot_loop_sphere_list.header.frame_id = inter_robot_loop_sphere_list.header.frame_id = intra_robot_loop_line_list.header.frame_id = inter_robot_loop_line_list.header.frame_id = 'map'
+            intra_robot_loop_sphere_list.header.stamp = inter_robot_loop_sphere_list.header.stamp = intra_robot_loop_line_list.header.stamp = inter_robot_loop_line_list.header.stamp = self.get_clock().now().to_msg()
+            intra_robot_loop_sphere_list.ns = inter_robot_loop_sphere_list.ns = intra_robot_loop_line_list.ns = inter_robot_loop_line_list.ns = 'loop'
+            intra_robot_loop_sphere_list.action = inter_robot_loop_sphere_list.action = intra_robot_loop_line_list.action = inter_robot_loop_line_list.action = Marker.ADD
+            intra_robot_loop_sphere_list.pose.orientation.w = inter_robot_loop_sphere_list.pose.orientation.w = intra_robot_loop_line_list.pose.orientation.w = inter_robot_loop_line_list.pose.orientation.w = 1.0
+            intra_robot_loop_sphere_list.id = inter_robot_loop_sphere_list.id = intra_robot_loop_line_list.id = inter_robot_loop_line_list.id = 0
+            intra_robot_loop_sphere_list.type = inter_robot_loop_sphere_list.type = Marker.SPHERE_LIST
+            intra_robot_loop_line_list.type = inter_robot_loop_line_list.type = Marker.LINE_LIST
+            intra_robot_loop_sphere_list.scale.x = inter_robot_loop_sphere_list.scale.x = sphere_scale
+            intra_robot_loop_sphere_list.scale.y = inter_robot_loop_sphere_list.scale.y = sphere_scale
+            intra_robot_loop_sphere_list.scale.z = inter_robot_loop_sphere_list.scale.z = sphere_scale
+            intra_robot_loop_line_list.scale.x = inter_robot_loop_line_list.scale.x = line_scale
+            intra_robot_loop_line_list.scale.y = inter_robot_loop_line_list.scale.y = line_scale
+            intra_robot_loop_line_list.scale.z = inter_robot_loop_line_list.scale.z = line_scale
+            intra_robot_loop_sphere_list.color.a = inter_robot_loop_sphere_list.color.a = 1.0
+            intra_robot_loop_sphere_list.color.r = intra_robot_loop_line_list.color.r = intra_robot_color[0]
+            intra_robot_loop_sphere_list.color.g = intra_robot_loop_line_list.color.g = intra_robot_color[1]
+            intra_robot_loop_sphere_list.color.b = intra_robot_loop_line_list.color.b = intra_robot_color[2]
+            intra_robot_loop_line_list.color.a = inter_robot_loop_line_list.color.a = 1.0
+            inter_robot_loop_sphere_list.color.r = inter_robot_loop_line_list.color.r = inter_robot_color[0]
+            inter_robot_loop_sphere_list.color.g = inter_robot_loop_line_list.color.g = inter_robot_color[1]
+            inter_robot_loop_sphere_list.color.b = inter_robot_loop_line_list.color.b = inter_robot_color[2]
+
+            for from_keyframe, to_keyframe, relative_pose, loop_type in edges.values():
+                from_keyframe_position = keyframes[from_keyframe]
+                to_keyframe_position = keyframes[to_keyframe]
+                distance = np.linalg.norm(to_keyframe_position - from_keyframe_position)
+                if distance < line_threshold:
+                    # draw a sphere
+                    unit_vector_to_minus_from = (
+                        to_keyframe_position - from_keyframe_position) / np.linalg.norm(to_keyframe_position - from_keyframe_position)
+                    middle_position = from_keyframe_position + distance / 2.0 * unit_vector_to_minus_from
+                    middle_point = Point()
+                    middle_point.x = middle_position[0]
+                    middle_point.y = middle_position[1]
+                    middle_point.z = middle_position[2] + 1.0
+                    if loop_type == Loop.INTER_ROBOT:
+                        inter_robot_loop_sphere_list.points.append(middle_point)
+                    elif loop_type == Loop.INTRA_ROBOT:
+                        intra_robot_loop_sphere_list.points.append(middle_point)
+                else:
+                    from_point = Point()
+                    from_point.x = from_keyframe_position[0]
+                    from_point.y = from_keyframe_position[1]
+                    from_point.z = from_keyframe_position[2] + 1.0
+                    to_point = Point()
+                    to_point.x = to_keyframe_position[0]
+                    to_point.y = to_keyframe_position[1]
+                    to_point.z = to_keyframe_position[2] + 1.0
+                    if loop_type == Loop.INTER_ROBOT:
+                        inter_robot_loop_line_list.points.append(from_point)
+                        inter_robot_loop_line_list.points.append(to_point)
+                    elif loop_type == Loop.INTRA_ROBOT:
+                        intra_robot_loop_line_list.points.append(from_point)
+                        intra_robot_loop_line_list.points.append(to_point)
+
+            print(
+                f'publishing loop edges as lines with {len(intra_robot_loop_line_list.points)} points on topic {self.robot_name + "/loop_markers"}')
+            self.markers_pub_intra_loops_lines.publish(intra_robot_loop_line_list)
+            print(
+                f'publishing loop edges as lines with {len(inter_robot_loop_line_list.points)} points on topic {self.robot_name + "/loop_markers"}')
+            self.markers_pub_inter_loops_lines.publish(inter_robot_loop_line_list)
+            print(
+                f'publishing loop edges as spheres with {len(intra_robot_loop_sphere_list.points)} points on topic {self.robot_name + "/loop_markers"}')
+            self.markers_pub_intra_loops_spheres.publish(intra_robot_loop_sphere_list)
+            print(
+                f'publishing loop edges as spheres with {len(inter_robot_loop_sphere_list.points)} points on topic {self.robot_name + "/loop_markers"}')
+            self.markers_pub_inter_loops_spheres.publish(inter_robot_loop_sphere_list)
+
         # publish the path as markers but as a line
+        line_alpha = 0.6
+        line_thickness = 2.0
         line_list = Marker()
-        color = [1.0, 0.0, 0.0]  # green
+        color = [1.0, 0.0, 0.0]  # red
         line_list.header.frame_id = 'map'
         line_list.header.stamp = self.get_clock().now().to_msg()
         line_list.ns = 'path'
@@ -406,8 +587,8 @@ class KittiMultiRobotProcessor(Node):
         line_list.pose.orientation.w = 1.0
         line_list.id = 0
         line_list.type = Marker.LINE_STRIP
-        line_list.scale.x = 2.5
-        line_list.color.a = 1.0
+        line_list.scale.x = line_thickness
+        line_list.color.a = line_alpha
         line_list.color.r = color[0]
         line_list.color.g = color[1]
         line_list.color.b = color[2]
@@ -438,8 +619,8 @@ class KittiMultiRobotProcessor(Node):
         line_list2.pose.orientation.w = 1.0
         line_list2.id = 0
         line_list2.type = Marker.LINE_STRIP
-        line_list2.scale.x = 2.5
-        line_list2.color.a = 1.0
+        line_list2.scale.x = line_thickness + + 0.25
+        line_list2.color.a = line_alpha + 0.2
         line_list2.color.r = color2[0]
         line_list2.color.g = color2[1]
         line_list2.color.b = color2[2]
