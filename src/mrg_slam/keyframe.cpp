@@ -64,6 +64,7 @@ KeyFrame::save( const std::string& result_path )
     std::ofstream ofs( result_path + ".txt" );
 
     ofs << "robot_name " << robot_name << "\n";
+    ofs << "readable_id " << readable_id << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
