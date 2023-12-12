@@ -162,6 +162,33 @@ class KittiMultiRobotProcessor(Node):
         print(f'total time {self.timestamps[-1] - self.timestamps[0]}')
         print(f'average time between timestamps {(self.timestamps[-1] - self.timestamps[0]) / len(self.timestamps)}')
 
+        # print some speed statistics
+        speeds = []
+        prev_pose = None
+        prev_ts = None
+        for ts, pose in zip(self.timestamps, velo_gt_poses):
+            if prev_pose is None:
+                prev_pose = pose
+                prev_ts = ts
+                continue
+            speeds.append(np.linalg.norm(pose[0:3, 3] - prev_pose[0:3, 3]) / (ts - prev_ts))
+            prev_pose = pose
+            prev_ts = ts
+        print(f'mean speed {np.mean(speeds):.2f} m/s std {np.std(speeds):.2f} m/s')
+        print(f'max speed {np.max(speeds):.2f} m/s, min {np.min(speeds):.2f} m/s')
+        print(f'mean speed {np.mean(speeds) * 3.6:.2f} km/h std {np.std(speeds) * 3.6:.2f} km/h')
+        print(f'max speed {np.max(speeds) * 3.6:.2f} km/h, min {np.min(speeds) * 3.6:.2f} km/h')
+        # print(speeds)
+        # print(self.timestamps)
+        speeds_half_1 = speeds[0:len(speeds) // 2]
+        speeds_half_2 = speeds[len(speeds) // 2:]
+        print(f'mean speed half 1 {np.mean(speeds_half_1):.2f} m/s max {np.max(speeds_half_1):.2f} m/s min {np.min(speeds_half_1):.2f} m/s')
+        print(f'mean speed half 2 {np.mean(speeds_half_2):.2f} m/s max {np.max(speeds_half_2):.2f} m/s min {np.min(speeds_half_2):.2f} m/s')
+        print(
+            f'mean speed half 1 {np.mean(speeds_half_1) * 3.6:.2f} km/h max {np.max(speeds_half_1) * 3.6:.2f} km/h min {np.min(speeds_half_1) * 3.6:.2f} km/h')
+        print(
+            f'mean speed half 2 {np.mean(speeds_half_2) * 3.6:.2f} km/h max {np.max(speeds_half_2) * 3.6:.2f} km/h min {np.min(speeds_half_2) * 3.6:.2f} km/h')
+
         step = 1000
         small_step = 10
         velo = self.dataset.get_velo(0)

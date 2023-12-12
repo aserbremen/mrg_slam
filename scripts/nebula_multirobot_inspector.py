@@ -79,7 +79,7 @@ class RosbagProcessor(Node):
         super().__init__('rosbag_processor')
 
         self.playback_rate = self.declare_parameter('rate', 1.0).get_parameter_value().double_value
-        self.robot_names = self.declare_parameter('robot_names', ['husky1']).get_parameter_value().string_array_value
+        self.robot_names = self.declare_parameter('robot_names', ['husky1', 'husky4', 'spot1']).get_parameter_value().string_array_value
         self.dataset_dir = self.declare_parameter('dataset_dir', '').get_parameter_value().string_value
         self.enable_floor_detetction = self.declare_parameter('enable_floor_detetction', False).get_parameter_value().bool_value
         # For analysing pointcloud data
@@ -354,11 +354,18 @@ class RosbagProcessor(Node):
             odom_xyz = np.array([[odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
                                 for stamp, odom in np.take(self.data_dict[robot_name]['odometry_msgs'], keyframe_odom_indices, axis=0)])
             odom_xyz_norms = np.linalg.norm(odom_xyz[1:, :] - odom_xyz[:-1, :], axis=1)
+            odom_stamps = np.array([stamp for stamp, odom in np.take(
+                self.data_dict[robot_name]['odometry_msgs'],
+                keyframe_odom_indices, axis=0)])
+            speeds = odom_xyz_norms / (odom_stamps[1:] - odom_stamps[:-1])
             print('Average keyframe distance {:.2f}'.format(np.mean(odom_xyz_norms)))
             print('Max keyframe distance {:.2f}'.format(np.max(odom_xyz_norms)))
             print('Min keyframe distance {:.2f}'.format(np.min(odom_xyz_norms)))
             # calculate the traveled distance
             print('Total traveled distance {:.2f}'.format(np.sum(odom_xyz_norms)))
+            print(f'Max speed {np.max(speeds)}, mean speed {np.mean(speeds)}, min speed {np.min(speeds)}')
+
+            print(f'Max speed {np.max(speeds)}, mean speed {np.mean(speeds)}, min speed {np.min(speeds)}')
 
             # Need w, x, y, z for pyquaternion
             odom_orientations = np.array([
@@ -560,6 +567,27 @@ class RosbagProcessor(Node):
             prev_translation = keyframes_dict['stamps_poses'][i-1][1]
             traveled_distance += np.linalg.norm(translation - prev_translation)
         print('Traveled distance: {:.2f}'.format(traveled_distance))
+        print('Number of keyframes: {}'.format(len(keyframes_dict['stamps_poses'])))
+        print('Duration of the trajectory: {:.2f}s {}:{} min:sec'.format(
+            keyframes_dict['stamps_poses'][-1][0] - keyframes_dict['stamps_poses'][0][0],
+            int((keyframes_dict['stamps_poses'][-1][0] - keyframes_dict['stamps_poses'][0][0]) / 60),
+            int((keyframes_dict['stamps_poses'][-1][0] - keyframes_dict['stamps_poses'][0][0]) % 60)))
+
+        # speed information
+        speeds = []
+        prev_stamp = None
+        prev_translation = None
+        for stamp, translation, _ in keyframes_dict['stamps_poses']:
+            if prev_stamp is None:
+                prev_stamp = stamp
+                prev_translation = translation
+                continue
+            speeds.append(np.linalg.norm(translation - prev_translation) / (stamp - prev_stamp))
+            prev_stamp = stamp
+            prev_translation = translation
+        print('Max speed: {:.2f} m/s, mean speed {:.2f} m/s'.format(np.max(speeds), np.mean(speeds)))
+        print('Max speed {:.2f} km/h, mean speed {:.2f} km/h'.format(np.max(speeds) * 3.6, np.mean(speeds) * 3.6))
+
         exit(0)
 
 
