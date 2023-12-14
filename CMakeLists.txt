@@ -333,6 +333,7 @@ ament_python_install_package(scripts)
 install(PROGRAMS
   scripts/map2odom_publisher_ros2.py
   scripts/clock_publisher_ros2.py
+  scripts/odom_to_file.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

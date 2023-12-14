@@ -67,7 +67,7 @@ def print_remappings(remappings, header=None):
 
 def launch_setup(context, *args, **kwargs):
 
-    config_file = 'hdl_multi_robot_graph_slam.yaml'
+    config_file = 'mrg_slam.yaml'
     if 'config' in context.launch_configurations:
         config_file = context.launch_configurations['config']
     config_file_path = os.path.join(
@@ -251,7 +251,7 @@ def launch_setup(context, *args, **kwargs):
         remaps = [('/odom', '/' + model_namespace + '/scan_matching_odometry/odom')]
         odom_to_file_node = Node(
             name='scan_matching_odom_to_file',
-            package='vamex_sim_rovers',
+            package='mrg_slam',
             executable='odom_to_file.py',
             namespace=model_namespace,
             remappings=remaps,
