@@ -9,6 +9,8 @@ import rclpy
 from rclpy import Node
 from sensor_msgs.msg import Imu, PointCloud2
 
+# reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
+
 NORM_G = 9.81
 # matrix positions error state
 P = 0
@@ -32,7 +34,7 @@ def skew(v: np.ndarray):
     )
 
 
-def error_quaternion_derivative(q: np.ndarray):
+def error_quaternion_derivative(q: np.ndarray):  # Equation 281
     result = np.ndarray((4, 3))
     qx = q[0]
     qy = q[1]
@@ -44,6 +46,7 @@ def error_quaternion_derivative(q: np.ndarray):
         [qz, qw, -qx],
         [-qy, qx, qw],
     ])
+    return result
 
 
 class State(object):
@@ -175,3 +178,10 @@ class LidarImuOdometryNode(Node):
     def lidar_callback(self, msg: PointCloud2):
         # get the current nominal state as an input for point cloud matching
         x = self.error_state.x
+
+
+if __name__ == '__main__':
+    rclpy.init()
+    node = LidarImuOdometryNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
