@@ -25,6 +25,8 @@ W_N_I = 3
 A_W_I = 6
 W_W_I = 9
 
+I = np.identity(3)
+
 
 def skew(v: np.ndarray):
     return np.ndarray(
@@ -73,6 +75,7 @@ class ErrorState(object):
         self.DOF = 18
         self.Pe = np.zeros((self.DOF, self.DOF))  # error covariance
         self.time = 0.0
+        self.dt = None
 
         # measured accel and turn rate
         self.a_m = np.zeros((3, 1))
@@ -94,7 +97,6 @@ class ErrorState(object):
     def predict_error_state_jacobian(self):
         Fx = np.identity((self.DOF, self.DOF), dtype=float)  # type: np.ndarray
         # position
-        I = np.identity(3)
         # Fx[P:P+3, P:P+3] = I
         Fx[P:P+3, V:V+3] = I * self.dt
         # velocity
@@ -103,7 +105,7 @@ class ErrorState(object):
         Fx[V:V+3, A_B:A_B+3] = - self.x.q * self.dt
         Fx[G:G+3, G:G+3] = I * self.dt
         # rot part
-        Fx[Q:Q+3, Q:Q+3] = R.from_rotvec((self.w_m - self.x.w_b) * self.dt).as_matrix()
+        Fx[Q:Q+3, Q:Q+3] = R.from_rotvec((self.w_m - self.x.w_b) * self.dt).as_matrix().transpose()
         Fx[W_B:W_B+3, W_B:W_B+3] = - I * self.dt
         # accel bias part
         # Fx[A_B:A_B+3, A_B:A_B+3] = I
@@ -135,14 +137,10 @@ class ErrorState(object):
     def set_turn_rate(self, turn_rate):
         self.w_m = turn_rate
 
-    def set_time(self, t):
+    def set_time(self, time):
         if self.time is not None:
-            self.dt = t - self.time
-            self.predict(self.dt)
-        self.time = t
-
-    # a_m measured acceleration
-    # w_m measured turn rate
+            self.dt = time - self.time
+        self.time = time
 
     def predict(self):
         # dt = self.time - t
@@ -154,7 +152,7 @@ class ErrorState(object):
         # self.w_b_e += w_i  # w_i random impulse
         # self.ge += 0
 
-        Fx = self.predict_error_state_jacobian(self.a_m, self.w_m, self.dt)  # type: np.ndarray
+        Fx = self.predict_error_state_jacobian()  # type: np.ndarray
         Fi = self.predict_noise_jacobian()  # type: np.ndarray
         self.Pe = Fx @ self.Pe @ Fx.transpose() + Fi @ self.Q @ Fi.transpose()
 
@@ -171,9 +169,10 @@ class LidarImuOdometryNode(Node):
         self.error_state = ErrorState()
 
     def imu_callback(self, msg: Imu):
-        self.error_state.set_time(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
         self.error_state.set_acc(np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z]))
         self.error_state.set_turn_rate(np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z]))
+        self.error_state.set_time(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+        self.error_state.predict()
 
     def lidar_callback(self, msg: PointCloud2):
         # get the current nominal state as an input for point cloud matching
