@@ -7,7 +7,9 @@ from scipy.spatial.transform import Rotation as R
 from enum import Enum
 
 # import pcl python
-# import pcl
+import pcl
+from pcl import PointCloud
+import sensor_msgs.msg._point_cloud2 as pc2
 
 import rclpy
 from rclpy.node import Node
@@ -56,6 +58,24 @@ def skew(v: np.ndarray):
         [vflat[2], 0.0, -vflat[0]],
         [-vflat[1], vflat[0], 0.0]
     ])
+
+
+def pointcloud2_to_array(cloud_msg, only_xyz=True):
+    tuples = []
+    for field in cloud_msg.fields:
+        if field.datatype == 7:
+            data_type = np.float32
+        elif field.datatype == 4:
+            data_type = np.uint16
+        tuples.append((field.name, data_type))
+    dtype = np.dtype(list(tuples))
+    points = np.frombuffer(cloud_msg.data, dtype=dtype)
+    # skip nans
+    points = points[~np.isnan(points['x'])]
+    points = np.array(points.tolist(), dtype=np.float32)
+    if only_xyz:
+        points = points[:, 0:3]
+    return points
 
 
 def error_quaternion_derivative(q: np.ndarray):  # Equation 281
@@ -279,6 +299,8 @@ class LidarImuOdometryNode(Node):
             self.gt_path_pub = self.create_publisher(Path, self.gt_path_topic, 10)
             self.gt_path = Path()
 
+        self.last_pcl2 = None
+
     def imu_callback(self, msg: Imu):
         a_m = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         a_m = a_m[:, np.newaxis]
@@ -289,13 +311,74 @@ class LidarImuOdometryNode(Node):
         self.error_state_kalman_filter.set_turn_rate(w_m)
         self.error_state_kalman_filter.set_time(float_ts)
         self.error_state_kalman_filter.predict()
-        # print(f'prediction_counter: {self.prediction_counter}')
-        # self.prediction_counter += 1
+        self.publish_all()
+
+    def publish_all(self):
         self.publish_pose()
         self.publish_odometry()
         self.publish_tf()
         self.publish_estimate_path()
         self.publish_gt_path()
+
+    def voxel_grid_filter_point_cloud(self, cloud: pcl.PointCloud):
+        vg = cloud.make_voxel_grid_filter()
+        vg.set_leaf_size(0.2, 0.2, 0.2)
+        cloud = vg.filter()
+        return cloud
+
+    def lidar_callback(self, msg: PointCloud2):
+        # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
+        if self.last_pcl2 is None:
+            self.last_pcl2 = msg
+            self.target = pcl.PointCloud()
+            points = pointcloud2_to_array(msg)  # points have all the fields, we only need XYZ
+            print(f'points.shape: {points.shape}')
+            print(f'points: {points}')
+            print(f'points.dtype: {points.dtype}')
+            # TODO verify pointcloud2_to_array works correctly
+            self.target.from_array(points)
+            self.target = self.voxel_grid_filter_point_cloud(self.target)
+
+            # save the current estimated pose as the initial pose for the point cloud matching, prediction will be done
+            float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+            self.error_state_kalman_filter.set_time(float_ts)
+            self.error_state_kalman_filter.predict()
+            self.last_nominal_state = self.error_state_kalman_filter.nominal_state
+            return
+        # predict the error state kalmann filter
+        float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+        self.error_state_kalman_filter.set_time(float_ts)
+        self.error_state_kalman_filter.predict()
+
+        # calculate the alignment between last and current point cloud
+        self.source = pcl.PointCloud()
+        self.source.from_array(np.asarray(msg.data, dtype=np.float32).reshape(-1, 3))
+        self.source = self.voxel_grid_filter_point_cloud(self.source)
+
+        # GICP TODO
+        gicp = self.source.make_GeneralizedIterativeClosestPoint()
+
+        init_guess = np.identity(4)
+        last_pos = self.last_nominal_state.p
+        last_rot = self.last_nominal_state.q.as_matrix()
+        current_pos = self.error_state_kalman_filter.nominal_state.p
+        current_rot = self.error_state_kalman_filter.nominal_state.q.as_matrix()
+        init_guess[0:3, 0:3] = last_rot.transpose() @ current_rot
+        init_guess[0:3, 3] = last_rot.transpose() @ (current_pos - last_pos).flatten()
+
+        converged, transf, estimate, fitness = gicp.gicp(
+            self.source, self.target, max_iter=100, correspondence_randomness=20,
+            initial_guess=self.last_nominal_state.q.as_matrix())
+        print(f'converged: {converged}')
+        print(f'estimate: {estimate}')
+        print(f'fitness: {fitness}')
+        print(f'init_guess:\n{init_guess}')
+        print(f'transf:\n{transf}')
+
+        # update the nominal state with the estimated transformation TODO
+
+        self.last_pcl2 = msg
+        self.last_nominal_state = self.error_state_kalman_filter.nominal_state
 
     def publish_pose(self):
         pose = PoseStamped()
@@ -377,10 +460,6 @@ class LidarImuOdometryNode(Node):
         self.path_pub.publish(self.path)
 
     def publish_tf(self):
-        pass
-
-    def lidar_callback(self, msg: PointCloud2):
-        # get the current nominal state as an input for point cloud matching
         pass
 
 
