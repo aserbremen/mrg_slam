@@ -22,8 +22,8 @@ from tf2_ros import TransformBroadcaster, TransformStamped
 # reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
 
 NORM_G = 9.81
-ACC_START_STD = 0.15
-TURN_RATE_START_STD = 0.125  # degrees
+ACC_START_STD = 0.15  # only needed when acceleration is part of the state
+TURN_RATE_START_STD = 0.125  # degrees, only needed when turn rate is part of the state
 # matrix positions error state
 P = 0
 V = 3
@@ -60,15 +60,35 @@ def skew(v: np.ndarray):
     ])
 
 
-def pointcloud2_to_array(cloud_msg, only_xyz=True):
+def pointcloud2_to_array(cloud_msg: PointCloud2, only_xyz=True):
     tuples = []
+    dtype = []
+    print(f'cloud_msg.fields: {cloud_msg.fields}')
+    offset = 0
+    # use the offset and datatype from cloud_msg.fields to construct the numpy data type
     for field in cloud_msg.fields:
         if field.datatype == 7:
             data_type = np.float32
         elif field.datatype == 4:
             data_type = np.uint16
-        tuples.append((field.name, data_type))
-    dtype = np.dtype(list(tuples))
+        else:
+            raise Exception(f'unsupported datatype {field.datatype}')
+        if field.offset > offset:
+            dtype.append(('', np.uint8, field.offset - offset))
+            offset = field.offset
+        dtype.append((field.name, data_type))
+        offset += np.dtype(data_type).itemsize
+
+        # tuples.append((field.name, data_type))
+    print(f'buffer size {len(cloud_msg.data)}')
+    print(f'dtype: {dtype}')
+    print(f'buffer size % dtype.itemsize: {len(cloud_msg.data) % np.dtype(dtype).itemsize}')
+    # print(f'tuples size: {len(tuples)}')
+    # print(f'tuples: {tuples}')
+    # print(f'buffer size / tuples size: {len(cloud_msg.data) / len(tuples)}')
+    # print(f'msg.data size: {cloud_msg.data}')
+    # print(f'dense {cloud_msg.is_dense}')
+    # dtype = np.dtype(list(tuples))
     points = np.frombuffer(cloud_msg.data, dtype=dtype)
     # skip nans
     points = points[~np.isnan(points['x'])]
@@ -256,6 +276,8 @@ class ErrorStateKalmanFilter:
         self.w_m = turn_rate
 
     def set_time(self, time):
+        if time < self.time:
+            print(f'Warning: time {time} is smaller than previous time {self.time} by {self.time - time} seconds')
         if self.time is not None:
             self.dt = time - self.time
         self.time = time
@@ -288,22 +310,50 @@ class LidarImuOdometryNode(Node):
         self.path_topic = self.declare_parameter('path_topic', 'path').value
         self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
+        # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion
+        self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 0.0]).value
+        self.imu_extrinsic_quat = R.from_quat(self.imu_extrinsic_quat)
+
         self.gt_path_file = self.declare_parameter('gt_path_file', '').value
         if os.path.exists(self.gt_path_file):
-            with open(self.gt_path_file, 'r') as f:
-                self.gt_mat = np.genfromtxt(self.gt_path_file)
-                # set z-axis to zero
-                self.gt_mat[:, 3] = 0
+            self.gt_delimiter = self.declare_parameter('gt_delimiter', ' ').value
+            self.gt_quat_format = self.declare_parameter('gt_format', 'qxqyqzqw').value
             self.publish_ground_truth = True
             self.gt_path_topic = self.declare_parameter('gt_path_topic', 'gt_path').value
             self.gt_path_pub = self.create_publisher(Path, self.gt_path_topic, 10)
             self.gt_path = Path()
+            with open(self.gt_path_file, 'r') as f:
+                # usual format is timestamp x y z qx qy qz qw
+                # in kimera multi dataset the format is timestamp x y z qw qx qy qz
+                print(f'loading gt_path_file {self.gt_path_file}')
+                if self.gt_delimiter == 'comma':
+                    self.gt_delimiter = ','
+                gt_mat = np.genfromtxt(self.gt_path_file, delimiter=self.gt_delimiter)
+                if self.gt_quat_format == 'qwqxqyqz':
+                    print(f'fixing quaternion format for gt_path_file {self.gt_path_file}')
+                    gt_mat = gt_mat[:, [0, 1, 2, 3, 7, 4, 5, 6]]
+                # transform into origin at first pose
+                first_pos = gt_mat[0, 1:4]
+                first_quat = R.from_quat(gt_mat[0, 4:8])
+                first_rot_mat_inv = first_quat.as_matrix().transpose()
+                for row in gt_mat:
+                    old_pos = row[1:4]
+                    old_rot_mat = R.from_quat(row[4:8]).as_matrix()
+                    transformed_pos = first_rot_mat_inv @ (old_pos - first_pos)
+                    transformed_rot_mat = first_rot_mat_inv @ old_rot_mat
+                    row[1:4] = transformed_pos
+                    row[4:8] = R.from_matrix(transformed_rot_mat).as_quat()
 
         self.last_pcl2 = None
 
     def imu_callback(self, msg: Imu):
+        # the imu data needs to be rotated to the correct frame, I believe it is the following transformation
+        # np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]), but I am not sure TODO
+        # [ 0.5, -0.5, 0.5, -0.5 b] quaternion
         a_m = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         a_m = a_m[:, np.newaxis]
+        a_m = self.imu_extrinsic_quat.as_matrix() @ a_m
+        print(f'a_m: {a_m}')
         w_m = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         w_m = w_m[:, np.newaxis]
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
@@ -368,7 +418,7 @@ class LidarImuOdometryNode(Node):
 
         converged, transf, estimate, fitness = gicp.gicp(
             self.source, self.target, max_iter=100, correspondence_randomness=20,
-            initial_guess=self.last_nominal_state.q.as_matrix())
+            initial_guess=np.identity(4))
         print(f'converged: {converged}')
         print(f'estimate: {estimate}')
         print(f'fitness: {fitness}')
@@ -376,11 +426,11 @@ class LidarImuOdometryNode(Node):
         print(f'transf:\n{transf}')
 
         # update the nominal state with the estimated transformation TODO
-
+        self.target = self.source
         self.last_pcl2 = msg
         self.last_nominal_state = self.error_state_kalman_filter.nominal_state
 
-    def publish_pose(self):
+    def pose_from_state(self):
         pose = PoseStamped()
         pose.header.frame_id = 'map'
         pose.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
@@ -393,22 +443,17 @@ class LidarImuOdometryNode(Node):
         pose.pose.orientation.y = qy
         pose.pose.orientation.z = qz
         pose.pose.orientation.w = qw
-        self.pose_pub.publish(pose)
+        return pose
+
+    def publish_pose(self):
+        self.pose_pub.publish(self.pose_from_state())
 
     def publish_odometry(self):
         odom = Odometry()
         odom.header.frame_id = 'map'
         odom.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
-        x, y, z = self.error_state_kalman_filter.nominal_state.p.flatten()
-        qx, qy, qz, qw = self.error_state_kalman_filter.nominal_state.q.as_quat()
         vx, vy, vz = self.error_state_kalman_filter.nominal_state.v.flatten()
-        odom.pose.pose.position.x = x
-        odom.pose.pose.position.y = y
-        odom.pose.pose.position.z = z
-        odom.pose.pose.orientation.x = qx
-        odom.pose.pose.orientation.y = qy
-        odom.pose.pose.orientation.z = qz
-        odom.pose.pose.orientation.w = qw
+        odom.pose.pose = self.pose_from_state()
         odom.twist.twist.linear.x = vx
         odom.twist.twist.linear.y = vy
         odom.twist.twist.linear.z = vz
@@ -441,22 +486,7 @@ class LidarImuOdometryNode(Node):
         self.gt_path_pub.publish(self.gt_path)
 
     def publish_estimate_path(self):
-        time = self.error_state_kalman_filter.time
-        x, y, z = self.error_state_kalman_filter.nominal_state.p.flatten()
-        qx, qy, qz, qw = self.error_state_kalman_filter.nominal_state.q.as_quat()
-        pose = PoseStamped()
-        pose.header.frame_id = 'map'
-        pose.header.stamp = float_ts_to_ros_stamp(time)
-        pose.pose.position.x = x
-        pose.pose.position.y = y
-        pose.pose.position.z = z
-        pose.pose.orientation.x = qx
-        pose.pose.orientation.y = qy
-        pose.pose.orientation.z = qz
-        pose.pose.orientation.w = qw
-
-        self.path.poses.append(pose)
-
+        self.path.poses.append(self.pose_from_state())
         self.path_pub.publish(self.path)
 
     def publish_tf(self):
