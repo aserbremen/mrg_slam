@@ -6,6 +6,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from enum import Enum
 
+import ros2_numpy as rnp
+
 # import pcl python
 import pcl
 from pcl import PointCloud
@@ -18,7 +20,7 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import Imu, PointCloud2
 from tf2_ros import TransformBroadcaster, TransformStamped
-
+from enum import Enum
 # reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
 
 NORM_G = 9.81
@@ -61,38 +63,8 @@ def skew(v: np.ndarray):
 
 
 def pointcloud2_to_array(cloud_msg: PointCloud2, only_xyz=True):
-    tuples = []
-    dtype = []
-    print(f'cloud_msg.fields: {cloud_msg.fields}')
-    offset = 0
-    # use the offset and datatype from cloud_msg.fields to construct the numpy data type
-    for field in cloud_msg.fields:
-        if field.datatype == 7:
-            data_type = np.float32
-        elif field.datatype == 4:
-            data_type = np.uint16
-        else:
-            raise Exception(f'unsupported datatype {field.datatype}')
-        if field.offset > offset:
-            dtype.append(('', np.uint8, field.offset - offset))
-            offset = field.offset
-        dtype.append((field.name, data_type))
-        offset += np.dtype(data_type).itemsize
-
-        # tuples.append((field.name, data_type))
-    print(f'buffer size {len(cloud_msg.data)}')
-    print(f'dtype: {dtype}')
-    print(f'buffer size % dtype.itemsize: {len(cloud_msg.data) % np.dtype(dtype).itemsize}')
-    # print(f'tuples size: {len(tuples)}')
-    # print(f'tuples: {tuples}')
-    # print(f'buffer size / tuples size: {len(cloud_msg.data) / len(tuples)}')
-    # print(f'msg.data size: {cloud_msg.data}')
-    # print(f'dense {cloud_msg.is_dense}')
-    # dtype = np.dtype(list(tuples))
-    points = np.frombuffer(cloud_msg.data, dtype=dtype)
-    # skip nans
-    points = points[~np.isnan(points['x'])]
-    points = np.array(points.tolist(), dtype=np.float32)
+    points = rnp.numpify(cloud_msg)
+    points = np.array([list(point) for point in points]).reshape(-1, 5)
     if only_xyz:
         points = points[:, 0:3]
     return points
@@ -276,11 +248,12 @@ class ErrorStateKalmanFilter:
         self.w_m = turn_rate
 
     def set_time(self, time):
-        if time < self.time:
-            print(f'Warning: time {time} is smaller than previous time {self.time} by {self.time - time} seconds')
         if self.time is not None:
             self.dt = time - self.time
         self.time = time
+
+        if time < self.time and self.time is not None:
+            print(f'Warning: time {time} is smaller than previous time {self.time} by {self.time - time} seconds')
 
     def update(self, z: np.ndarray):
         pass
@@ -381,11 +354,7 @@ class LidarImuOdometryNode(Node):
         if self.last_pcl2 is None:
             self.last_pcl2 = msg
             self.target = pcl.PointCloud()
-            points = pointcloud2_to_array(msg)  # points have all the fields, we only need XYZ
-            print(f'points.shape: {points.shape}')
-            print(f'points: {points}')
-            print(f'points.dtype: {points.dtype}')
-            # TODO verify pointcloud2_to_array works correctly
+            points = pointcloud2_to_array(msg)
             self.target.from_array(points)
             self.target = self.voxel_grid_filter_point_cloud(self.target)
 
@@ -402,7 +371,8 @@ class LidarImuOdometryNode(Node):
 
         # calculate the alignment between last and current point cloud
         self.source = pcl.PointCloud()
-        self.source.from_array(np.asarray(msg.data, dtype=np.float32).reshape(-1, 3))
+        points = pointcloud2_to_array(msg)
+        self.source.from_array(points)
         self.source = self.voxel_grid_filter_point_cloud(self.source)
 
         # GICP TODO
@@ -417,8 +387,7 @@ class LidarImuOdometryNode(Node):
         init_guess[0:3, 3] = last_rot.transpose() @ (current_pos - last_pos).flatten()
 
         converged, transf, estimate, fitness = gicp.gicp(
-            self.source, self.target, max_iter=100, correspondence_randomness=20,
-            initial_guess=np.identity(4))
+            self.source, self.target, max_iter=100)
         print(f'converged: {converged}')
         print(f'estimate: {estimate}')
         print(f'fitness: {fitness}')
