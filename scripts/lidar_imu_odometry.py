@@ -8,15 +8,11 @@ from enum import Enum
 
 import ros2_numpy as rnp
 
-# import pcl python
-import pcl
-from pcl import PointCloud
-import sensor_msgs.msg._point_cloud2 as pc2
-
+import pygicp
 import rclpy
 from rclpy.node import Node
 from builtin_interfaces.msg import Time
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Pose
 from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import Imu, PointCloud2
 from tf2_ros import TransformBroadcaster, TransformStamped
@@ -50,7 +46,7 @@ def float_ts_to_ros_stamp(ts: float):
 
 
 def ros_stamp_to_float_ts(ros_ts: Time):
-    return ros_ts.sec + ros_ts.nanosec * 1e-9
+    return float(ros_ts.sec + ros_ts.nanosec * 1e-9)
 
 
 def skew(v: np.ndarray):
@@ -287,6 +283,15 @@ class LidarImuOdometryNode(Node):
         self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 0.0]).value
         self.imu_extrinsic_quat = R.from_quat(self.imu_extrinsic_quat)
 
+        self.downsample_resolution = self.declare_parameter('downsample_resolution', 0.1).value
+
+        # Setup scan matching registration
+        # Consult README.md of fast_gicp for more information
+        self.registration_method = pygicp.FastGICP()
+        self.registration_method.set_num_threads(8)
+        self.registration_method.set_max_correspondence_distance(2.0)
+        self.registration_method.set_correspondence_randomness(20)
+
         self.gt_path_file = self.declare_parameter('gt_path_file', '').value
         if os.path.exists(self.gt_path_file):
             self.gt_delimiter = self.declare_parameter('gt_delimiter', ' ').value
@@ -295,6 +300,7 @@ class LidarImuOdometryNode(Node):
             self.gt_path_topic = self.declare_parameter('gt_path_topic', 'gt_path').value
             self.gt_path_pub = self.create_publisher(Path, self.gt_path_topic, 10)
             self.gt_path = Path()
+            self.gt_time_format = self.declare_parameter('gt_time_format', 'seconds').value
             with open(self.gt_path_file, 'r') as f:
                 # usual format is timestamp x y z qx qy qz qw
                 # in kimera multi dataset the format is timestamp x y z qw qx qy qz
@@ -305,19 +311,32 @@ class LidarImuOdometryNode(Node):
                 if self.gt_quat_format == 'qwqxqyqz':
                     print(f'fixing quaternion format for gt_path_file {self.gt_path_file}')
                     gt_mat = gt_mat[:, [0, 1, 2, 3, 7, 4, 5, 6]]
+                if self.gt_time_format != 'seconds':
+                    print(f'fixing timestamp format for gt_path_file {self.gt_path_file}')
+                    if self.gt_time_format == 'milliseconds':
+                        gt_mat[:, 0] = gt_mat[:, 0] * 1e-3
+                    elif self.gt_time_format == 'microseconds':
+                        gt_mat[:, 0] = gt_mat[:, 0] * 1e-6
+                    elif self.gt_time_format == 'nanoseconds':
+                        gt_mat[:, 0] = gt_mat[:, 0] * 1e-9
+                    else:
+                        raise ValueError(f'unknown gt_time_format {self.gt_time_format}')
+
                 # transform into origin at first pose
-                first_pos = gt_mat[0, 1:4]
-                first_quat = R.from_quat(gt_mat[0, 4:8])
+                print('Transforming gt path to origin at first pose')
+                first_pos = np.copy(gt_mat[0, 1:4])
+                first_quat = R.from_quat(np.copy(gt_mat[0, 4:8]))
                 first_rot_mat_inv = first_quat.as_matrix().transpose()
-                for row in gt_mat:
-                    old_pos = row[1:4]
-                    old_rot_mat = R.from_quat(row[4:8]).as_matrix()
+                for i in range(gt_mat.shape[0]):
+                    old_pos = gt_mat[i][1:4]
+                    old_rot_mat = R.from_quat(gt_mat[i][4:8]).as_matrix()
                     transformed_pos = first_rot_mat_inv @ (old_pos - first_pos)
                     transformed_rot_mat = first_rot_mat_inv @ old_rot_mat
-                    row[1:4] = transformed_pos
-                    row[4:8] = R.from_matrix(transformed_rot_mat).as_quat()
+                    gt_mat[i][1:4] = transformed_pos.flatten()
+                    gt_mat[i][4:8] = R.from_matrix(transformed_rot_mat).as_quat()
+                self.gt_mat = gt_mat
 
-        self.last_pcl2 = None
+        self.last_points = None
 
     def imu_callback(self, msg: Imu):
         # the imu data needs to be rotated to the correct frame, I believe it is the following transformation
@@ -326,7 +345,6 @@ class LidarImuOdometryNode(Node):
         a_m = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         a_m = a_m[:, np.newaxis]
         a_m = self.imu_extrinsic_quat.as_matrix() @ a_m
-        print(f'a_m: {a_m}')
         w_m = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         w_m = w_m[:, np.newaxis]
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
@@ -336,48 +354,13 @@ class LidarImuOdometryNode(Node):
         self.error_state_kalman_filter.predict()
         self.publish_all()
 
-    def publish_all(self):
-        self.publish_pose()
-        self.publish_odometry()
-        self.publish_tf()
-        self.publish_estimate_path()
-        self.publish_gt_path()
+    # def voxel_grid_filter_point_cloud(self, cloud: pcl.PointCloud):
+    #     vg = cloud.make_voxel_grid_filter()
+    #     vg.set_leaf_size(0.2, 0.2, 0.2)
+    #     cloud = vg.filter()
+    #     return cloud
 
-    def voxel_grid_filter_point_cloud(self, cloud: pcl.PointCloud):
-        vg = cloud.make_voxel_grid_filter()
-        vg.set_leaf_size(0.2, 0.2, 0.2)
-        cloud = vg.filter()
-        return cloud
-
-    def lidar_callback(self, msg: PointCloud2):
-        # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
-        if self.last_pcl2 is None:
-            self.last_pcl2 = msg
-            self.target = pcl.PointCloud()
-            points = pointcloud2_to_array(msg)
-            self.target.from_array(points)
-            self.target = self.voxel_grid_filter_point_cloud(self.target)
-
-            # save the current estimated pose as the initial pose for the point cloud matching, prediction will be done
-            float_ts = ros_stamp_to_float_ts(msg.header.stamp)
-            self.error_state_kalman_filter.set_time(float_ts)
-            self.error_state_kalman_filter.predict()
-            self.last_nominal_state = self.error_state_kalman_filter.nominal_state
-            return
-        # predict the error state kalmann filter
-        float_ts = ros_stamp_to_float_ts(msg.header.stamp)
-        self.error_state_kalman_filter.set_time(float_ts)
-        self.error_state_kalman_filter.predict()
-
-        # calculate the alignment between last and current point cloud
-        self.source = pcl.PointCloud()
-        points = pointcloud2_to_array(msg)
-        self.source.from_array(points)
-        self.source = self.voxel_grid_filter_point_cloud(self.source)
-
-        # GICP TODO
-        gicp = self.source.make_GeneralizedIterativeClosestPoint()
-
+    def init_guess_from_states(self):
         init_guess = np.identity(4)
         last_pos = self.last_nominal_state.p
         last_rot = self.last_nominal_state.q.as_matrix()
@@ -385,37 +368,89 @@ class LidarImuOdometryNode(Node):
         current_rot = self.error_state_kalman_filter.nominal_state.q.as_matrix()
         init_guess[0:3, 0:3] = last_rot.transpose() @ current_rot
         init_guess[0:3, 3] = last_rot.transpose() @ (current_pos - last_pos).flatten()
+        init_guess = np.array(init_guess, dtype=np.float32)
+        return init_guess
 
-        converged, transf, estimate, fitness = gicp.gicp(
-            self.source, self.target, max_iter=100)
-        print(f'converged: {converged}')
-        print(f'estimate: {estimate}')
-        print(f'fitness: {fitness}')
-        print(f'init_guess:\n{init_guess}')
-        print(f'transf:\n{transf}')
+    def lidar_callback(self, msg: PointCloud2):
+        # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
+        if self.last_points is None:
+            # self.last_pcl2 = msg
+            # self.target = pcl.PointCloud()
+            self.last_points = pointcloud2_to_array(msg)
+            self.last_points = pygicp.downsample(self.last_points, self.downsample_resolution)
+            self.registration_method.set_input_target(self.last_points)
 
+            # save the current estimated pose as the initial pose for the point cloud matching, prediction will be done
+            float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+            self.error_state_kalman_filter.set_time(float_ts)
+            self.error_state_kalman_filter.predict()
+            self.last_nominal_state = self.error_state_kalman_filter.nominal_state
+            return
+
+        # predict the error state kalmann filter
+        float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+        self.error_state_kalman_filter.set_time(float_ts)
+        self.error_state_kalman_filter.predict()
+
+        # calculate the alignment between last and current point cloud
+        self.current_points = pointcloud2_to_array(msg)
+        self.current_points = pygicp.downsample(self.current_points, self.downsample_resolution)
+        self.registration_method.set_input_source(self.current_points)
+
+        # GICP
+
+        init_guess = self.init_guess_from_states()
+
+        delta_trans = self.registration_method.align(initial_guess=init_guess)
+
+        print(f'GICP converged: {self.registration_method.has_converged()}')
+        print(f'GICP fitness score: {self.registration_method.get_fitness_score()}')
+        print(f'initial guess from states:\n{init_guess}')
+        print(f'GICP delta transformation:\n{delta_trans}')
+        print(f'Error between initial guess and ')
         # update the nominal state with the estimated transformation TODO
-        self.target = self.source
-        self.last_pcl2 = msg
+        self.registration_method.swap_source_and_target()
         self.last_nominal_state = self.error_state_kalman_filter.nominal_state
 
-    def pose_from_state(self):
-        pose = PoseStamped()
-        pose.header.frame_id = 'map'
-        pose.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+    def publish_all(self):
+        if not self.error_state_kalman_filter.imu_calibrated:
+            return
+        self.publish_pose()
+        self.publish_odometry()
+        self.publish_tf()
+        self.publish_estimate_path()
+        self.publish_gt_path()
+
+    def pose_stamped_from_state(self):
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = 'map'
+        pose_stamped.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
         x, y, z = self.error_state_kalman_filter.nominal_state.p.flatten()
         qx, qy, qz, qw = self.error_state_kalman_filter.nominal_state.q.as_quat()
-        pose.pose.position.x = x
-        pose.pose.position.y = y
-        pose.pose.position.z = z
-        pose.pose.orientation.x = qx
-        pose.pose.orientation.y = qy
-        pose.pose.orientation.z = qz
-        pose.pose.orientation.w = qw
+        pose_stamped.pose.position.x = x
+        pose_stamped.pose.position.y = y
+        pose_stamped.pose.position.z = z
+        pose_stamped.pose.orientation.x = qx
+        pose_stamped.pose.orientation.y = qy
+        pose_stamped.pose.orientation.z = qz
+        pose_stamped.pose.orientation.w = qw
+        return pose_stamped
+
+    def pose_from_state(self):
+        pose = Pose()
+        x, y, z = self.error_state_kalman_filter.nominal_state.p.flatten()
+        qx, qy, qz, qw = self.error_state_kalman_filter.nominal_state.q.as_quat()
+        pose.position.x = x
+        pose.position.y = y
+        pose.position.z = z
+        pose.orientation.x = qx
+        pose.orientation.y = qy
+        pose.orientation.z = qz
+        pose.orientation.w = qw
         return pose
 
     def publish_pose(self):
-        self.pose_pub.publish(self.pose_from_state())
+        self.pose_pub.publish(self.pose_stamped_from_state())
 
     def publish_odometry(self):
         odom = Odometry()
@@ -442,6 +477,7 @@ class LidarImuOdometryNode(Node):
         pose = PoseStamped()
         pose.header.frame_id = 'map'
         pose.header.stamp = float_ts_to_ros_stamp(gt_time)
+        print(f'gt_pos = {gt_pos}')
         pose.pose.position.x = gt_pos[0]
         pose.pose.position.y = gt_pos[1]
         pose.pose.position.z = gt_pos[2]
@@ -455,7 +491,7 @@ class LidarImuOdometryNode(Node):
         self.gt_path_pub.publish(self.gt_path)
 
     def publish_estimate_path(self):
-        self.path.poses.append(self.pose_from_state())
+        self.path.poses.append(self.pose_stamped_from_state())
         self.path_pub.publish(self.path)
 
     def publish_tf(self):
