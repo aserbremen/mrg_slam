@@ -17,6 +17,10 @@ from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import Imu, PointCloud2
 from tf2_ros import TransformBroadcaster, TransformStamped
 from enum import Enum
+import copy
+from termcolor import colored
+
+
 # reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
 
 NORM_G = 9.81
@@ -98,7 +102,7 @@ class NominalState:
     def predict(self, a_m: np.ndarray, w_m: np.ndarray, dt: float):
         self.p += self.v * dt + 0.5 * (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt * dt
         self.v += (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt
-        self.q = self.q * R.from_rotvec(((w_m - self.w_b) * dt).flatten())
+        self.q = self.q * R.from_rotvec(((w_m - self.w_b).flatten() * dt))
         # self.a_b += 0 # for completeness
         # self.w_b += 0 # for completeness
         # self.g += 0 # for completeness
@@ -120,10 +124,10 @@ class ErrorState:
         # self.w_m = np.zeros((3, 1))
         # self.time = None
 
-        self.a_n = 1e-3  # noise applied to velocity error
-        self.w_n = 1e-4  # noise applied to rotation error
-        self.a_w = 1e-4  # noise applied to accelerometer bias
-        self.w_w = 1e-5  # noise applied to gyroscope bias
+        self.a_n = 1e-5  # noise applied to acceleration error
+        self.w_n = 1e-6  # noise applied to turn rate error
+        self.a_w = 1e-6  # noise applied to accelerometer bias
+        self.w_w = 1e-7  # noise applied to gyroscope bias
 
         # this is the noise covariance matrix of the noise applied to the error state
         self.Q = np.zeros((12, 12))
@@ -204,6 +208,8 @@ class ErrorStateKalmanFilter:
         self.imu_calibration_max_samples = 800
         self.imu_calibration_acc_samples = []
         self.imu_calibration_turn_rate_samples = []
+        self.imu_acc_samples = []
+        self.imu_turn_rate_samples = []
 
     def predict(self):
         if self.dt is None:
@@ -246,10 +252,17 @@ class ErrorStateKalmanFilter:
     def set_time(self, time):
         if self.time is not None:
             self.dt = time - self.time
+            if self.dt < 0:
+                print(colored(f'Warning: dt {self.dt} is smaller than zero', 'red'))
+                exit(1)
         self.time = time
 
         if time < self.time and self.time is not None:
-            print(f'Warning: time {time} is smaller than previous time {self.time} by {self.time - time} seconds')
+            print(colored(f'Warning: time {time} is smaller than previous time {self.time} by {self.time - time} seconds', 'red'))
+
+
+    def insert_time_acc_turn_rate(self, time, acc, turn_rate):
+        
 
     def update(self, z: np.ndarray):
         pass
@@ -348,6 +361,7 @@ class LidarImuOdometryNode(Node):
         w_m = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         w_m = w_m[:, np.newaxis]
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+        self.error_state_kalman_filter.insert_time_acc_turn_rate(float_ts, a_m, w_m)
         self.error_state_kalman_filter.set_acc(a_m)
         self.error_state_kalman_filter.set_turn_rate(w_m)
         self.error_state_kalman_filter.set_time(float_ts)
@@ -372,6 +386,8 @@ class LidarImuOdometryNode(Node):
         return init_guess
 
     def lidar_callback(self, msg: PointCloud2):
+        if not self.error_state_kalman_filter.imu_calibrated:
+            return
         # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
         if self.last_points is None:
             # self.last_pcl2 = msg
@@ -384,7 +400,7 @@ class LidarImuOdometryNode(Node):
             float_ts = ros_stamp_to_float_ts(msg.header.stamp)
             self.error_state_kalman_filter.set_time(float_ts)
             self.error_state_kalman_filter.predict()
-            self.last_nominal_state = self.error_state_kalman_filter.nominal_state
+            self.last_nominal_state = copy.deepcopy(self.error_state_kalman_filter.nominal_state)
             return
 
         # predict the error state kalmann filter
@@ -403,14 +419,12 @@ class LidarImuOdometryNode(Node):
 
         delta_trans = self.registration_method.align(initial_guess=init_guess)
 
-        print(f'GICP converged: {self.registration_method.has_converged()}')
-        print(f'GICP fitness score: {self.registration_method.get_fitness_score()}')
         print(f'initial guess from states:\n{init_guess}')
         print(f'GICP delta transformation:\n{delta_trans}')
         print(f'Error between initial guess and ')
         # update the nominal state with the estimated transformation TODO
         self.registration_method.swap_source_and_target()
-        self.last_nominal_state = self.error_state_kalman_filter.nominal_state
+        self.last_nominal_state = copy.deepcopy(self.error_state_kalman_filter.nominal_state)
 
     def publish_all(self):
         if not self.error_state_kalman_filter.imu_calibrated:
