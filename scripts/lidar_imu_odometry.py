@@ -320,6 +320,13 @@ class LidarImuOdometryNode(Node):
 
         self.downsample_resolution = self.declare_parameter('downsample_resolution', 0.1).value
 
+        self.scan_matching_path_pub = self.create_publisher(Path, 'scan_matching_path', 10)
+        self.init_guess_path_pub = self.create_publisher(Path, 'init_guess_path', 10)
+        self.scan_matching_path = Path()
+        self.init_guess_path = Path()
+        self.pure_scan_matching_pose = np.identity(4)
+        self.init_guess_pose = np.identity(4)
+
         # Setup scan matching registration
         # Consult README.md of fast_gicp for more information
         self.registration_method = pygicp.FastGICP()
@@ -448,6 +455,9 @@ class LidarImuOdometryNode(Node):
 
         delta_transformation = self.registration_method.align(initial_guess=init_guess)
 
+        self.pure_scan_matching_pose = self.pure_scan_matching_pose @ delta_transformation
+        self.init_guess_pose = self.init_guess_pose @ init_guess
+
         R_init_guess = R.from_matrix(init_guess[:3, :3])
         R_registration = R.from_matrix(delta_transformation[:3, :3])
         delta_angle = np.rad2deg((R_init_guess.inv() * R_registration).magnitude())
@@ -466,10 +476,46 @@ class LidarImuOdometryNode(Node):
         if not self.initialized():
             return
         self.publish_pose()
+        self.publish_scan_matching_pose()
+        self.publish_init_guess_pose()
         self.publish_odometry()
         self.publish_tf()
         self.publish_estimate_path()
         self.publish_gt_path()
+
+    def pose_from_matrix(self, mat: np.ndarray):
+        pose = Pose()
+        pose.position.x = mat[0, 3]
+        pose.position.y = mat[1, 3]
+        pose.position.z = mat[2, 3]
+        qx, qy, qz, qw = R.from_matrix(mat[:3, :3]).as_quat()
+        pose.orientation.x = qx
+        pose.orientation.y = qy
+        pose.orientation.z = qz
+        pose.orientation.w = qw
+        return pose
+
+    def publish_scan_matching_pose(self):
+        pose = self.pose_from_matrix(self.pure_scan_matching_pose)
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = 'map'
+        pose_stamped.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        pose_stamped.pose = pose
+        self.scan_matching_path.header.frame_id = 'map'
+        self.scan_matching_path.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        self.scan_matching_path.poses.append(pose_stamped)
+        self.scan_matching_path_pub.publish(self.scan_matching_path)
+
+    def publish_init_guess_pose(self):
+        pose = self.pose_from_matrix(self.init_guess_pose)
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = 'map'
+        pose_stamped.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        pose_stamped.pose = pose
+        self.init_guess_path.header.frame_id = 'map'
+        self.init_guess_path.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        self.init_guess_path.poses.append(pose_stamped)
+        self.init_guess_path_pub.publish(self.init_guess_path)
 
     def pose_stamped_from_state(self):
         pose_stamped = PoseStamped()
