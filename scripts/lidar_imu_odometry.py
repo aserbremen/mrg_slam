@@ -17,10 +17,16 @@ from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import Imu, PointCloud2
 from tf2_ros import TransformBroadcaster, TransformStamped
 from enum import Enum
+<<<<<<< HEAD
 import copy
 from termcolor import colored
 
 
+=======
+
+from collections import deque
+from copy import deepcopy
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 # reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
 
 NORM_G = 9.81
@@ -64,9 +70,9 @@ def skew(v: np.ndarray):
 
 def pointcloud2_to_array(cloud_msg: PointCloud2, only_xyz=True):
     points = rnp.numpify(cloud_msg)
-    points = np.array([list(point) for point in points]).reshape(-1, 5)
+    # points = np.array([list(point) for point in points]).reshape(-1, 5)
     if only_xyz:
-        points = points[:, 0:3]
+        points = points['xyz']
     return points
 
 
@@ -124,10 +130,17 @@ class ErrorState:
         # self.w_m = np.zeros((3, 1))
         # self.time = None
 
+<<<<<<< HEAD
         self.a_n = 1e-5  # noise applied to acceleration error
         self.w_n = 1e-6  # noise applied to turn rate error
         self.a_w = 1e-6  # noise applied to accelerometer bias
         self.w_w = 1e-7  # noise applied to gyroscope bias
+=======
+        self.a_n = 0.04  # noise applied to velocity error
+        self.w_n = 0.04  # noise applied to rotation error
+        self.a_w = 0.00433  # noise applied to accelerometer bias
+        self.w_w = 0.00255  # noise applied to gyroscope bias
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 
         # this is the noise covariance matrix of the noise applied to the error state
         self.Q = np.zeros((12, 12))
@@ -202,50 +215,83 @@ class ErrorStateKalmanFilter:
         self.a_m = np.zeros((3, 1))
         self.w_m = np.zeros((3, 1))
         self.time = None
-        self.dt = None
         self.imu_calibrated = False
         self.imu_calibration_num_samples = 0
         self.imu_calibration_max_samples = 800
         self.imu_calibration_acc_samples = []
         self.imu_calibration_turn_rate_samples = []
+<<<<<<< HEAD
         self.imu_acc_samples = []
         self.imu_turn_rate_samples = []
+=======
+        self.imu_calibration_time_samples = []
+        self.acc_samples = deque()
+        self.turn_rate_samples = deque()
+        self.time_samples = deque()
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 
-    def predict(self):
-        if self.dt is None:
-            return
+    def predict(self, dt: float):
+        # print(f'position before prediction: {self.nominal_state.p.flatten()}')
+        # print(f'velocity before prediction: {self.nominal_state.v.flatten()}')
+        # print(f'orientation before prediction: {self.nominal_state.q.as_quat()}')
+        self.nominal_state.predict(self.a_m, self.w_m, dt)
+        # print(f'position after prediction: {self.nominal_state.p.flatten()}')
+        # print(f'velocity after prediction: {self.nominal_state.v.flatten()}')
+        # print(f'orientation after prediction: {self.nominal_state.q.as_quat()}')
+        self.error_state.predict(self.nominal_state, self.a_m, self.w_m, dt)
+
+    def predict_upto(self, time_upto: float):
         if not self.imu_calibrated:
-            self.calibrate_imu()
             return
+        if self.time is None:
+            # get the imu sample before the first time_upto
+            for time in deepcopy(self.time_samples):
+                if time <= time_upto:
+                    self.time = self.time_samples.popleft()
+                    self.a_m = self.acc_samples.popleft()
+                    self.w_m = self.turn_rate_samples.popleft()
+                    # print(f'Setting first prediction sample at time {self.time} for time_upto {time_upto}')
+                elif time > time_upto:
+                    break
 
-        print(f'\ndt = {self.dt}')
-        print(f'position before prediction: {self.nominal_state.p.flatten()}')
-        print(f'velocity before prediction: {self.nominal_state.v.flatten()}')
-        print(f'orientation before prediction: {self.nominal_state.q.as_quat()}')
-        self.nominal_state.predict(self.a_m, self.w_m, self.dt)
-        print(f'position after prediction: {self.nominal_state.p.flatten()}')
-        print(f'velocity after prediction: {self.nominal_state.v.flatten()}')
-        print(f'orientation after prediction: {self.nominal_state.q.as_quat()}')
-        self.error_state.predict(self.nominal_state, self.a_m, self.w_m, self.dt)
+        print(f'\n\nStarting prediction upto time {time_upto} - self.time {self.time} = {time_upto - self.time} ')
+        if time_upto < self.time:
+            raise ValueError(f'Time to predict {time_upto} < filter time {self.time}')
+        while self.time < time_upto:
+            if time_upto > self.time_samples[0]:
+                dt = self.time_samples[0] - self.time
+                self.time = self.time_samples[0]
+            elif time_upto <= self.time_samples[0]:
+                dt = time_upto - self.time
+                self.time = time_upto
+            if dt < 0:
+                raise ValueError(f'dt {dt} < 0 in predict_upto')
+            # print(f'\nPredicting one step with self.time {self.time} and dt {dt}')
+            self.predict(dt)
+            # pop the last time, acc, and turn rate samples, note that self.time is set above
+            self.time_samples.popleft()
+            self.a_m = self.acc_samples.popleft()
+            self.w_m = self.turn_rate_samples.popleft()
 
+        print(f'Finished predict_upto: time_upto {time_upto} - self.time = {self.time} = {time_upto - self.time}')
+
+    # calibrate imu assuming horizontal starting pose
     def calibrate_imu(self):
-        if self.imu_calibration_num_samples < self.imu_calibration_max_samples:
-            self.imu_calibration_acc_samples.append((self.a_m + self.nominal_state.g).flatten())
-            self.imu_calibration_turn_rate_samples.append(self.w_m.flatten())
-            self.imu_calibration_num_samples += 1
-        if self.imu_calibration_num_samples == self.imu_calibration_max_samples:
-            # calculate the mean and covariance of the acc and turn rate samples
-            self.nominal_state.a_b = np.array(self.imu_calibration_acc_samples).mean(axis=0).reshape((3, 1))
-            self.nominal_state.w_b = np.array(self.imu_calibration_turn_rate_samples).mean(axis=0).reshape((3, 1))
-            print(f'{self.imu_calibration_num_samples} imu samples used for bias calibration')
-            print(f'acc bias: {self.nominal_state.a_b.flatten()}')
-            print(f'turn rate bias {self.nominal_state.w_b.flatten()}')
+        # calculate the mean and covariance of the acc and turn rate samples
+        self.nominal_state.a_b = np.array(self.imu_calibration_acc_samples).mean(axis=0).reshape((3, 1))
+        self.nominal_state.a_b[2] -= NORM_G  # correct the gravity (assuming horizontal)
+        self.nominal_state.w_b = np.array(self.imu_calibration_turn_rate_samples).mean(axis=0).reshape((3, 1))
+        print(f'{len(self.imu_calibration_acc_samples)} imu samples used for bias calibration')
+        print(f'acc bias: {self.nominal_state.a_b.flatten()}')
+        print(f'turn rate bias {self.nominal_state.w_b.flatten()}')
 
-            self.imu_calibrated = True
+        self.acc_samples.extend(self.imu_calibration_acc_samples)
+        self.turn_rate_samples.extend(self.imu_calibration_turn_rate_samples)
+        self.time_samples.extend(self.imu_calibration_time_samples)
 
-    def set_acc(self, acc):
-        self.a_m = acc
+        self.imu_calibrated = True
 
+<<<<<<< HEAD
     def set_turn_rate(self, turn_rate):
         self.w_m = turn_rate
 
@@ -263,6 +309,21 @@ class ErrorStateKalmanFilter:
 
     def insert_time_acc_turn_rate(self, time, acc, turn_rate):
         
+=======
+    def insert_imu_sample(self, acc: np.ndarray, turn_rate: np.ndarray, time: float):
+        if not self.imu_calibrated:
+            self.imu_calibration_acc_samples.append(acc)
+            self.imu_calibration_turn_rate_samples.append(turn_rate)
+            self.imu_calibration_time_samples.append(time)
+            if len(self.imu_calibration_acc_samples) == self.imu_calibration_max_samples:
+                self.calibrate_imu()
+            return
+        self.acc_samples.append(acc)
+        self.turn_rate_samples.append(turn_rate)
+        if len(self.time_samples) > 0 and time < self.time_samples[-1]:
+            raise ValueError(f'Inserting IMU sample, Current time {time} < last time {self.time_samples[-1]}, IMU out of order.')
+        self.time_samples.append(time)
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 
     def update(self, z: np.ndarray):
         pass
@@ -293,10 +354,17 @@ class LidarImuOdometryNode(Node):
         self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
         # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion
-        self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 0.0]).value
+        self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 1.0]).value
         self.imu_extrinsic_quat = R.from_quat(self.imu_extrinsic_quat)
 
         self.downsample_resolution = self.declare_parameter('downsample_resolution', 0.1).value
+
+        self.scan_matching_path_pub = self.create_publisher(Path, 'scan_matching_path', 10)
+        self.init_guess_path_pub = self.create_publisher(Path, 'init_guess_path', 10)
+        self.scan_matching_path = Path()
+        self.init_guess_path = Path()
+        self.pure_scan_matching_pose = np.identity(4)
+        self.init_guess_pose = np.identity(4)
 
         # Setup scan matching registration
         # Consult README.md of fast_gicp for more information
@@ -351,6 +419,9 @@ class LidarImuOdometryNode(Node):
 
         self.last_points = None
 
+    def initialized(self):
+        return self.error_state_kalman_filter.imu_calibrated
+
     def imu_callback(self, msg: Imu):
         # the imu data needs to be rotated to the correct frame, I believe it is the following transformation
         # np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]), but I am not sure TODO
@@ -360,13 +431,24 @@ class LidarImuOdometryNode(Node):
         a_m = self.imu_extrinsic_quat.as_matrix() @ a_m
         w_m = np.array([msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z])
         w_m = w_m[:, np.newaxis]
+        w_m = self.imu_extrinsic_quat.as_matrix() @ w_m
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+<<<<<<< HEAD
         self.error_state_kalman_filter.insert_time_acc_turn_rate(float_ts, a_m, w_m)
         self.error_state_kalman_filter.set_acc(a_m)
         self.error_state_kalman_filter.set_turn_rate(w_m)
         self.error_state_kalman_filter.set_time(float_ts)
         self.error_state_kalman_filter.predict()
         self.publish_all()
+=======
+
+        self.error_state_kalman_filter.insert_imu_sample(a_m, w_m, float_ts)
+        # self.error_state_kalman_filter.set_acc(a_m)
+        # self.error_state_kalman_filter.set_turn_rate(w_m)
+        # self.error_state_kalman_filter.set_time(float_ts)
+        # self.error_state_kalman_filter.predict()
+        # self.publish_all()
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 
     # def voxel_grid_filter_point_cloud(self, cloud: pcl.PointCloud):
     #     vg = cloud.make_voxel_grid_filter()
@@ -382,31 +464,43 @@ class LidarImuOdometryNode(Node):
         current_rot = self.error_state_kalman_filter.nominal_state.q.as_matrix()
         init_guess[0:3, 0:3] = last_rot.transpose() @ current_rot
         init_guess[0:3, 3] = last_rot.transpose() @ (current_pos - last_pos).flatten()
+        # init_guess[0:3, 0:3] = current_rot.transpose() @ last_rot
+        # init_guess[0:3, 3] = current_rot.transpose() @ (last_pos - current_pos).flatten()
+
         init_guess = np.array(init_guess, dtype=np.float32)
         return init_guess
 
     def lidar_callback(self, msg: PointCloud2):
+<<<<<<< HEAD
         if not self.error_state_kalman_filter.imu_calibrated:
+=======
+        if not self.initialized():
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
             return
         # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
         if self.last_points is None:
-            # self.last_pcl2 = msg
-            # self.target = pcl.PointCloud()
             self.last_points = pointcloud2_to_array(msg)
             self.last_points = pygicp.downsample(self.last_points, self.downsample_resolution)
             self.registration_method.set_input_target(self.last_points)
 
             # save the current estimated pose as the initial pose for the point cloud matching, prediction will be done
             float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+<<<<<<< HEAD
             self.error_state_kalman_filter.set_time(float_ts)
             self.error_state_kalman_filter.predict()
             self.last_nominal_state = copy.deepcopy(self.error_state_kalman_filter.nominal_state)
+=======
+            self.last_time_upto = float_ts
+            self.error_state_kalman_filter.predict_upto(float_ts)
+            self.last_nominal_state = deepcopy(self.error_state_kalman_filter.nominal_state)
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
             return
 
         # predict the error state kalmann filter
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
-        self.error_state_kalman_filter.set_time(float_ts)
-        self.error_state_kalman_filter.predict()
+        if float_ts < self.last_time_upto:
+            raise ValueError(f'new time upto {float_ts} < last time upto {self.last_time_upto}')
+        self.error_state_kalman_filter.predict_upto(float_ts)
 
         # calculate the alignment between last and current point cloud
         self.current_points = pointcloud2_to_array(msg)
@@ -417,23 +511,76 @@ class LidarImuOdometryNode(Node):
 
         init_guess = self.init_guess_from_states()
 
-        delta_trans = self.registration_method.align(initial_guess=init_guess)
+        delta_transformation = self.registration_method.align(initial_guess=init_guess)
 
+<<<<<<< HEAD
+=======
+        self.pure_scan_matching_pose = self.pure_scan_matching_pose @ delta_transformation
+        self.init_guess_pose = self.init_guess_pose @ init_guess
+
+        R_init_guess = R.from_matrix(init_guess[:3, :3])
+        R_registration = R.from_matrix(delta_transformation[:3, :3])
+        delta_angle = np.rad2deg((R_init_guess.inv() * R_registration).magnitude())
+        delta_tranlsation = np.linalg.norm((init_guess[0:3, 3] - delta_transformation[0:3, 3]))
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
         print(f'initial guess from states:\n{init_guess}')
-        print(f'GICP delta transformation:\n{delta_trans}')
-        print(f'Error between initial guess and ')
+        print(f'GICP delta transformation:\n{delta_transformation}')
+        print(f'delta translation {delta_tranlsation} delta angle (deg) {delta_angle}')
+
         # update the nominal state with the estimated transformation TODO
         self.registration_method.swap_source_and_target()
+<<<<<<< HEAD
         self.last_nominal_state = copy.deepcopy(self.error_state_kalman_filter.nominal_state)
+=======
+        self.last_nominal_state = deepcopy(self.error_state_kalman_filter.nominal_state)
+
+        self.publish_all()
+>>>>>>> a66dc716d27148cc9e883a1c7ded074619f771a7
 
     def publish_all(self):
-        if not self.error_state_kalman_filter.imu_calibrated:
+        if not self.initialized():
             return
         self.publish_pose()
+        self.publish_scan_matching_pose()
+        self.publish_init_guess_pose()
         self.publish_odometry()
         self.publish_tf()
         self.publish_estimate_path()
         self.publish_gt_path()
+
+    def pose_from_matrix(self, mat: np.ndarray):
+        pose = Pose()
+        pose.position.x = mat[0, 3]
+        pose.position.y = mat[1, 3]
+        pose.position.z = mat[2, 3]
+        qx, qy, qz, qw = R.from_matrix(mat[:3, :3]).as_quat()
+        pose.orientation.x = qx
+        pose.orientation.y = qy
+        pose.orientation.z = qz
+        pose.orientation.w = qw
+        return pose
+
+    def publish_scan_matching_pose(self):
+        pose = self.pose_from_matrix(self.pure_scan_matching_pose)
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = 'map'
+        pose_stamped.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        pose_stamped.pose = pose
+        self.scan_matching_path.header.frame_id = 'map'
+        self.scan_matching_path.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        self.scan_matching_path.poses.append(pose_stamped)
+        self.scan_matching_path_pub.publish(self.scan_matching_path)
+
+    def publish_init_guess_pose(self):
+        pose = self.pose_from_matrix(self.init_guess_pose)
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = 'map'
+        pose_stamped.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        pose_stamped.pose = pose
+        self.init_guess_path.header.frame_id = 'map'
+        self.init_guess_path.header.stamp = float_ts_to_ros_stamp(self.error_state_kalman_filter.time)
+        self.init_guess_path.poses.append(pose_stamped)
+        self.init_guess_path_pub.publish(self.init_guess_path)
 
     def pose_stamped_from_state(self):
         pose_stamped = PoseStamped()
@@ -491,7 +638,6 @@ class LidarImuOdometryNode(Node):
         pose = PoseStamped()
         pose.header.frame_id = 'map'
         pose.header.stamp = float_ts_to_ros_stamp(gt_time)
-        print(f'gt_pos = {gt_pos}')
         pose.pose.position.x = gt_pos[0]
         pose.pose.position.y = gt_pos[1]
         pose.pose.position.z = gt_pos[2]
