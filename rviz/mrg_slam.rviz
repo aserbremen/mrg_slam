@@ -549,9 +549,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: -999999
+      Max Intensity: 7.240432262420654
       Min Color: 0; 0; 0
-      Min Intensity: 999999
+      Min Intensity: -3.401914119720459
       Name: atlas/mrg_slam/map_points
       Position Transformer: XYZ
       Selectable: true
@@ -618,23 +618,8 @@ Visualization Manager:
         Value: /atlas/mrg_slam/markers
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: bestla/mrg_slam/markers
-      Namespaces:
-        last_nodes: true
-        loop_close_radius: true
-        main_edges: true
-        nodes: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /bestla/mrg_slam/markers
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
       Enabled: false
-      Name: atlas/slam/node_names
+      Name: bestla/mrg_slam/markers
       Namespaces:
         {}
       Topic:
@@ -642,11 +627,11 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /atlas/mrg_slam/markers/node_names
+        Value: /bestla/mrg_slam/markers
       Value: false
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: bestla/slam/node_names
+      Name: atlas/slam/node_names
       Namespaces:
         node_names: true
       Topic:
@@ -654,8 +639,20 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /bestla/mrg_slam/markers/node_names
+        Value: /atlas/mrg_slam/markers/node_names
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: bestla/slam/node_names
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bestla/mrg_slam/markers/node_names
+      Value: false
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
@@ -688,7 +685,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 25; 255; 0
-      Enabled: true
+      Enabled: false
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
@@ -711,7 +708,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /bestla/gt_path
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
       Name: atlas/mrg_slam/markers_covariance
@@ -898,7 +895,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 63.85719299316406
+      Distance: 49.45100784301758
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

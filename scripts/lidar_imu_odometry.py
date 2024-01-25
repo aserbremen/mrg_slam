@@ -20,6 +20,10 @@ from enum import Enum
 
 from collections import deque
 from copy import deepcopy
+# import colored function
+from termcolor import colored, cprint
+
+
 # reference: Quaternion kinematics for the error-state Kalman filter https://arxiv.org/pdf/1711.02508v1.pdf
 
 NORM_G = 9.81
@@ -212,6 +216,7 @@ class ErrorStateKalmanFilter:
         self.imu_calibration_acc_samples = []
         self.imu_calibration_turn_rate_samples = []
         self.imu_calibration_time_samples = []
+        self.first_time = None
         self.acc_samples = deque()
         self.turn_rate_samples = deque()
         self.time_samples = deque()
@@ -226,9 +231,9 @@ class ErrorStateKalmanFilter:
         # print(f'orientation after prediction: {self.nominal_state.q.as_quat()}')
         self.error_state.predict(self.nominal_state, self.a_m, self.w_m, dt)
 
-    def predict_upto(self, time_upto: float):
+    def predict_upto(self, time_upto: float) -> bool:
         if not self.imu_calibrated:
-            return
+            return False
         if self.time is None:
             # get the imu sample before the first time_upto
             for time in deepcopy(self.time_samples):
@@ -240,9 +245,18 @@ class ErrorStateKalmanFilter:
                 elif time > time_upto:
                     break
 
-        print(f'\n\nStarting prediction upto time {time_upto} - self.time {self.time} = {time_upto - self.time} ')
+        print(
+            f'\n\nStarting prediction upto time {time_upto}/{time_upto-self.first_time} - self.time {self.time}/{self.time-self.first_time} = {time_upto-self.time}')
         if time_upto < self.time:
-            raise ValueError(f'Time to predict {time_upto} < filter time {self.time}')
+            raise ValueError(
+                f'Time to predict {time_upto} < filter time {self.time}, filter time since start {self.time - self.first_time}')
+        if len(self.time_samples) == 0:
+            print(
+                colored(
+                    f'No IMU samples to predict upto time {time_upto}/{time_upto-self.first_time}, filter time {self.time}/{self.time-self.first_time}',
+                    'yellow'))
+            return False
+
         while self.time < time_upto:
             if time_upto > self.time_samples[0]:
                 dt = self.time_samples[0] - self.time
@@ -251,7 +265,7 @@ class ErrorStateKalmanFilter:
                 dt = time_upto - self.time
                 self.time = time_upto
             if dt < 0:
-                raise ValueError(f'dt {dt} < 0 in predict_upto')
+                raise ValueError(f'dt {dt} < 0 in predict_upto, filter time since start {self.time - self.first_time}')
             # print(f'\nPredicting one step with self.time {self.time} and dt {dt}')
             self.predict(dt)
             # pop the last time, acc, and turn rate samples, note that self.time is set above
@@ -260,6 +274,7 @@ class ErrorStateKalmanFilter:
             self.w_m = self.turn_rate_samples.popleft()
 
         print(f'Finished predict_upto: time_upto {time_upto} - self.time = {self.time} = {time_upto - self.time}')
+        return True
 
     # calibrate imu assuming horizontal starting pose
     def calibrate_imu(self):
@@ -392,6 +407,8 @@ class LidarImuOdometryNode(Node):
         # the imu data needs to be rotated to the correct frame, I believe it is the following transformation
         # np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]]), but I am not sure TODO
         # [ 0.5, -0.5, 0.5, -0.5 b] quaternion
+        if self.error_state_kalman_filter.first_time is None:
+            self.error_state_kalman_filter.first_time = ros_stamp_to_float_ts(msg.header.stamp)
         a_m = np.array([msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z])
         a_m = a_m[:, np.newaxis]
         a_m = self.imu_extrinsic_quat.as_matrix() @ a_m
@@ -401,17 +418,6 @@ class LidarImuOdometryNode(Node):
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
 
         self.error_state_kalman_filter.insert_imu_sample(a_m, w_m, float_ts)
-        # self.error_state_kalman_filter.set_acc(a_m)
-        # self.error_state_kalman_filter.set_turn_rate(w_m)
-        # self.error_state_kalman_filter.set_time(float_ts)
-        # self.error_state_kalman_filter.predict()
-        # self.publish_all()
-
-    # def voxel_grid_filter_point_cloud(self, cloud: pcl.PointCloud):
-    #     vg = cloud.make_voxel_grid_filter()
-    #     vg.set_leaf_size(0.2, 0.2, 0.2)
-    #     cloud = vg.filter()
-    #     return cloud
 
     def init_guess_from_states(self):
         init_guess = np.identity(4)
@@ -428,18 +434,24 @@ class LidarImuOdometryNode(Node):
         return init_guess
 
     def lidar_callback(self, msg: PointCloud2):
+        if self.error_state_kalman_filter.first_time is None:
+            self.error_state_kalman_filter.first_time = ros_stamp_to_float_ts(msg.header.stamp)
         if not self.initialized():
             return
         # get the current nominal state as an input for point cloud matching, assume XYZI point cloud
         if self.last_points is None:
+            # Predict the state
+            float_ts = ros_stamp_to_float_ts(msg.header.stamp)
+            self.last_time_upto = float_ts
+            prediction_valid = self.error_state_kalman_filter.predict_upto(float_ts)
+            if not prediction_valid:
+                print(colored(f'prediction not valid at time {float_ts}', 'yellow'))
+
             self.last_points = pointcloud2_to_array(msg)
             self.last_points = pygicp.downsample(self.last_points, self.downsample_resolution)
             self.registration_method.set_input_target(self.last_points)
 
             # save the current estimated pose as the initial pose for the point cloud matching, prediction will be done
-            float_ts = ros_stamp_to_float_ts(msg.header.stamp)
-            self.last_time_upto = float_ts
-            self.error_state_kalman_filter.predict_upto(float_ts)
             self.last_nominal_state = deepcopy(self.error_state_kalman_filter.nominal_state)
             return
 
@@ -447,7 +459,9 @@ class LidarImuOdometryNode(Node):
         float_ts = ros_stamp_to_float_ts(msg.header.stamp)
         if float_ts < self.last_time_upto:
             raise ValueError(f'new time upto {float_ts} < last time upto {self.last_time_upto}')
-        self.error_state_kalman_filter.predict_upto(float_ts)
+        prediction_valid = self.error_state_kalman_filter.predict_upto(float_ts)
+        if not prediction_valid:
+            print(colored(f'prediction not valid at time {float_ts}', 'yellow'))
 
         # calculate the alignment between last and current point cloud
         self.current_points = pointcloud2_to_array(msg)
@@ -455,9 +469,7 @@ class LidarImuOdometryNode(Node):
         self.registration_method.set_input_source(self.current_points)
 
         # GICP
-
         init_guess = self.init_guess_from_states()
-
         delta_transformation = self.registration_method.align(initial_guess=init_guess)
 
         self.pure_scan_matching_pose = self.pure_scan_matching_pose @ delta_transformation
@@ -466,10 +478,15 @@ class LidarImuOdometryNode(Node):
         R_init_guess = R.from_matrix(init_guess[:3, :3])
         R_registration = R.from_matrix(delta_transformation[:3, :3])
         delta_angle = np.rad2deg((R_init_guess.inv() * R_registration).magnitude())
-        delta_tranlsation = np.linalg.norm((init_guess[0:3, 3] - delta_transformation[0:3, 3]))
-        print(f'initial guess from states:\n{init_guess}')
-        print(f'GICP delta transformation:\n{delta_transformation}')
-        print(f'delta translation {delta_tranlsation} delta angle (deg) {delta_angle}')
+        delta_translation = np.linalg.norm((init_guess[0:3, 3] - delta_transformation[0:3, 3]))
+
+        if delta_angle > 20 or delta_translation > 0.5 or (delta_translation == 0 and delta_angle == 0):
+            # print(f'recalculating gicp with init guess = identity delta_pos {delta_translation} delta_angle (deg) {delta_angle}')
+            delta_transformation = self.registration_method.align(initial_guess=np.identity(4))
+
+        # print(f'initial guess from states:\n{init_guess}')
+        # print(f'GICP delta transformation:\n{delta_transformation}')
+        # print(f'delta translation {delta_translation} delta angle (deg) {delta_angle}')
 
         # update the nominal state with the estimated transformation TODO
         self.registration_method.swap_source_and_target()
