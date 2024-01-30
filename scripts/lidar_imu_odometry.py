@@ -42,7 +42,8 @@ W_N_I = 3
 A_W_I = 6
 W_W_I = 9
 
-I = np.identity(3)
+I_3 = np.identity(3)
+I_18 = np.eye(18)
 
 
 def float_ts_to_ros_stamp(ts: float):
@@ -174,22 +175,22 @@ class ErrorState:
         # Construct the state transition matrix Fx in order to propagate the error state covariance matrix Pe: equation 270
         Fx = np.identity(self.DOF, dtype=float)  # type: np.ndarray
         # position
-        # Fx[P:P+3, P:P+3] = I
-        Fx[P:P+3, V:V+3] = I * dt
+        # Fx[P:P+3, P:P+3] = I_3
+        Fx[P:P+3, V:V+3] = I_3 * dt
         # velocity
-        # Fx[V:V+3, V:V+3] = I
+        # Fx[V:V+3, V:V+3] = I_3
         Fx[V:V+3, Q:Q+3] = - x.q.as_matrix() @ skew(a_m - x.a_b) @ self.theta * dt
         Fx[V:V+3, A_B:A_B+3] = - x.q.as_matrix() * dt
-        Fx[G:G+3, G:G+3] = I * dt
+        Fx[G:G+3, G:G+3] = I_3 * dt
         # rot part
         Fx[Q:Q+3, Q:Q+3] = R.from_rotvec(((w_m - x.w_b) * dt).flatten()).as_matrix().transpose()
-        Fx[W_B:W_B+3, W_B:W_B+3] = - I * dt
+        Fx[W_B:W_B+3, W_B:W_B+3] = - I_3 * dt
         # accel bias part
-        # Fx[A_B:A_B+3, A_B:A_B+3] = I
+        # Fx[A_B:A_B+3, A_B:A_B+3] = I_3
         # gyro bias part
-        # Fx[W_B:W_B+3, W_B:W_B+3] = I
+        # Fx[W_B:W_B+3, W_B:W_B+3] = I_3
         # gravity part
-        # Fx[G:G+3, G:G+3] = I
+        # Fx[G:G+3, G:G+3] = I_3
 
         # Fx = self.predict_error_state_jacobian(x)  # type: np.ndarray
         # Fi = self.predict_noise_jacobian()  # type: np.ndarray
@@ -221,6 +222,18 @@ class ErrorStateKalmanFilter:
         self.turn_rate_samples = deque()
         self.time_samples = deque()
 
+        self.scan_matching_update_translation_std = 0.01
+        self.scan_matching_update_translation_var_vec = np.ones(
+            (3,)) * self.scan_matching_update_translation_std * self.scan_matching_update_translation_std
+        self.scan_matching_update_rotation_std = 0.5  # degree
+        self.scan_matching_update_translation_std = np.deg2rad(self.scan_matching_update_rotation_std)
+        self.scan_matching_update_rotation_var_vec = np.ones(
+            (3,)) * self.scan_matching_update_rotation_std * self.scan_matching_update_rotation_std
+        self.scan_matching_update_measurement_covariance = np.diag(
+            [self.scan_matching_update_translation_var_vec, self.scan_matching_update_rotation_var_vec])
+        self.V = self.scan_matching_update_measurement_covariance  # shorter name for convenience
+        print(f'scan_matching_update_measurement_covariance\n{self.scan_matching_update_measurement_covariance}')
+
     def predict(self, dt: float):
         # print(f'position before prediction: {self.nominal_state.p.flatten()}')
         # print(f'velocity before prediction: {self.nominal_state.v.flatten()}')
@@ -235,7 +248,7 @@ class ErrorStateKalmanFilter:
         if not self.imu_calibrated:
             return False
         if self.time is None:
-            # get the imu sample before the first time_upto
+            # get the imu sample before the first time_upto, once after imu is calibrated
             for time in deepcopy(self.time_samples):
                 if time <= time_upto:
                     self.time = self.time_samples.popleft()
@@ -274,6 +287,7 @@ class ErrorStateKalmanFilter:
             self.w_m = self.turn_rate_samples.popleft()
 
         print(f'Finished predict_upto: time_upto {time_upto} - self.time = {self.time} = {time_upto - self.time}')
+
         return True
 
     # calibrate imu assuming horizontal starting pose
@@ -306,8 +320,43 @@ class ErrorStateKalmanFilter:
             raise ValueError(f'Inserting IMU sample, Current time {time} < last time {self.time_samples[-1]}, IMU out of order.')
         self.time_samples.append(time)
 
-    def update(self, z: np.ndarray):
-        pass
+    # Perform a scan matching update, where z is the relative transformation in R^(4x4) between the last and current point cloud
+    def scan_matching_update(self, z: np.ndarray, last_nominal_state: NominalState, R_LI: np.ndarray, t_LI: np.ndarray):
+        # calculate the Kalman gain
+        last_nominal_state_cov = deepcopy(last_nominal_state.cov)
+        # construct the Jacobian H_nominal_state in R^(6x18) of h_trans and h_rot wrt to last nominal state eq. (277) H_x
+        # 6 DOF measurement = 3 DOF (translation) + 3 DOF (rotation)
+        # 18 DOF for the nominal state
+        # Note that we use hard coded values for slicing H_nominal state below concerning the rows of H_nominal state
+        # Otherwise use the state entries for the columns which correspond to the actual state matrix entries
+
+        H_nominal_state = np.zeros((6, last_nominal_state.DOF))
+
+        R_WL_k_1 = last_nominal_state.q.as_matrix()  # R from LIDAR to WORLD at k-1
+        R_WL_k = self.nominal_state.q.as_matrix()  # R from LIDAR to WORLD at k
+        t_WL_k_1 = last_nominal_state.p  # translation from LIDAR to WORLD at k-1
+        t_WL_k = self.nominal_state.p  # translation from LIDAR to WORLD at k
+        # h_trans wrt state translation
+        H_nominal_state[0:3, P:P+3] = -R_LI.transpose() @ R_WL_k_1
+        # h_trans wrt state rotation
+        H_nominal_state[0:3, Q:Q+3] = R_LI.transpose() @ R_WL_k_1.transpose() @ skew(R_WL_k @ t_LI + t_WL_k - t_WL_k_1) @ R_WL_k_1
+        # h_rot wrt state translation
+        # H_nominal_state[3:6, P:P+3] = np.zeros((3, 3))
+        # h_rot wrt state rotation
+        H_nominal_state[3:6, Q:Q+3] = - (R_WL_k @ R_LI).transpose() @ R_WL_k_1
+        print(f'scan matching update H_nominal_state\n{H_nominal_state[0:9, 0:9]:.2f}')
+        H_error_state = last_nominal_state.update_error_state_jacobian()
+        # Final correction jacobian eq. (277)
+        H = H_nominal_state @ H_error_state
+        # TODO find out whether it is possible to retrieve the covariance of the GICP alignment
+
+        # Kalman gain eq. (275)
+        K = P @ H.transpose() @ np.linalg.inv((H @ last_nominal_state_cov @ H.transpose() + self.V))
+
+        delta_state = K @ ()
+
+        # Joseph form of covariance propagation eq. (278)
+        self.error_state.Pe = (I_18 - K @ H) @ last_nominal_state_cov @ (I_18 - K @ H).transpose() + K @ V @ K.transpose()
 
 
 class LidarImuOdometryNode(Node):
@@ -334,9 +383,11 @@ class LidarImuOdometryNode(Node):
         self.path_topic = self.declare_parameter('path_topic', 'path').value
         self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
-        # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion
+        # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion, this is IMU to Body/LIDAR -> R_LI
         self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 1.0]).value
         self.imu_extrinsic_quat = R.from_quat(self.imu_extrinsic_quat)
+        self.R_LI = self.imu_extrinsic_quat.as_matrix()
+        self.t_LI = self.declare_parameter('imu_extrinsic_translation', [0.0, 0.0, 0.0]).value
 
         self.downsample_resolution = self.declare_parameter('downsample_resolution', 0.1).value
 
@@ -489,6 +540,8 @@ class LidarImuOdometryNode(Node):
         # print(f'delta translation {delta_translation} delta angle (deg) {delta_angle}')
 
         # update the nominal state with the estimated transformation TODO
+        self.error_state_kalman_filter.scan_matching_update(delta_transformation, self.last_nominal_state, self.R_LI, self.t_LI)
+
         self.registration_method.swap_source_and_target()
         self.last_nominal_state = deepcopy(self.error_state_kalman_filter.nominal_state)
 
