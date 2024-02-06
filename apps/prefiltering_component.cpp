@@ -142,7 +142,7 @@ private:
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros )
     {
         // Convert to pcl pointcloud from ros PointCloud2
-        pcl::PointCloud<PointT>::Ptr src_cloud = std::make_shared<pcl::PointCloud<PointT>>();
+        pcl::PointCloud<PointT>::Ptr src_cloud = boost::make_shared<pcl::PointCloud<PointT>>();
         pcl::fromROSMsg( *src_cloud_ros, *src_cloud );
         if( src_cloud->empty() ) {
             return;
