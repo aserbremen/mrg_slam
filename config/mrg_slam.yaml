@@ -151,8 +151,8 @@ mrg_slam_component:
     enable_imu_orientation: false
     # keyframe registration params
     max_keyframes_per_update: 10000
-    keyframe_delta_trans: 2.0
-    keyframe_delta_angle: 2.0
+    keyframe_delta_trans: 1.0
+    keyframe_delta_angle: 1.0
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
@@ -212,7 +212,7 @@ mrg_slam_component:
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
     graph_request_min_accum_dist: 2.0
-    graph_request_max_robot_dist: 25.0
+    graph_request_max_robot_dist: 50.0
     graph_request_min_time_delay: 2.0
     graph_exchange_mode: "PATH_PROXIMITY"
     # update params
