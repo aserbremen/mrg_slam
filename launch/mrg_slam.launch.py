@@ -285,9 +285,9 @@ def launch_setup(context, *args, **kwargs):
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
         mrg_slam_params['init_pose'][1] = mrg_slam_params['y']
         mrg_slam_params['init_pose'][2] = mrg_slam_params['z']
-        mrg_slam_params['init_pose'][3] = np.deg2rad(mrg_slam_params['yaw'])
+        mrg_slam_params['init_pose'][3] = np.deg2rad(mrg_slam_params['roll'])
         mrg_slam_params['init_pose'][4] = np.deg2rad(mrg_slam_params['pitch'])
-        mrg_slam_params['init_pose'][5] = np.deg2rad(mrg_slam_params['roll'])
+        mrg_slam_params['init_pose'][5] = np.deg2rad(mrg_slam_params['yaw'])
         # set the correct frame ids according to the model namespace
         mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
         mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
