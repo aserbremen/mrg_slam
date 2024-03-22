@@ -85,6 +85,7 @@ def launch_setup(context, *args, **kwargs):
         static_transform_params = config_params['lidar2base_publisher']['ros__parameters']
         map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
         clock_publisher_ros2_params = config_params['clock_publisher_ros2']['ros__parameters']
+        velodyne_params = config_params['velodyne']['ros__parameters']
         prefiltering_params = config_params['prefiltering_component']['ros__parameters']
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
         floor_detection_params = config_params['floor_detection_component']['ros__parameters']
@@ -94,6 +95,7 @@ def launch_setup(context, *args, **kwargs):
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
     static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
     map2robotmap_publisher_params = overwrite_yaml_params_from_cli(map2robotmap_publisher_params, context.launch_configurations)
+    velodyne_params = overwrite_yaml_params_from_cli(velodyne_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
@@ -105,6 +107,7 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(static_transform_params, 'static_transform_params')
     print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
     print_yaml_params(clock_publisher_ros2_params, 'clock_publisher_ros2_params')
+    print_yaml_params(velodyne_params, 'velodyne_params')
     print_yaml_params(prefiltering_params, 'prefiltering_params')
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
     print_yaml_params(floor_detection_params, 'floor_detection_params')
@@ -114,7 +117,6 @@ def launch_setup(context, *args, **kwargs):
     frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
     child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
     static_transform_publisher = Node(
-        # name=model_namespace + '_lidar2base_publisher',
         name='lidar2base_publisher',
         namespace=model_namespace,
         package='tf2_ros',
@@ -166,7 +168,7 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
-    if os.path.expandvars('$ROS_DISTRO') != 'humble':
+    if os.path.expandvars('$ROS_DISTRO') == 'foxy' or os.path.expandvars('$ROS_DISTRO') == 'eloquent':
         clock_publisher_ros2 = Node(
             package='mrg_slam',
             executable='clock_publisher_ros2.py',
@@ -206,6 +208,43 @@ def launch_setup(context, *args, **kwargs):
         parameters=[shared_params],
         prefix=prefix
     )
+
+    # Launch the velodyne driver and pointcloud transform node if the lidar is enabled in the config
+    # Note, we don't need the laserscan node, since we only use the pointcloud data
+    # Also, we set the frame_ids according to the model_namespace, e.g. atlas/velodyne (default without namespace = velodyne)
+    if velodyne_params['enable_velodyne']:
+        velodyne_driver_share_dir = get_package_share_directory('velodyne_driver')
+        velodyne_params_file = os.path.join(velodyne_driver_share_dir, 'config',
+                                            velodyne_params['velodyne_driver']['driver_node_params_file'])
+        with open(velodyne_params_file, 'r') as f:
+            driver_node_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
+        # overwrite the frame_id to consider the model_namespace
+        driver_node_params['frame_id'] = model_namespace + '/' + velodyne_params['velodyne_driver']['frame_id']
+        velodyne_driver_node = ComposableNode(
+            package='velodyne_driver',
+            plugin='velodyne_driver::VelodyneDriver',
+            name='velodyne_driver_node',
+            namespace=model_namespace,
+            parameters=[shared_params, driver_node_params],
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
+        velodyne_transform_share_dir = get_package_share_directory('velodyne_pointcloud')
+        velodyne_transform_params_file = os.path.join(velodyne_transform_share_dir, 'config',
+                                                      velodyne_params['velodyne_transform']['transform_node_params_file'])
+        with open(velodyne_transform_params_file, 'r') as f:
+            transform_node_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
+        # overwrite the frame_id to consider the model_namespace, and set correct calibration file
+        transform_node_params['fixed_frame'] = model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
+        transform_node_params['calibration'] = os.path.join(velodyne_transform_share_dir, 'params',
+                                                            velodyne_params['velodyne_transform']['calibration'])
+        velodyne_transform_node = ComposableNode(
+            package='velodyne_pointcloud',
+            plugin='velodyne_pointcloud::Transform',
+            name='velodyne_transform_node',
+            namespace=model_namespace,
+            parameters=[shared_params, transform_node_params],
+            extra_arguments=[{'use_intra_process_comms': True}]
+        )
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
     prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
@@ -323,6 +362,9 @@ def launch_setup(context, *args, **kwargs):
         )
 
     composable_nodes = []
+    if velodyne_params['enable_velodyne']:
+        composable_nodes.append(velodyne_driver_node)
+        composable_nodes.append(velodyne_transform_node)
     if prefiltering_params['enable_prefiltering']:
         composable_nodes.append(prefiltering_node)
     if scan_matching_odometry_params['enable_scan_matching_odometry']:
@@ -351,8 +393,7 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list.append(load_composable_nodes)
     if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
         launch_description_list.append(odom_to_file_node)
-
-    # Return nodes
+    # Return nodes to our OpenFunction
     return launch_description_list
 
 
