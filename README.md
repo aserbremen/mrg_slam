@@ -20,7 +20,7 @@ Here are some things to consider when using the `mrg_slam` package:
 - All robot names participating in the multi-robot SLAM should be given in the `multi_robot_names` parameter in the used configuration file.
 - Most nodes in the `mrg_slam.yaml` can be enabled/disabled by setting the respective parameter to `true`/`false` for testing certain parts of the SLAM system.
 
-- Check out the [mrg_slam_velodyne_VLP16.yaml](config/mrg_slam_velodyne_VLP16.yaml) file for an example configuration file for the SLAM using live data from a Velodyne VLP-16 LIDAR sensor. `use_sim_time` is set to true and `velodyne/ros__parameters/enable_velodyne` is set to true in this configuration file.
+- Check out the [mrg_slam_velodyne_VLP16.yaml](config/mrg_slam_velodyne_VLP16.yaml) file for an example configuration file for the SLAM using live data from a Velodyne VLP-16 LIDAR sensor. `use_sim_time` is set to `false` and `velodyne/ros__parameters/enable_velodyne` is set to true in this configuration file.
   - We launch the velodyne driver node and the transform node ourselves in the launch file, because we want the `frame_id` in the point cloud message to be `model_namespace/velodyne`. The `frame_id` in the point cloud message is set to `velodyne` by default in the velodyne driver node and cannot be changed easily.
   - Also we don't need the laser scan message which is published by the velodyne driver standard launch file. We only need the point cloud message.
 
