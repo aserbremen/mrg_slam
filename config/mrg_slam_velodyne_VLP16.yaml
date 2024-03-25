@@ -5,7 +5,6 @@
     use_sim_time: false # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
-    start_rviz2: false
 
 # Transform between lidar and base_link
 lidar2base_publisher:

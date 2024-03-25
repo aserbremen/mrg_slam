@@ -50,7 +50,6 @@ If you want to debug another node, you need to move the prefix in the full launc
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
-    'start_rviz2': bool,
     'enable_floor_detection': bool,
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
@@ -187,18 +186,6 @@ def launch_setup(context, *args, **kwargs):
             parameters=[shared_params],
             output='both'
         )
-
-    # # Start rviz2 from this launch file if set to true
-    # if shared_params['start_rviz2']:
-    #     rviz2 = Node(
-    #         name='rviz2',
-    #         package='rviz2',
-    #         executable='rviz2',
-    #         arguments=['-d', os.path.join(get_package_share_directory(
-    #             'mrg_slam'), 'rviz', 'hdl_multi_robot_graph_slam_ros2.rviz')],
-    #         parameters=[shared_params],
-    #         output='both'
-    #     )
 
     # # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
     # if os.path.expandvars('$ROS_DISTRO') != 'humble':

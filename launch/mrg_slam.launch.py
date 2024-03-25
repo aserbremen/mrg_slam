@@ -14,7 +14,6 @@ import numpy as np
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
-    'start_rviz2': bool,
     'enable_floor_detection': bool,
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
@@ -151,18 +150,6 @@ def launch_setup(context, *args, **kwargs):
                        str(map2robotmap_publisher_params['map2robotmap_yaw']),
                        map2robotmap_publisher_params['map2robotmap_frame_id'],
                        map2robotmap_child_frame_id],
-            parameters=[shared_params],
-            output='both'
-        )
-
-    # Start rviz2 from this launch file if set to true
-    if shared_params['start_rviz2']:
-        rviz2 = Node(
-            name='rviz2',
-            package='rviz2',
-            executable='rviz2',
-            arguments=['-d', os.path.join(get_package_share_directory(
-                'mrg_slam'), 'rviz', 'hdl_multi_robot_graph_slam_ros2.rviz')],
             parameters=[shared_params],
             output='both'
         )
@@ -383,10 +370,8 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list = [static_transform_publisher]
     if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
         launch_description_list.append(map2robotmap_publisher)
-    if shared_params['start_rviz2']:
-        launch_description_list.append(rviz2)
     # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
-    if os.path.expandvars('$ROS_DISTRO') != 'humble':
+    if os.path.expandvars('$ROS_DISTRO') == 'foxy' or os.path.expandvars('$ROS_DISTRO') == 'eloquent':
         launch_description_list.append(clock_publisher_ros2)
     launch_description_list.append(map2odom_publisher_ros2)
     launch_description_list.append(container)
