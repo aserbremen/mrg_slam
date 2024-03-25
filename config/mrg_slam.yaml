@@ -138,7 +138,8 @@ mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
     own_name: "atlas"
-    /properties/scenario/rovers/names: ["atlas", "bestla"]
+    # The names of the robots that are part of the multi-robot system need to be specified here
+    multi_robot_names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15

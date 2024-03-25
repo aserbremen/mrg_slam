@@ -122,7 +122,8 @@ mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
     own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
+    # The names of the robots that are part of the multi-robot system need to be specified here
+    multi_robot_names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15

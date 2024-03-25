@@ -26,7 +26,7 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
 
     registration = select_registration_method( node_ros.get() );
 
-    auto robot_names = node_ros->get_parameter( "/properties/scenario/rovers/names" ).as_string_array();
+    auto robot_names = node_ros->get_parameter( "multi_robot_names" ).as_string_array();
     for( const auto& robot_name : robot_names ) {
         last_loop_edge_accum_distance_map[robot_name] = 0.0;
     }
