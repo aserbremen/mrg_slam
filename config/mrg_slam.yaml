@@ -136,6 +136,7 @@ floor_detection_component:
 mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
+    # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "atlas"
     # The names of the robots that are part of the multi-robot system need to be specified here
     multi_robot_names: ["atlas", "bestla"]
@@ -146,9 +147,9 @@ mrg_slam_component:
     x: 0.0
     y: 0.0
     z: 0.0
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
+    roll: 0.0 # degrees
+    pitch: 0.0 # degrees
+    yaw: 0.0 # degrees
     # init_pose array is overwritten by above values
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
     init_pose_topic: "NONE"
