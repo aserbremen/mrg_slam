@@ -79,7 +79,8 @@ def pointcloud2_to_array(cloud_msg: PointCloud2, only_xyz=True):
     return points
 
 
-def error_quaternion_derivative(q: np.ndarray):  # Equation 281
+# Equation 281
+def error_quaternion_derivative(q: np.ndarray):
     result = np.ndarray((4, 3))
     qx = q[0]
     qy = q[1]
@@ -94,8 +95,32 @@ def error_quaternion_derivative(q: np.ndarray):  # Equation 281
     return result
 
 
-class NominalState:
-    def __init__(self):
+# class NominalState:
+#     def __init__(self):
+#         self.p = np.zeros((3, 1))  # position
+#         self.v = np.zeros((3, 1))  # velocity
+#         self.q = R.identity()  # quaternion
+#         self.a_b = np.zeros((3, 1))
+#         self.w_b = np.zeros((3, 1))
+#         self.g = np.array([0.0, 0.0, -NORM_G])
+#         self.g = self.g[:, np.newaxis]  # make it a column vector
+#         self.DOF = 18
+#         self.cov = np.zeros((self.DOF, self.DOF))
+
+#     # a_m: measured acceleration
+#     # dt: time step
+#     def predict(self, a_m: np.ndarray, w_m: np.ndarray, dt: float):
+#         self.p += self.v * dt + 0.5 * (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt * dt
+#         self.v += (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt
+#         self.q = self.q * R.from_rotvec(((w_m - self.w_b).flatten() * dt))
+#         # self.a_b += 0 # for completeness
+#         # self.w_b += 0 # for completeness
+#         # self.g += 0 # for completeness
+
+
+class ErrorState:
+    def __init__(self) -> None:
+        # nominal state
         self.p = np.zeros((3, 1))  # position
         self.v = np.zeros((3, 1))  # velocity
         self.q = R.identity()  # quaternion
@@ -106,27 +131,15 @@ class NominalState:
         self.DOF = 18
         self.cov = np.zeros((self.DOF, self.DOF))
 
-    # a_m: measured acceleration
-    # dt: time step
-    def predict(self, a_m: np.ndarray, w_m: np.ndarray, dt: float):
-        self.p += self.v * dt + 0.5 * (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt * dt
-        self.v += (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt
-        self.q = self.q * R.from_rotvec(((w_m - self.w_b).flatten() * dt))
-        # self.a_b += 0 # for completeness
-        # self.w_b += 0 # for completeness
-        # self.g += 0 # for completeness
-
-
-class ErrorState:
-    def __init__(self) -> None:
-        self.pe = np.zeros((3, 1))
-        self.ve = np.zeros((3, 1))
-        self.theta = np.zeros((3, 1))  # error rotation in R^3
-        self.a_b_e = np.zeros((3, 1))
-        self.w_b_e = np.zeros((3, 1))
-        self.ge = np.zeros((3, 1))
-        self.DOF = 18
-        self.Pe = np.zeros((self.DOF, self.DOF))  # error covariance
+        # error state
+        # self.pe = np.zeros((3, 1))
+        # self.ve = np.zeros((3, 1))
+        # self.theta = np.zeros((3, 1))  # error rotation in R^3
+        # self.a_b_e = np.zeros((3, 1))
+        # self.w_b_e = np.zeros((3, 1))
+        # self.ge = np.zeros((3, 1))
+        # self.DOF = 18
+        self.error_cov = np.zeros((self.DOF, self.DOF))  # error covariance
 
         # measured accel and turn rate
         # self.a_m = np.zeros((3, 1))
@@ -147,30 +160,20 @@ class ErrorState:
 
         self.Fi = self.perturbation_vector_jacobian()  # type: np.ndarray # equation 271
 
-    def perturbation_vector_jacobian(self):
-        # equation 271
-        Fi = np.zeros((18, 12))
-        Fi[V:V+3, A_N_I:A_N_I+3] = np.identity(3)
-        Fi[Q:Q+3, W_N_I:W_N_I+3] = np.identity(3)
-        Fi[A_B:A_B+3, A_W_I:A_W_I+3] = np.identity(3)
-        Fi[W_B:W_B+3, W_W_I:W_W_I+3] = np.identity(3)
-        return Fi
+    # a_m: measured acceleration
+    # w_m: measured turn rate
+    # dt: time step
+    def predict(self, a_m: np.ndarray, w_m: np.ndarray, dt: float):
+        # predict the nominal state
+        self.p += self.v * dt + 0.5 * (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt * dt
+        self.v += (self.q.as_matrix() @ (a_m - self.a_b) + self.g) * dt
+        self.q = self.q * R.from_rotvec(((w_m - self.w_b).flatten() * dt))
+        # self.a_b += 0 # for completeness
+        # self.w_b += 0 # for completeness
+        # self.g += 0 # for completeness
 
-    def update_error_state_jacobian(self):
-        X_error_state = np.identity((self.DOF, self.DOF))
-        X_error_state[Q:Q+3, Q:Q+3] = error_quaternion_derivative(self.x.q)  # make sure nominal q is up to date
-
-    def predict(self, x: NominalState, a_m: np.ndarray, w_m: np.ndarray, dt: float):
         # The error state mean is initialized to zero. In the prediction step the error state mean stays zero: equation 268
-        # x_e = Fx * x_e + Fi * w_i # equation 268
-
-        # self.pe += self.ve * self.dt
-        # self.ve += (- x.q.as_matrix() @ skew(self.a_m - x.a_b) @ self.theta - x.q.as_matrix() @ self.a_b_e + self.ge) * self.dt
-        # self.theta += R.from_rotvec((self.w_m - x.w_b) * self.dt) * self.theta - self.w_b_e * self.dt
-        # for completeness
-        # self.a_b_e += a_i # a_i random impulse
-        # self.w_b_e += w_i  # w_i random impulse
-        # self.ge += 0
+        # x_e = F_nominal_state(nominal_state, move_input) * error_state # equation 268
 
         # Construct the state transition matrix Fx in order to propagate the error state covariance matrix Pe: equation 270
         Fx = np.identity(self.DOF, dtype=float)  # type: np.ndarray
@@ -179,11 +182,11 @@ class ErrorState:
         Fx[P:P+3, V:V+3] = I_3 * dt
         # velocity
         # Fx[V:V+3, V:V+3] = I_3
-        Fx[V:V+3, Q:Q+3] = - x.q.as_matrix() @ skew(a_m - x.a_b) @ self.theta * dt
-        Fx[V:V+3, A_B:A_B+3] = - x.q.as_matrix() * dt
+        Fx[V:V+3, Q:Q+3] = - self.q.as_matrix() @ skew(a_m - self.a_b) @ self.theta * dt
+        Fx[V:V+3, A_B:A_B+3] = - self.q.as_matrix() * dt
         Fx[G:G+3, G:G+3] = I_3 * dt
         # rot part
-        Fx[Q:Q+3, Q:Q+3] = R.from_rotvec(((w_m - x.w_b) * dt).flatten()).as_matrix().transpose()
+        Fx[Q:Q+3, Q:Q+3] = R.from_rotvec(((w_m - self.w_b) * dt).flatten()).as_matrix().transpose()
         Fx[W_B:W_B+3, W_B:W_B+3] = - I_3 * dt
         # accel bias part
         # Fx[A_B:A_B+3, A_B:A_B+3] = I_3
@@ -201,48 +204,161 @@ class ErrorState:
         Qi[W_W_I:W_W_I+3, W_W_I:W_W_I+3] *= dt
 
         # Progate the error state covariance matrix Pe: equation 269
-        self.Pe = Fx @ self.Pe @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
+        self.error_cov = Fx @ self.error_cov @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
+
+    # def perturbation_vector_jacobian(self):
+    #     # equation 271
+    #     Fi = np.zeros((18, 12))
+    #     Fi[V:V+3, A_N_I:A_N_I+3] = np.identity(3)
+    #     Fi[Q:Q+3, W_N_I:W_N_I+3] = np.identity(3)
+    #     Fi[A_B:A_B+3, A_W_I:A_W_I+3] = np.identity(3)
+    #     Fi[W_B:W_B+3, W_W_I:W_W_I+3] = np.identity(3)
+    #     return Fi
+
+    def update_error_state_jacobian(self):
+        # equation 279
+        X_error_state = np.identity((self.DOF, self.DOF))
+        X_error_state[Q:Q+3, Q:Q+3] = error_quaternion_derivative(self.q)  # make sure nominal q is up to date
+
+    def update_scan_matching_jacobian(self):
+        # equation 279
+        X_error_state = np.identity((self.DOF, self.DOF))
+        X_error_state[Q:Q+3, Q:Q+3] = error_quaternion_derivative(self.q)  # make sure nominal q is up to date
+        # construct the Jacobian H_nomial_state
+        H_nominal_state = np.zeros((6, self.DOF))
+
+        R_WL_k_1 = last_nominal_state.q.as_matrix()  # R from LIDAR to WORLD at k-1
+        R_WL_k = self.nominal_state.q.as_matrix()  # R from LIDAR to WORLD at k
+        t_WL_k_1 = last_nominal_state.p  # translation from LIDAR to WORLD at k-1
+        t_WL_k = self.nominal_state.p  # translation from LIDAR to WORLD at k
+        # h_trans wrt state translation
+        H_nominal_state[0:3, P:P+3] = -R_LI.transpose() @ R_WL_k_1
+        # h_trans wrt state rotation
+        H_nominal_state[0:3, Q:Q+3] = R_LI.transpose() @ R_WL_k_1.transpose() @ skew(R_WL_k @ t_LI + t_WL_k - t_WL_k_1) @ R_WL_k_1
+        # h_rot wrt state translation
+        # H_nominal_state[3:6, P:P+3] = np.zeros((3, 3))
+        # h_rot wrt state rotation
+        H_nominal_state[3:6, Q:Q+3] = - (R_WL_k @ R_LI).transpose() @ R_WL_k_1
+        print(f'scan matching update H_nominal_state\n{H_nominal_state[0:9, 0:9]:.2f}')
+
+    def update_scan_matching_lidar(self, z: np.ndarray):
+        # calculate the Kalman gain
+        last_nominal_state_cov = deepcopy(self.cov)
+        H = self.update_scan_matching_jacobian()  # in R^(6x18)
+        K = self.cov @ H.transpose() @ np.linalg.inv((H @ last_nominal_state_cov @ H.transpose() + self.V))
 
 
 class ErrorStateKalmanFilter:
     def __init__(self) -> None:
-        self.nominal_state = NominalState()  # type: NominalState
-        self.error_state = ErrorState()  # type: ErrorState
-        self.a_m = np.zeros((3, 1))
-        self.w_m = np.zeros((3, 1))
+        # nominal state
+        self.p = np.zeros((3, 1))  # position
+        self.v = np.zeros((3, 1))  # velocity
+        self.q = R.identity()  # quaternion
+        self.a_b = np.zeros((3, 1))
+        self.w_b = np.zeros((3, 1))
+        self.g = np.array([0.0, 0.0, -NORM_G])
+        self.g = self.g[:, np.newaxis]  # make it a column vector
+        self.DOF = 18
+        self.cov = np.zeros((self.DOF, self.DOF))
+
+        # error state
+        # self.pe = np.zeros((3, 1))
+        # self.ve = np.zeros((3, 1))
+        # self.theta = np.zeros((3, 1))  # error rotation in R^3
+        # self.a_b_e = np.zeros((3, 1))
+        # self.w_b_e = np.zeros((3, 1))
+        # self.ge = np.zeros((3, 1))
+        # self.DOF = 18
+        self.error_cov = np.zeros((self.DOF, self.DOF))  # error covariance
+
+        # measured accel and turn rate
+        # self.a_m = np.zeros((3, 1))
+        # self.w_m = np.zeros((3, 1))
         self.time = None
+
+        # noise parameters
+        self.a_n = 0.04  # noise applied to velocity error
+        self.w_n = 0.04  # noise applied to rotation error
+        self.a_w = 0.00433  # noise applied to accelerometer bias
+        self.w_w = 0.00255  # noise applied to gyroscope bias
+
+        # this is the noise covariance matrix of the noise applied to the error state
+        self.Q = np.zeros((12, 12))
+        self.Q[A_N_I:A_N_I+3, A_N_I:A_N_I+3] = np.diag([self.a_n, self.a_n, self.a_n])  # equation 262
+        self.Q[W_N_I:W_N_I+3, W_N_I:W_N_I+3] = np.diag([self.w_n, self.w_n, self.w_n])  # equation 263
+        self.Q[A_W_I:A_W_I+3, A_W_I:A_W_I+3] = np.diag([self.a_w, self.a_w, self.a_w])  # equation 264
+        self.Q[W_W_I:W_W_I+3, W_W_I:W_W_I+3] = np.diag([self.w_w, self.w_w, self.w_w])  # equation 265
+
+        # equation 271
+        self.Fi = np.zeros((18, 12))
+        self.Fi[V:V+3, A_N_I:A_N_I+3] = np.identity(3)
+        self.Fi[Q:Q+3, W_N_I:W_N_I+3] = np.identity(3)
+        self.Fi[A_B:A_B+3, A_W_I:A_W_I+3] = np.identity(3)
+        self.Fi[W_B:W_B+3, W_W_I:W_W_I+3] = np.identity(3)
+
+        # imu calibration
         self.imu_calibrated = False
-        self.imu_calibration_num_samples = 0
         self.imu_calibration_max_samples = 800
-        self.imu_calibration_acc_samples = []
-        self.imu_calibration_turn_rate_samples = []
-        self.imu_calibration_time_samples = []
+        # The first time any callback is called, for debugging
         self.first_time = None
         self.acc_samples = deque()
         self.turn_rate_samples = deque()
         self.time_samples = deque()
 
-        self.scan_matching_update_translation_std = 0.01
-        self.scan_matching_update_translation_var_vec = np.ones(
-            (3,)) * self.scan_matching_update_translation_std * self.scan_matching_update_translation_std
-        self.scan_matching_update_rotation_std = 0.5  # degree
-        self.scan_matching_update_translation_std = np.deg2rad(self.scan_matching_update_rotation_std)
-        self.scan_matching_update_rotation_var_vec = np.ones(
-            (3,)) * self.scan_matching_update_rotation_std * self.scan_matching_update_rotation_std
+        self.scan_matching_update_translation_std = 0.01  # meters
+        self.scan_matching_update_translation_var_vec = self.scan_matching_update_translation_std * \
+            self.scan_matching_update_translation_std * np.ones((3,))
+        self.scan_matching_update_rotation_std = 1.0  # degree
+        self.scan_matching_update_rotation_std = np.deg2rad(self.scan_matching_update_rotation_std)
+        self.scan_matching_update_rotation_var_vec = self.scan_matching_update_rotation_std * \
+            self.scan_matching_update_rotation_std * np.ones((3,))
         self.scan_matching_update_measurement_covariance = np.diag(
             [self.scan_matching_update_translation_var_vec, self.scan_matching_update_rotation_var_vec])
         self.V = self.scan_matching_update_measurement_covariance  # shorter name for convenience
         print(f'scan_matching_update_measurement_covariance\n{self.scan_matching_update_measurement_covariance}')
 
     def predict(self, dt: float):
-        # print(f'position before prediction: {self.nominal_state.p.flatten()}')
-        # print(f'velocity before prediction: {self.nominal_state.v.flatten()}')
-        # print(f'orientation before prediction: {self.nominal_state.q.as_quat()}')
-        self.nominal_state.predict(self.a_m, self.w_m, dt)
-        # print(f'position after prediction: {self.nominal_state.p.flatten()}')
-        # print(f'velocity after prediction: {self.nominal_state.v.flatten()}')
-        # print(f'orientation after prediction: {self.nominal_state.q.as_quat()}')
-        self.error_state.predict(self.nominal_state, self.a_m, self.w_m, dt)
+        # predict the nominal state
+        self.p += self.v * dt + 0.5 * (self.q.as_matrix() @ (self.a_m - self.a_b) + self.g) * dt * dt
+        self.v += (self.q.as_matrix() @ (self.a_m - self.a_b) + self.g) * dt
+        self.q = self.q * R.from_rotvec(((self.w_m - self.w_b).flatten() * dt))
+        # self.a_b += 0 # for completeness
+        # self.w_b += 0 # for completeness
+        # self.g += 0 # for completeness
+
+        # The error state mean is initialized to zero. In the prediction step the error state mean stays zero: equation 268
+        # x_e = F_nominal_state(nominal_state, move_input) * error_state # equation 268
+
+        # Construct the state transition matrix Fx in order to propagate the error state covariance matrix Pe: equation 270
+        Fx = np.identity(self.DOF, dtype=float)  # type: np.ndarray
+        # position
+        # Fx[P:P+3, P:P+3] = I_3
+        Fx[P:P+3, V:V+3] = I_3 * dt
+        # velocity
+        # Fx[V:V+3, V:V+3] = I_3
+        Fx[V:V+3, Q:Q+3] = - self.q.as_matrix() @ skew(self.a_m - self.a_b) * dt
+        Fx[V:V+3, A_B:A_B+3] = - self.q.as_matrix() * dt
+        Fx[G:G+3, G:G+3] = I_3 * dt
+        # rot part
+        Fx[Q:Q+3, Q:Q+3] = R.from_rotvec(((self.w_m - self.w_b) * dt).flatten()).as_matrix().transpose()
+        Fx[W_B:W_B+3, W_B:W_B+3] = - I_3 * dt
+        # accel bias part
+        # Fx[A_B:A_B+3, A_B:A_B+3] = I_3
+        # gyro bias part
+        # Fx[W_B:W_B+3, W_B:W_B+3] = I_3
+        # gravity part
+        # Fx[G:G+3, G:G+3] = I_3
+
+        # Fx = self.predict_error_state_jacobian(x)  # type: np.ndarray
+        # Fi = self.predict_noise_jacobian()  # type: np.ndarray
+        Qi = self.Q  # type: np.ndarray
+        Qi[A_N_I:A_N_I+3, A_N_I:A_N_I+3] *= dt * dt
+        Qi[W_N_I:W_N_I+3, W_N_I:W_N_I+3] *= dt * dt
+        Qi[A_W_I:A_W_I+3, A_W_I:A_W_I+3] *= dt
+        Qi[W_W_I:W_W_I+3, W_W_I:W_W_I+3] *= dt
+
+        # Progate the error state covariance matrix Pe: equation 269
+        self.error_cov = Fx @ self.error_cov @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
 
     def predict_upto(self, time_upto: float) -> bool:
         if not self.imu_calibrated:
@@ -252,8 +368,8 @@ class ErrorStateKalmanFilter:
             for time in deepcopy(self.time_samples):
                 if time <= time_upto:
                     self.time = self.time_samples.popleft()
-                    self.a_m = self.acc_samples.popleft()
-                    self.w_m = self.turn_rate_samples.popleft()
+                    a_m = self.acc_samples.popleft()
+                    w_m = self.turn_rate_samples.popleft()
                     # print(f'Setting first prediction sample at time {self.time} for time_upto {time_upto}')
                 elif time > time_upto:
                     break
@@ -280,11 +396,11 @@ class ErrorStateKalmanFilter:
             if dt < 0:
                 raise ValueError(f'dt {dt} < 0 in predict_upto, filter time since start {self.time - self.first_time}')
             # print(f'\nPredicting one step with self.time {self.time} and dt {dt}')
-            self.predict(dt)
+            self.predict(dt, a_m, w_m)
             # pop the last time, acc, and turn rate samples, note that self.time is set above
             self.time_samples.popleft()
-            self.a_m = self.acc_samples.popleft()
-            self.w_m = self.turn_rate_samples.popleft()
+            a_m = self.acc_samples.popleft()
+            w_m = self.turn_rate_samples.popleft()
 
         print(f'Finished predict_upto: time_upto {time_upto} - self.time = {self.time} = {time_upto - self.time}')
 
@@ -293,32 +409,25 @@ class ErrorStateKalmanFilter:
     # calibrate imu assuming horizontal starting pose
     def calibrate_imu(self):
         # calculate the mean and covariance of the acc and turn rate samples
-        self.nominal_state.a_b = np.array(self.imu_calibration_acc_samples).mean(axis=0).reshape((3, 1))
-        self.nominal_state.a_b[2] -= NORM_G  # correct the gravity (assuming horizontal)
-        self.nominal_state.w_b = np.array(self.imu_calibration_turn_rate_samples).mean(axis=0).reshape((3, 1))
-        print(f'{len(self.imu_calibration_acc_samples)} imu samples used for bias calibration')
-        print(f'acc bias: {self.nominal_state.a_b.flatten()}')
-        print(f'turn rate bias {self.nominal_state.w_b.flatten()}')
-
-        self.acc_samples.extend(self.imu_calibration_acc_samples)
-        self.turn_rate_samples.extend(self.imu_calibration_turn_rate_samples)
-        self.time_samples.extend(self.imu_calibration_time_samples)
+        self.a_b = np.array(self.acc_samples).mean(axis=0).reshape((3, 1))
+        self.a_b[2] -= NORM_G  # correct the gravity (assuming horizontal)
+        self.w_b = np.array(self.imu_calibration_turn_rate_samples).mean(axis=0).reshape((3, 1))
+        print(f'{len(self.acc_samples)} imu samples used for bias calibration')
+        print(f'acc bias: {self.a_b.flatten()}')
+        print(f'turn rate bias {self.w_b.flatten()}')
 
         self.imu_calibrated = True
 
     def insert_imu_sample(self, acc: np.ndarray, turn_rate: np.ndarray, time: float):
-        if not self.imu_calibrated:
-            self.imu_calibration_acc_samples.append(acc)
-            self.imu_calibration_turn_rate_samples.append(turn_rate)
-            self.imu_calibration_time_samples.append(time)
-            if len(self.imu_calibration_acc_samples) == self.imu_calibration_max_samples:
-                self.calibrate_imu()
-            return
         self.acc_samples.append(acc)
         self.turn_rate_samples.append(turn_rate)
+        self.time_samples.append(time)
+        if not self.imu_calibrated:
+            if len(self.acc_samples) == self.imu_calibration_max_samples:
+                self.calibrate_imu()
+            return
         if len(self.time_samples) > 0 and time < self.time_samples[-1]:
             raise ValueError(f'Inserting IMU sample, Current time {time} < last time {self.time_samples[-1]}, IMU out of order.')
-        self.time_samples.append(time)
 
     # Perform a scan matching update, where z is the relative transformation in R^(4x4) between the last and current point cloud
     def scan_matching_update(self, z: np.ndarray, last_nominal_state: NominalState, R_LI: np.ndarray, t_LI: np.ndarray):
@@ -370,20 +479,22 @@ class LidarImuOdometryNode(Node):
 
         self.error_state_kalman_filter = ErrorStateKalmanFilter()
 
-        self.prediction_counter = 0
-
+        # Pose publisher
         self.pose_topic = self.declare_parameter('pose_topic', 'pose').value
         self.pose_pub = self.create_publisher(PoseStamped, self.pose_topic, 10)
 
+        # Odometry publisher
         self.odom_topic = self.declare_parameter('odom_topic', 'odom').value
         self.odom_pub = self.create_publisher(Odometry, self.odom_topic, 10)
 
+        # Path publisher
         self.path = Path()
         self.path.header.frame_id = 'map'
         self.path_topic = self.declare_parameter('path_topic', 'path').value
         self.path_pub = self.create_publisher(Path, self.path_topic, 10)
 
-        # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion, this is IMU to Body/LIDAR -> R_LI
+        # extrinsic calibration of IMU to LIDAR, this is IMU to Body/LIDAR -> R_LI, t_LI
+        # kimera multi [ 0.5, -0.5, 0.5, -0.5 ] quaternion
         self.imu_extrinsic_quat = self.declare_parameter('imu_extrinsic_rotation', [0.0, 0.0, 0.0, 1.0]).value
         self.imu_extrinsic_quat = R.from_quat(self.imu_extrinsic_quat)
         self.R_LI = self.imu_extrinsic_quat.as_matrix()
@@ -391,11 +502,13 @@ class LidarImuOdometryNode(Node):
 
         self.downsample_resolution = self.declare_parameter('downsample_resolution', 0.1).value
 
+        # Scan matching Path publisher
         self.scan_matching_path_pub = self.create_publisher(Path, 'scan_matching_path', 10)
-        self.init_guess_path_pub = self.create_publisher(Path, 'init_guess_path', 10)
         self.scan_matching_path = Path()
-        self.init_guess_path = Path()
         self.pure_scan_matching_pose = np.identity(4)
+        # Initial guess Path publisher
+        self.init_guess_path_pub = self.create_publisher(Path, 'init_guess_path', 10)
+        self.init_guess_path = Path()
         self.init_guess_pose = np.identity(4)
 
         # Setup scan matching registration
@@ -405,6 +518,7 @@ class LidarImuOdometryNode(Node):
         self.registration_method.set_max_correspondence_distance(2.0)
         self.registration_method.set_correspondence_randomness(20)
 
+        # Setup ground truth path publisher if available
         self.gt_path_file = self.declare_parameter('gt_path_file', '').value
         if os.path.exists(self.gt_path_file):
             self.gt_delimiter = self.declare_parameter('gt_delimiter', ' ').value
