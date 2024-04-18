@@ -250,7 +250,7 @@ private:
         // General and scenario parameters
         this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
         this->declare_parameter<std::string>( "own_name", "atlas" );
-        this->declare_parameter<std::vector<std::string>>( "/properties/scenario/rovers/names", { "atlas", "bestla" } );
+        this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
         this->declare_parameter<std::string>( "model_namespace", "" );
         this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
         this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
@@ -361,7 +361,7 @@ private:
         // Set member variables for this class
         points_topic    = this->get_parameter( "points_topic" ).as_string();
         own_name        = this->get_parameter( "own_name" ).as_string();
-        robot_names     = this->get_parameter( "/properties/scenario/rovers/names" ).as_string_array();
+        robot_names     = this->get_parameter( "multi_robot_names" ).as_string_array();
         model_namespace = this->get_parameter( "model_namespace" ).as_string();
         odom_sub_topic  = this->get_parameter( "odom_sub_topic" ).as_string();
         cloud_sub_topic = this->get_parameter( "cloud_sub_topic" ).as_string();

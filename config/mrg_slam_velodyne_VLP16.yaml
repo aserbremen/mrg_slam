@@ -2,7 +2,7 @@
 /**:
   ros__parameters:
     model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
-    use_sim_time: true # true for rosbags and for gazebo
+    use_sim_time: false # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
 
@@ -38,7 +38,7 @@ clock_publisher_ros2:
 # Parameters for the Velodyne driver and transform
 velodyne:
   ros__parameters:
-    enable_velodyne: false
+    enable_velodyne: true
     velodyne_driver:
         # This file will be loaded from the velodyne_driver package config share directory
         driver_node_params_file: VLP16-velodyne_driver_node-params.yaml
@@ -136,7 +136,6 @@ floor_detection_component:
 mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
-    # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "atlas"
     # The names of the robots that are part of the multi-robot system need to be specified here
     multi_robot_names: ["atlas", "bestla"]
