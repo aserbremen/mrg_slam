@@ -549,15 +549,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-<<<<<<< HEAD
       Max Intensity: 7.240432262420654
       Min Color: 0; 0; 0
       Min Intensity: -3.401914119720459
-=======
-      Max Intensity: 3.5201656818389893
-      Min Color: 0; 0; 0
-      Min Intensity: -2.681208610534668
->>>>>>> main
       Name: atlas/mrg_slam/map_points
       Position Transformer: XYZ
       Selectable: true
@@ -626,8 +620,6 @@ Visualization Manager:
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
       Name: bestla/mrg_slam/markers
-<<<<<<< HEAD
-=======
       Namespaces:
         {}
       Topic:
@@ -640,7 +632,6 @@ Visualization Manager:
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: atlas/slam/node_names
->>>>>>> main
       Namespaces:
         {}
       Topic:
@@ -648,27 +639,6 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-<<<<<<< HEAD
-        Value: /bestla/mrg_slam/markers
-      Value: false
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: atlas/slam/node_names
-=======
-        Value: /atlas/mrg_slam/markers/node_names
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
-      Name: bestla/slam/node_names
->>>>>>> main
-      Namespaces:
-        {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-<<<<<<< HEAD
         Value: /atlas/mrg_slam/markers/node_names
       Value: true
     - Class: rviz_default_plugins/MarkerArray
@@ -681,8 +651,6 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-=======
->>>>>>> main
         Value: /bestla/mrg_slam/markers/node_names
       Value: false
     - Alpha: 1
@@ -927,11 +895,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-<<<<<<< HEAD
       Distance: 49.45100784301758
-=======
-      Distance: 22.13644790649414
->>>>>>> main
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
