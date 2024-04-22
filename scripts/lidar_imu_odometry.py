@@ -133,12 +133,12 @@ class ErrorStateKalmanFilter:
         self.a_w = 0.00433  # noise applied to accelerometer bias
         self.w_w = 0.00255  # noise applied to gyroscope bias
 
-        # this is the noise covariance matrix of the noise applied to the error state, eq. (271)
+        # this is the noise covariance matrix of the noise applied to the error state, needs to be multiplied with the time step in the prediction step
         self.Q = np.zeros((12, 12))
-        self.Q[A_N_I:A_N_I+3, A_N_I:A_N_I+3] = np.diag([self.a_n, self.a_n, self.a_n])  # eq. (262)
-        self.Q[W_N_I:W_N_I+3, W_N_I:W_N_I+3] = np.diag([self.w_n, self.w_n, self.w_n])  # eq. (263)
-        self.Q[A_W_I:A_W_I+3, A_W_I:A_W_I+3] = np.diag([self.a_w, self.a_w, self.a_w])  # eq. (264)
-        self.Q[W_W_I:W_W_I+3, W_W_I:W_W_I+3] = np.diag([self.w_w, self.w_w, self.w_w])  # eq. (265)
+        self.Q[A_N_I:A_N_I+3, A_N_I:A_N_I+3] = np.diag([self.a_n, self.a_n, self.a_n])  # eq. (262), missing time step
+        self.Q[W_N_I:W_N_I+3, W_N_I:W_N_I+3] = np.diag([self.w_n, self.w_n, self.w_n])  # eq. (263), missing time step
+        self.Q[A_W_I:A_W_I+3, A_W_I:A_W_I+3] = np.diag([self.a_w, self.a_w, self.a_w])  # eq. (264), missing time step
+        self.Q[W_W_I:W_W_I+3, W_W_I:W_W_I+3] = np.diag([self.w_w, self.w_w, self.w_w])  # eq. (265), missing time step
 
         # eq. (271)
         self.Fi = np.zeros((18, 12))
@@ -149,7 +149,7 @@ class ErrorStateKalmanFilter:
 
         # imu calibration
         self.imu_calibrated = False
-        self.imu_calibration_max_samples = 5
+        self.imu_calibration_max_samples = 100
         self.acc_samples = deque()
         self.turn_rate_samples = deque()
         self.time_samples = deque()
@@ -169,9 +169,9 @@ class ErrorStateKalmanFilter:
         p, v, q, a_b, w_b, g = self.nominal_state.p, self.nominal_state.v, self.nominal_state.q, self.nominal_state.a_b, self.nominal_state.w_b, self.nominal_state.g
 
         # predict the nominal state
-        self.nominal_state.p += v * dt + 0.5 * (q.as_matrix() @ (a_m - a_b) + g) * dt * dt
-        self.nominal_state.v += (q.as_matrix() @ (a_m - a_b) + g) * dt
-        self.nominal_state.q = q * R.from_rotvec(((w_m - w_b).flatten() * dt))
+        # self.nominal_state.p += v * dt + 0.5 * (q.as_matrix() @ (a_m - a_b) + g) * dt * dt  # eq. (260a)
+        # self.nominal_state.v += (q.as_matrix() @ (a_m - a_b) + g) * dt  # eq. (260b)
+        # self.nominal_state.q = q * R.from_rotvec(((w_m - w_b).flatten() * dt))  # eq. (260c)
         # self.a_b += 0 # for completeness
         # self.w_b += 0 # for completeness
         # self.g += 0 # for completeness
@@ -182,30 +182,30 @@ class ErrorStateKalmanFilter:
         # Construct the state transition matrix Fx in order to propagate the error state covariance matrix Pe: eq. (270)
         Fx = np.identity(self.DOF, dtype=float)  # type: np.ndarray
         # position
-        # Fx[P:P+3, P:P+3] = I_3
-        Fx[P:P+3, V:V+3] = I_3 * dt
+        # Fx[P:P+3, P:P+3] = np.identity(3)
+        Fx[P:P+3, V:V+3] = np.identity(3) * dt
         # velocity
-        # Fx[V:V+3, V:V+3] = I_3
+        # Fx[V:V+3, V:V+3] = np.identity(3)
         Fx[V:V+3, Q:Q+3] = - q.as_matrix() @ skew(a_m - a_b) * dt
         Fx[V:V+3, A_B:A_B+3] = - q.as_matrix() * dt
-        Fx[G:G+3, G:G+3] = I_3 * dt
+        Fx[V:V+3, G:G+3] = np.identity(3) * dt
         # rot part
         Fx[Q:Q+3, Q:Q+3] = R.from_rotvec(((w_m - w_b) * dt).flatten()).as_matrix().transpose()
-        Fx[W_B:W_B+3, W_B:W_B+3] = - I_3 * dt
+        Fx[Q:Q+3, W_B:W_B+3] = - np.identity(3) * dt
         # accel bias part
-        # Fx[A_B:A_B+3, A_B:A_B+3] = I_3
+        # Fx[A_B:A_B+3, A_B:A_B+3] = np.identity(3)
         # gyro bias part
-        # Fx[W_B:W_B+3, W_B:W_B+3] = I_3
+        # Fx[W_B:W_B+3, W_B:W_B+3] = np.identity(3)
         # gravity part
-        # Fx[G:G+3, G:G+3] = I_3
+        # Fx[G:G+3, G:G+3] = np.identity(3)
 
         # Fx = self.predict_error_state_jacobian(x)  # type: np.ndarray
         # Fi = self.predict_noise_jacobian()  # type: np.ndarray
         Qi = self.Q  # type: np.ndarray
-        Qi[A_N_I:A_N_I+3, A_N_I:A_N_I+3] *= dt * dt
-        Qi[W_N_I:W_N_I+3, W_N_I:W_N_I+3] *= dt * dt
-        Qi[A_W_I:A_W_I+3, A_W_I:A_W_I+3] *= dt
-        Qi[W_W_I:W_W_I+3, W_W_I:W_W_I+3] *= dt
+        Qi[A_N_I:A_N_I+3, A_N_I:A_N_I+3] *= dt * dt  # eq. (262)
+        Qi[W_N_I:W_N_I+3, W_N_I:W_N_I+3] *= dt * dt  # eq. (263)
+        Qi[A_W_I:A_W_I+3, A_W_I:A_W_I+3] *= dt  # eq. (264)
+        Qi[W_W_I:W_W_I+3, W_W_I:W_W_I+3] *= dt  # eq. (265)
 
         # Progate the error state covariance matrix Pe: eq. (269)
         self.error_cov = Fx @ self.error_cov @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
@@ -233,14 +233,13 @@ class ErrorStateKalmanFilter:
             return False
 
         while self.time < time_upto:
-            print(f'len time samples {len(self.time_samples)} time_samples {self.time_samples}')
+            # print(f'len time samples {len(self.time_samples)} time_samples {self.time_samples}')
             if time_upto > self.time_samples[0]:
-                print(
-                    f'Predicting one step with self.time {self.time} and dt {self.time_samples[0] - self.time} and time_samples[0] {self.time_samples[0]}')
                 dt = self.time_samples[0] - self.time
+                # print(f'Predicting one step with self.time {self.time}, dt {dt}, time_samples[0] {self.time_samples[0]}')
                 self.time = self.time_samples[0]
             elif time_upto <= self.time_samples[0]:
-                print(f'Predicting one step with self.time {self.time} and dt {self.time_samples[0] - self.time} and time_upto {time_upto}')
+                # print(f'Predicting one step with self.time {self.time} and dt {self.time_samples[0] - self.time} and time_upto {time_upto}')
                 dt = time_upto - self.time
                 self.time = time_upto
             if dt < 0:
@@ -316,7 +315,7 @@ class ErrorStateKalmanFilter:
         # H_nominal_state[3:6, P:P+3] = np.zeros((3, 3))
         # h_rot wrt state rotation
         H_nominal_state[3:6, Q:Q+3] = - (R_WL_k @ R_LI).transpose() @ R_WL_k_1
-        print(f'scan matching update H_nominal_state\n{np.array2string( H_nominal_state[0:9, 0:9], precision=2, max_line_width=np.inf)}')
+        print(f'scan matching update H_nominal_state\n{np.array2string( H_nominal_state, precision=2, max_line_width=np.inf)}')
         H_error_state = np.identity(self.DOF)
         H_error_state[Q:Q+4, Q:Q+3] = error_quaternion_derivative(self.nominal_state.q)  # make sure nominal q is up to date
 
@@ -331,9 +330,10 @@ class ErrorStateKalmanFilter:
         error_state = kalman_gain @ (z-h)
         print(f'error state {np.array2string( error_state.flatten(), precision=2, max_line_width=np.inf)}')
 
-        self.print_state('before update')
+        state_before_update = deepcopy(self.nominal_state)
         self.inject_error_state(error_state)
-        self.print_state('after update')
+        state_after_update = deepcopy(self.nominal_state)
+        self.print_state_before_and_after(state_before_update, state_after_update)
         self.reset_error_state(error_state)
         # Joseph form of covariance propagation eq. (276)
         self.error_cov = (np.identity(self.DOF) - kalman_gain @ H_full) @ self.error_cov @ (np.identity(self.DOF) - kalman_gain @
@@ -350,6 +350,21 @@ class ErrorStateKalmanFilter:
         print(f'acceleration bias {np.array2string(self.nominal_state.a_b.flatten(), precision=6)}')
         print(f'gyro bias         {np.array2string(self.nominal_state.w_b.flatten(), precision=6)}')
         print(f'gravity           {np.array2string(self.nominal_state.g.flatten(), precision=6)}')
+
+    def print_state_before_and_after(self, state_before_update, state_after_update):
+        print('Before and after scan matching update')
+        print(f'position          {np.array2string(state_before_update.p.flatten(), precision=3)}')
+        print(f'position          {np.array2string(state_after_update.p.flatten(), precision=3)}')
+        print(f'velocity          {np.array2string(state_before_update.v.flatten(), precision=3)}')
+        print(f'velocity          {np.array2string(state_after_update.v.flatten(), precision=3)}')
+        print(f'quaternion        {np.array2string(state_before_update.q.as_quat(), precision=3)}')
+        print(f'quaternion        {np.array2string(state_after_update.q.as_quat(), precision=3)}')
+        print(f'acceleration bias {np.array2string(state_before_update.a_b.flatten(), precision=3)}')
+        print(f'acceleration bias {np.array2string(state_after_update.a_b.flatten(), precision=3)}')
+        print(f'gyro bias         {np.array2string(state_before_update.w_b.flatten(), precision=3)}')
+        print(f'gyro bias         {np.array2string(state_after_update.w_b.flatten(), precision=3)}')
+        print(f'gravity           {np.array2string(state_before_update.g.flatten(), precision=3)}')
+        print(f'gravity           {np.array2string(state_after_update.g.flatten(), precision=3)}')
 
     def inject_error_state(self, error_state: np.ndarray):
         self.nominal_state.p += error_state[P:P+3]
@@ -541,31 +556,34 @@ class LidarImuOdometryNode(Node):
 
         # GICP
         init_guess = self.init_guess_from_states()
-        delta_transformation = self.registration_method.align(initial_guess=init_guess)
+        delta_transformation_init_guess = self.registration_method.align(initial_guess=init_guess)
+        delta_transformation_no_init_guess = self.registration_method.align()
 
-        print(f'GICP transformation:\n{delta_transformation}')
-        print(f'init guess:\n{init_guess}')
+        print(f'GICP    init guess transformation:\n{delta_transformation_init_guess}')
+        print(f'GICP no init guess transformation:\n{delta_transformation_no_init_guess}')
+        # print(f'init guess:\n{init_guess}')
 
-        self.pure_scan_matching_pose = self.pure_scan_matching_pose @ delta_transformation
+        self.pure_scan_matching_pose = self.pure_scan_matching_pose @ delta_transformation_no_init_guess
         self.init_guess_pose = self.init_guess_pose @ init_guess
 
         R_init_guess = R.from_matrix(init_guess[:3, :3])
-        R_registration = R.from_matrix(delta_transformation[:3, :3])
+        R_registration = R.from_matrix(delta_transformation_no_init_guess[:3, :3])
         delta_angle = np.rad2deg((R_init_guess.inv() * R_registration).magnitude())
-        delta_translation = np.linalg.norm((init_guess[0:3, 3] - delta_transformation[0:3, 3]))
+        delta_translation = np.linalg.norm((init_guess[0:3, 3] - delta_transformation_no_init_guess[0:3, 3]))
 
         if delta_angle > 20 or delta_translation > 0.5 or (delta_translation == 0 and delta_angle == 0):
             print(f'recalculating gicp with init guess = identity delta_pos {delta_translation} delta_angle (deg) {delta_angle}')
-            delta_transformation = self.registration_method.align(initial_guess=np.identity(4))
+            delta_transformation_init_guess = delta_transformation_no_init_guess
 
         # print(f'initial guess from states:\n{init_guess}')
         # print(f'GICP delta transformation:\n{delta_transformation}')
         # print(f'delta translation {delta_translation} delta angle (deg) {delta_angle}')
 
         # update the nominal state with the estimated transformation TODO
+        final_transformation = delta_transformation_no_init_guess
         z_vec = np.zeros((6, 1))
-        z_vec[0:3] = delta_transformation[0:3, 3].reshape((3, 1))
-        z_vec[3:6] = R.from_matrix(delta_transformation[:3, :3]).as_rotvec().reshape((3, 1))
+        z_vec[0:3] = final_transformation[0:3, 3].reshape((3, 1))
+        z_vec[3:6] = R.from_matrix(final_transformation[:3, :3]).as_rotvec().reshape((3, 1))
         self.error_state_kalman_filter.scan_matching_update(z_vec, self.R_LI, self.t_LI)
 
         self.registration_method.swap_source_and_target()
