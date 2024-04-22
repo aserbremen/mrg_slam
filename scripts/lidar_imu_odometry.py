@@ -69,8 +69,9 @@ def skew(v: np.ndarray):
 # for some reason on different systems the point cloud message is numpified differently: array of tuples or dict
 def pointcloud2_to_array(cloud_msg: PointCloud2, only_xyz=True, remove_nans_and_inf=True):
     points = rnp.numpify(cloud_msg)
+    # numpify returns a numpy array of tuples which needs to be converted to a pure numpy array. a tuple is a single point
     if isinstance(points, np.ndarray):
-        points = np.array([list(point) for point in points]).reshape(-1, 5)
+        points = np.array([list(point) for row in points for point in row])
     if only_xyz:
         if isinstance(points, dict):
             points = points['xyz']
