@@ -369,8 +369,7 @@ class ErrorStateKalmanFilter:
     def inject_error_state(self, error_state: np.ndarray):
         self.nominal_state.p += error_state[P:P+3]
         self.nominal_state.v += error_state[V:V+3]
-        self.nominal_state.q = R.from_matrix(self.last_nominal_state.q.as_matrix() @
-                                             R.from_rotvec(error_state[Q:Q+3].flatten()).as_matrix())
+        self.nominal_state.q = self.last_nominal_state.q * R.from_rotvec(error_state[Q:Q+3].flatten())
         self.nominal_state.a_b += error_state[A_B:A_B+3]
         self.nominal_state.w_b += error_state[W_B:W_B+3]
         self.nominal_state.g += error_state[G:G+3]
@@ -379,10 +378,10 @@ class ErrorStateKalmanFilter:
         rot_error = error_state[Q:Q+3]
         # eq. (285) setting the error_state to 0 which is not necessary
         # self.error_state <- 0
-        G = np.identity(self.DOF)
-        G[Q:Q+3, Q:Q+3] = np.identity(3) - skew(0.5 * rot_error)  # eq. 287, can be neglected
+        G_mat = np.identity(self.DOF)
+        G_mat[Q:Q+3, Q:Q+3] = np.identity(3) - skew(0.5 * rot_error)  # eq. 287, can be neglected
         # Reset the error state covariance eq. (286)
-        self.error_cov = G @ self.error_cov @ G.transpose()
+        self.error_cov = G_mat @ self.error_cov @ G_mat.transpose()
         print(f'error covariance after reset:\n{np.array2string( self.error_cov, precision=2, max_line_width=np.inf)}')
 
 
