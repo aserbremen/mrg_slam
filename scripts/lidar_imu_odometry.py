@@ -42,9 +42,6 @@ W_N_I = 3
 A_W_I = 6
 W_W_I = 9
 
-I_3 = np.identity(3)
-I_18 = np.eye(18)
-
 
 def float_ts_to_ros_stamp(ts: float):
     ros_ts = Time()
@@ -122,7 +119,7 @@ class ErrorStateKalmanFilter:
         self.DOF = self.nominal_state.DOF
 
         # error state is created and injected in a measurement update, no need to initialize it
-        self.error_cov = np.zeros((self.DOF, self.DOF))  # error covariance
+        self.cov = np.zeros((self.DOF, self.DOF))
 
         # current filter time
         self.time = None
@@ -175,12 +172,12 @@ class ErrorStateKalmanFilter:
         self.nominal_state.p += v * dt + 0.5 * (q.as_matrix() @ (a_m - a_b) + g) * dt * dt  # eq. (260a)
         self.nominal_state.v += (q.as_matrix() @ (a_m - a_b) + g) * dt  # eq. (260b)
         self.nominal_state.q = q * R.from_rotvec(((w_m - w_b).flatten() * dt))  # eq. (260c)
-        # self.a_b += 0 # for completeness
-        # self.w_b += 0 # for completeness
-        # self.g += 0 # for completeness
+        # self.a_b += 0 # for completeness eq. (260d)
+        # self.w_b += 0 # for completeness eq. (260e)
+        # self.g += 0 # for completeness eq. (260f)
 
         # The error state mean is initialized to zero. In the prediction step the error state mean stays zero: eq. (268)
-        # x_e = F_nominal_state(nominal_state, move_input) * error_state
+        # x_e = F_x(nominal_state, move_input) @ error_state + Fi @ noise
 
         # Construct the state transition matrix Fx in order to propagate the error state covariance matrix Pe: eq. (270)
         Fx = np.identity(self.DOF, dtype=float)  # type: np.ndarray
@@ -211,7 +208,7 @@ class ErrorStateKalmanFilter:
         Qi[W_W_I:W_W_I+3, W_W_I:W_W_I+3] *= dt  # eq. (265)
 
         # Progate the error state covariance matrix Pe: eq. (269)
-        self.error_cov = Fx @ self.error_cov @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
+        self.cov = Fx @ self.cov @ Fx.transpose() + self.Fi @ Qi @ self.Fi.transpose()
 
     def predict_upto(self, time_upto: float) -> bool:
         if not self.imu_calibrated:
@@ -279,9 +276,8 @@ class ErrorStateKalmanFilter:
         self.acc_samples.append(acc)
         self.turn_rate_samples.append(turn_rate)
         self.time_samples.append(time)
-        if not self.imu_calibrated:
-            if len(self.acc_samples) == self.imu_calibration_max_samples:
-                self.calibrate_imu()
+        if not self.imu_calibrated and len(self.acc_samples) == self.imu_calibration_max_samples:
+            self.calibrate_imu()
             return
         if len(self.time_samples) > 0 and time < self.time_samples[-1]:
             raise ValueError(f'Inserting IMU sample, Current time {time} < last time {self.time_samples[-1]}, IMU out of order.')
@@ -347,7 +343,7 @@ class ErrorStateKalmanFilter:
         # TODO find out whether it is possible to retrieve the covariance of the GICP alignment
 
         # calculate the Kalman gain eq. (274)
-        kalman_gain = self.error_cov @ H_full.transpose() @ np.linalg.inv((H_full @ self.error_cov @ H_full.transpose() + self.V))
+        kalman_gain = self.cov @ H_full.transpose() @ np.linalg.inv((H_full @ self.cov @ H_full.transpose() + self.V))
         print(f'Kalman gain {np.array2string(kalman_gain, precision=2, max_line_width=np.inf)}')
 
         error_state = kalman_gain @ (z-h)
@@ -359,8 +355,8 @@ class ErrorStateKalmanFilter:
         self.print_state_before_and_after(state_before_update, state_after_update, 'State before and after scan matching update')
         self.reset_error_state(error_state)
         # Joseph form of covariance propagation eq. (276)
-        self.error_cov = (np.identity(self.DOF) - kalman_gain @ H_full) @ self.error_cov @ (np.identity(self.DOF) - kalman_gain @
-                                                                                            H_full).transpose() + kalman_gain @ self.V @ kalman_gain.transpose()
+        self.cov = (np.identity(self.DOF) - kalman_gain @ H_full) @ self.cov @ (np.identity(self.DOF) - kalman_gain @
+                                                                                H_full).transpose() + kalman_gain @ self.V @ kalman_gain.transpose()
 
         self.last_nominal_state = deepcopy(self.nominal_state)
 
@@ -383,7 +379,7 @@ class ErrorStateKalmanFilter:
 
         H_full = H_nominal_state @ H_error_state
 
-        kalman_gain = self.error_cov @ H_full.transpose() @ np.linalg.inv((H_full @ self.error_cov @ H_full.transpose() + self.V[:3, :3]))
+        kalman_gain = self.cov @ H_full.transpose() @ np.linalg.inv((H_full @ self.cov @ H_full.transpose() + self.V[:3, :3]))
         print(f'Kalman gain {np.array2string(kalman_gain, precision=2, max_line_width=np.inf)}')
 
         error_state = kalman_gain @ (z-h)
@@ -395,8 +391,8 @@ class ErrorStateKalmanFilter:
         self.print_state_before_and_after(state_before_update, state_after_update, 'State before and after scan matching update')
         self.reset_error_state(error_state)
         # Joseph form of covariance propagation eq. (276)
-        self.error_cov = (np.identity(self.DOF) - kalman_gain @ H_full) @ self.error_cov @ (np.identity(self.DOF) - kalman_gain @
-                                                                                            H_full).transpose() + kalman_gain @ self.V[:3, :3] @ kalman_gain.transpose()    # eq. (276)
+        self.cov = (np.identity(self.DOF) - kalman_gain @ H_full) @ self.cov @ (np.identity(self.DOF) - kalman_gain @
+                                                                                H_full).transpose() + kalman_gain @ self.V[:3, :3] @ kalman_gain.transpose()    # eq. (276)
 
         self.last_nominal_state = deepcopy(self.nominal_state)
 
@@ -441,8 +437,8 @@ class ErrorStateKalmanFilter:
         G_mat = np.identity(self.DOF)
         G_mat[Q:Q+3, Q:Q+3] = np.identity(3) - skew(0.5 * rot_error)  # eq. 287, can be neglected
         # Reset the error state covariance eq. (286)
-        self.error_cov = G_mat @ self.error_cov @ G_mat.transpose()
-        print(f'error covariance after reset:\n{np.array2string(self.error_cov, precision=2, max_line_width=np.inf)}')
+        self.cov = G_mat @ self.cov @ G_mat.transpose()
+        print(f'covariance after reset:\n{np.array2string(self.cov, precision=2, max_line_width=np.inf)}')
 
 
 class LidarImuOdometryNode(Node):

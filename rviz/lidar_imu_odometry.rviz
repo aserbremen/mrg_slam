@@ -88,7 +88,7 @@ Visualization Manager:
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
+      Length: 0.20000000298023224
       Line Style: Lines
       Line Width: 0.029999999329447746
       Name: Estimate Path
@@ -97,8 +97,8 @@ Visualization Manager:
         Y: 0
         Z: 0
       Pose Color: 255; 85; 255
-      Pose Style: None
-      Radius: 0.029999999329447746
+      Pose Style: Axes
+      Radius: 0.009999999776482582
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
       Topic:
@@ -144,7 +144,7 @@ Visualization Manager:
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
+      Length: 0.20000000298023224
       Line Style: Lines
       Line Width: 0.029999999329447746
       Name: Scan Matching Path
@@ -153,8 +153,8 @@ Visualization Manager:
         Y: 0
         Z: 0
       Pose Color: 255; 85; 255
-      Pose Style: None
-      Radius: 0.029999999329447746
+      Pose Style: Axes
+      Radius: 0.009999999776482582
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
       Topic:
@@ -218,25 +218,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10.875167846679688
+      Distance: 0.6910234093666077
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.22515583038330078
-        Y: 0.5428283214569092
-        Z: 0.9707794785499573
+        X: 0.026173099875450134
+        Y: 0.6827424168586731
+        Z: 0.6935132145881653
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6353983283042908
+      Pitch: 0.46539878845214844
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.850405693054199
+      Yaw: 2.4003970623016357
     Saved: ~
 Window Geometry:
   Displays:
@@ -254,5 +254,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1255
-  X: 50
-  Y: 269
+  X: 54
+  Y: 255
