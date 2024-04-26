@@ -18,6 +18,8 @@ Here are some things to consider when using the `mrg_slam` package:
   - All kinds of topics and services are remapped in the launch file to consider the `model_namespace` aka the robot name.
 - The only required message for the SLAM to work is the `sensor_msgs/msg/PointCloud2` message with the topic `/model_namepsace/velodyne_points`. The `model_namespace` is the name of the robot, which is used to distinguish between the different robots in the system. The `frame_id` of the point cloud message should be `model_namespace/velodyne`.
 - All robot names participating in the multi-robot SLAM should be given in the `multi_robot_names` parameter in the used configuration file.
+  - The robot names are used to register certain services for exchanging graph information between the robots.
+  - You can add robot names even if they are not participating in the multi-robot SLAM. 
 - Most nodes in the `mrg_slam.yaml` can be enabled/disabled by setting the respective parameter to `true`/`false` for testing certain parts of the SLAM system.
 
 - Check out the [mrg_slam_velodyne_VLP16.yaml](config/mrg_slam_velodyne_VLP16.yaml) file for an example configuration file for the SLAM using live data from a Velodyne VLP-16 LIDAR sensor. `use_sim_time` is set to `false` and `velodyne/ros__parameters/enable_velodyne` is set to true in this configuration file.
