@@ -330,7 +330,7 @@ def launch_setup(context, *args, **kwargs):
                   ('/mrg_slam/others_poses', '/' + model_namespace + '/mrg_slam/others_poses'),
                   ('/mrg_slam/publish_graph', '/' + model_namespace + '/mrg_slam/publish_graph'),
                   ('/mrg_slam/slam_status', '/' + model_namespace + '/mrg_slam/slam_status'),
-                  ('/mrg_slam/dump', '/' + model_namespace + '/mrg_slam/dump'),
+                  ('/mrg_slam/save_graph', '/' + model_namespace + '/mrg_slam/save_graph'),
                   ('/mrg_slam/save_map', '/' + model_namespace + '/mrg_slam/save_map'),
                   ('/mrg_slam/get_map', '/' + model_namespace + '/mrg_slam/get_map'),
                   ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),

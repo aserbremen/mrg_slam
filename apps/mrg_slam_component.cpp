@@ -41,13 +41,13 @@
 #include <mrg_slam_msgs/msg/pose_with_name.hpp>
 #include <mrg_slam_msgs/msg/pose_with_name_array.hpp>
 #include <mrg_slam_msgs/msg/slam_status.hpp>
-#include <mrg_slam_msgs/srv/dump_graph.hpp>
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_gids.hpp>
 #include <mrg_slam_msgs/srv/get_map.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
 #include <mrg_slam_msgs/srv/save_gids.hpp>
+#include <mrg_slam_msgs/srv/save_graph.hpp>
 #include <mrg_slam_msgs/srv/save_map.hpp>
 #include <mutex>
 #include <nav_msgs/msg/odometry.hpp>
@@ -168,11 +168,13 @@ public:
         // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
         // work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
-        // Dumb service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::DumpGraph::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::DumpGraph::Response>      res )>
-            dump_service_callback = std::bind( &MrgSlamComponent::dump_service, this, std::placeholders::_1, std::placeholders::_2 );
-        dump_service_server       = this->create_service<mrg_slam_msgs::srv::DumpGraph>( "/mrg_slam/dump", dump_service_callback );
+        // Save graph service
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Response>      res )>
+            save_graph_service_callback = std::bind( &MrgSlamComponent::save_graph_service, this, std::placeholders::_1,
+                                                     std::placeholders::_2 );
+        save_graph_service_server       = this->create_service<mrg_slam_msgs::srv::SaveGraph>( "/mrg_slam/save_graph",
+                                                                                               save_graph_service_callback );
         // Save map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Response>      res )>
@@ -197,21 +199,21 @@ public:
             publish_graph_service_callback = std::bind( &MrgSlamComponent::publish_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
         publish_graph_service_server       = this->create_service<mrg_slam_msgs::srv::PublishGraph>( "/mrg_slam/publish_graph",
-                                                                                               publish_graph_service_callback );
+                                                                                                     publish_graph_service_callback );
         // Request graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Response>      res )>
             request_graph_service_callback = std::bind( &MrgSlamComponent::request_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
         request_graph_service_server       = this->create_service<mrg_slam_msgs::srv::RequestGraphs>( "/mrg_slam/request_graph",
-                                                                                                request_graph_service_callback );
+                                                                                                      request_graph_service_callback );
         // Get graph IDs (gids) service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphGids::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::GetGraphGids::Response>      res )>
             get_graph_gids_service_callback = std::bind( &MrgSlamComponent::get_graph_gids_service, this, std::placeholders::_1,
                                                          std::placeholders::_2 );
         get_graph_gids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphGids>( "/mrg_slam/get_graph_gids",
-                                                                                                get_graph_gids_service_callback );
+                                                                                                      get_graph_gids_service_callback );
         // Save keyframes and edges service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGids::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveGids::Response>      res )>
@@ -929,10 +931,7 @@ private:
             graph_bytes += keyframe.cloud.data.size();
             graph_bytes += 7 * sizeof( double );
         }
-        for( const auto &edge : result->graph.edges ) {
-            graph_bytes += 7 * sizeof( double );   // relative_pose
-            graph_bytes += 36 * sizeof( double );  // information
-        }
+        graph_bytes += result->graph.edges.size() * sizeof( mrg_slam_msgs::msg::EdgeRos );
         received_graph_bytes.push_back( graph_bytes );
         // Fill the graph queue with the received graph
         std::lock_guard<std::mutex> lock( graph_queue_mutex );
@@ -1309,18 +1308,22 @@ private:
     }
 
     // /**
-    //  * @brief dump all data to the current directory
+    //  * @brief save all graph information and some timing information to request's directory
     //  * @param req
     //  * @param res
     //  * @return
     //  */
-    void dump_service( mrg_slam_msgs::srv::DumpGraph::Request::ConstSharedPtr req, mrg_slam_msgs::srv::DumpGraph::Response::SharedPtr res )
+    void save_graph_service( mrg_slam_msgs::srv::SaveGraph::Request::ConstSharedPtr req,
+                             mrg_slam_msgs::srv::SaveGraph::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
-        std::string directory = req->destination;
+        std::string directory = req->directory;
+        if( directory.back() == '/' ) {
+            directory.pop_back();
+        }
 
-        std::cout << "Dumping data to:" << directory << std::endl;
+        std::cout << "Saving graph information to: " << directory << std::endl;
 
         std::string keyframe_directory = directory + "/keyframes";
         if( !boost::filesystem::is_directory( keyframe_directory ) ) {
@@ -1406,10 +1409,13 @@ private:
         timing_stats_ofs << std::endl;
         int total_candidates = std::accumulate( loop_detector->loop_candidates_sizes.begin(), loop_detector->loop_candidates_sizes.end(),
                                                 0 );
-        timing_stats_ofs << "average_candidates " << total_candidates / loop_detector->loop_candidates_sizes.size() << std::endl;
-        double total_loop_detector_times = std::accumulate( loop_detector->loop_detection_times.begin(),
-                                                            loop_detector->loop_detection_times.end(), 0 );
-        timing_stats_ofs << "average_time_per_candidate_us " << total_loop_detector_times / total_candidates << std::endl;
+        timing_stats_ofs << "total_loop_closure_candidates " << total_candidates << std::endl;
+        if( loop_detector->loop_candidates_sizes.size() > 0 && total_candidates > 0 ) {
+            timing_stats_ofs << "average_candidates " << total_candidates / loop_detector->loop_candidates_sizes.size() << std::endl;
+            double total_loop_detector_times = std::accumulate( loop_detector->loop_detection_times.begin(),
+                                                                loop_detector->loop_detection_times.end(), 0 );
+            timing_stats_ofs << "average_time_per_candidate_us " << total_loop_detector_times / total_candidates << std::endl;
+        }
 
         timing_stats_ofs << "graph_optimization_times_us";
         for( const auto &time : graph_optimization_times ) {
@@ -1433,6 +1439,8 @@ private:
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
+        RCLCPP_INFO_STREAM( this->get_logger(), "Saving map to " << req->file_path << " with resolution " << req->resolution );
+
         snapshots_mutex.lock();
         snapshot = keyframes_snapshot;
         snapshots_mutex.unlock();
@@ -1454,23 +1462,23 @@ private:
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         if( zero_utm ) {
-            std::ofstream ofs( req->destination + ".utm" );
+            std::ofstream ofs( req->file_path + ".utm" );
             ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
 
-        auto dir = boost::filesystem::path( req->destination ).remove_filename();
+        auto dir = boost::filesystem::path( req->file_path ).remove_filename();
         if( !boost::filesystem::is_directory( dir ) ) {
             boost::filesystem::create_directories( dir );
         }
-        int ret      = pcl::io::savePCDFileBinary( req->destination, *cloud );
+        int ret      = pcl::io::savePCDFileBinary( req->file_path, *cloud );
         res->success = ret == 0;
 
         if( res->success ) {
-            std::cout << "saved " << cloud->points.size() << " with resolution " << req->resolution << " points to " << req->destination
+            std::cout << "saved " << cloud->points.size() << " with resolution " << req->resolution << " points to " << req->file_path
                       << std::endl;
         } else {
             std::cout << "failed to save " << cloud->points.size() << " with resolution " << req->resolution << " points to "
-                      << req->destination << std::endl;
+                      << req->file_path << std::endl;
         }
     }
 
@@ -1562,10 +1570,7 @@ private:
                 graph_bytes += keyframe.cloud.data.size();
                 graph_bytes += 7 * 8;  // 7 doubles for the pose
             }
-            for( const auto &edge : res->graph.edges ) {
-                graph_bytes += 7 * 8;   // 7 doubles for the relative pose
-                graph_bytes += 36 * 8;  // 36 doubles for the information matrix
-            }
+            graph_bytes += res->graph.edges.size() * sizeof( mrg_slam_msgs::msg::EdgeRos );
             sent_graph_bytes.push_back( graph_bytes );
 
 
@@ -1631,10 +1636,7 @@ private:
                 graph_size_bytes += keyframe.cloud.data.size();
                 graph_size_bytes += 7 * 8;  // 7 doubles for the pose
             }
-            for( const auto &edge : result->graph.edges ) {
-                graph_size_bytes += 7 * 8;   // 7 doubles for the relative pose
-                graph_size_bytes += 36 * 8;  // 36 doubles for the information matrix
-            }
+            graph_size_bytes += result->graph.edges.size() * sizeof( mrg_slam_msgs::msg::EdgeRos );
             received_graph_bytes.push_back( graph_size_bytes );
 
             graph_queue.push_back( std::make_shared<mrg_slam_msgs::msg::GraphRos>( std::move( result->graph ) ) );
@@ -1799,7 +1801,7 @@ private:
     // Services
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr           request_robot_graph_sub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr              request_robot_graph_pub;
-    rclcpp::Service<mrg_slam_msgs::srv::DumpGraph>::SharedPtr        dump_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr        save_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;

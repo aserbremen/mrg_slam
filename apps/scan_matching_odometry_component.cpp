@@ -15,10 +15,10 @@
 #include <memory>
 #include <mrg_slam/registrations.hpp>
 #include <mrg_slam/ros_utils.hpp>
+#include <mrg_slam_msgs/msg/scan_matching_status.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <mrg_slam_msgs/msg/scan_matching_status.hpp>
 
 namespace mrg_slam {
 
@@ -185,11 +185,13 @@ private:
         registration_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
         cloud_sizes.push_back( cloud->size() );
         if( counter % 100 == 0 ) {
-            std::cout << "Average scan matching odom registration time: "
-                      << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 ) / registration_times.size() << "us"
-                      << std::endl;
-            std::cout << "average scan matching odom cloud size: "
-                      << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 ) / cloud_sizes.size() << std::endl;
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Average scan matching odom registration time: "
+                                                         << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 )
+                                                                / registration_times.size()
+                                                         << "us" );
+            RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                 "average scan matching odom cloud size: " << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 )
+                                                                                  / cloud_sizes.size() );
         }
 
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
@@ -452,11 +454,11 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_after_update_sub;
 
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                  odom_pub;
-    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr     trans_pub;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                odom_pub;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr   trans_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::ScanMatchingStatus>::SharedPtr status_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr            aligned_points_pub;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                    read_until_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr          aligned_points_pub;
+    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                  read_until_pub;
 
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
@@ -500,7 +502,7 @@ private:
 
     std::string         result_dir;
     std::vector<double> registration_times;
-    std::vector<int>    cloud_sizes;
+    std::vector<int>    cloud_sizes;  // for debugging
 };
 
 }  // namespace mrg_slam

@@ -36,6 +36,12 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
         }
     }
 
+    if( cloud->empty() ) {
+        std::cerr << "warning: cloud empty. Probably only very first keyframes registered so far, that are exclued from final map!!"
+                  << std::endl;
+        return nullptr;
+    }
+
     cloud->width    = cloud->size();
     cloud->height   = 1;
     cloud->is_dense = false;
