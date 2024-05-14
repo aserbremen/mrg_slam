@@ -1439,7 +1439,7 @@ private:
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Saving map to " << req->file_path << " with resolution " << req->resolution );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution );
 
         snapshots_mutex.lock();
         snapshot = keyframes_snapshot;
