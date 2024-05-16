@@ -4,7 +4,7 @@
   <version>0.0.0</version>
   <description>The mrg_slam package</description>
 
-  <maintainer email="serov@uni-bremen.de">serov</maintainer>
+  <maintainer email="serov@uni-bremen.de">Andreas Serov</maintainer>
 
   <license>BSD</license>
 
@@ -19,7 +19,6 @@
   <depend>fast_gicp</depend>
   <depend>pcl_ros</depend>
   <depend>rclcpp</depend>
-  <depend>rospy</depend>
   <depend>geodesy</depend>
   <depend>std_msgs</depend>
   <depend>nmea_msgs</depend>
