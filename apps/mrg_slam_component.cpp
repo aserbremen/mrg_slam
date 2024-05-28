@@ -107,8 +107,8 @@ public:
 
         // subscribers
         if( !model_namespace.empty() ) {
-            odom_sub_topic  = "/" + model_namespace + "/scan_matching_odometry" + odom_sub_topic;
-            cloud_sub_topic = "/" + model_namespace + "/prefiltering" + cloud_sub_topic;
+            odom_sub_topic  = "/" + model_namespace + odom_sub_topic;
+            cloud_sub_topic = "/" + model_namespace + cloud_sub_topic;
         }
         RCLCPP_INFO( this->get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
         RCLCPP_INFO( this->get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );

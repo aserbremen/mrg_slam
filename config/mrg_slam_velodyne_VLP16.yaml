@@ -155,6 +155,8 @@ mrg_slam_component:
     # Frame settings
     map_frame_id: "map"
     odom_frame_id: "odom"
+    odom_sub_topic: "/scan_matching_odometry/odom" # topic should include / at the beginning, is prepended by model_namespace
+    cloud_sub_topic: "/prefiltering/filtered_points" # topic should include / at the beginning, is prepended by model_namespace
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
