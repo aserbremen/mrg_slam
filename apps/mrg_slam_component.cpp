@@ -106,9 +106,9 @@ public:
         inf_calclator.reset( new InformationMatrixCalculator( node_ros ) );
 
         // subscribers
-        if( !model_namespace.empty() ) {
-            odom_sub_topic  = "/" + model_namespace + odom_sub_topic;
-            cloud_sub_topic = "/" + model_namespace + cloud_sub_topic;
+        if( !own_name.empty() ) {
+            odom_sub_topic  = "/" + own_name + odom_sub_topic;
+            cloud_sub_topic = "/" + own_name + cloud_sub_topic;
         }
         RCLCPP_INFO( this->get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
         RCLCPP_INFO( this->get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
@@ -253,7 +253,6 @@ private:
         this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
         this->declare_parameter<std::string>( "own_name", "atlas" );
         this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        this->declare_parameter<std::string>( "model_namespace", "" );
         this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
         this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
 
@@ -364,7 +363,6 @@ private:
         points_topic    = this->get_parameter( "points_topic" ).as_string();
         own_name        = this->get_parameter( "own_name" ).as_string();
         robot_names     = this->get_parameter( "multi_robot_names" ).as_string_array();
-        model_namespace = this->get_parameter( "model_namespace" ).as_string();
         odom_sub_topic  = this->get_parameter( "odom_sub_topic" ).as_string();
         cloud_sub_topic = this->get_parameter( "cloud_sub_topic" ).as_string();
 
@@ -1474,11 +1472,9 @@ private:
         res->success = ret == 0;
 
         if( res->success ) {
-            std::cout << "saved " << cloud->points.size() << " with resolution " << req->resolution << " points to " << req->file_path
-                      << std::endl;
+            std::cout << "saved map " << req->file_path << " with " << cloud->points.size() << " points" << std::endl;
         } else {
-            std::cout << "failed to save " << cloud->points.size() << " with resolution " << req->resolution << " points to "
-                      << req->file_path << std::endl;
+            std::cout << "failed to save " << req->file_path << " with " << cloud->points.size() << " points" << std::endl;
         }
     }
 
@@ -1856,7 +1852,6 @@ private:
     std::string              points_topic;
     std::string              own_name;
     std::vector<std::string> robot_names;
-    std::string              model_namespace;
     std::string              result_dir;
 
     float               robot_remove_points_radius;

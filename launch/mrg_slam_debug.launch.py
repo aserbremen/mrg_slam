@@ -33,7 +33,7 @@ We are going to debug the component container for the bestla robot, atlas is goi
             {
                 "name": "Launch mrg_slam",
                 "type": "ros",
-                "target": "/home/serov/code/cpp/ros2_mrg_slam/src/mrg_slam/launch/mrg_slam_debug.launch.py",
+                "target": "/home/serov/code/cpp/Multi-Robot-Graph-SLAM/src/mrg_slam/launch/mrg_slam_debug.launch.py",
                 "request": "launch",
                 "arguments": ["model_namespace:=bestla", "x:=-15.0", "y:=-13.0", "z:=1.2", "use_sim_time:=true"],
                 "launch": [
@@ -113,6 +113,8 @@ def launch_setup(context, *args, **kwargs):
         'config',
         config_file
     )
+
+    # TODO update this launch script to reflect changes in mrg_slam.launch.py
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)

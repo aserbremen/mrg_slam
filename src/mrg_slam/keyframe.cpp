@@ -27,7 +27,11 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     cloud_msg( cloud_msg ),
     node( nullptr )
 {
-    readable_id = robot_name + "-" + std::to_string( odom_keyframe_counter );
+    if( robot_name.empty() ) {
+        readable_id = "\"\"." + std::to_string( odom_keyframe_counter );
+        return;
+    }
+    readable_id = robot_name + "." + std::to_string( odom_keyframe_counter );
 }
 
 KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :

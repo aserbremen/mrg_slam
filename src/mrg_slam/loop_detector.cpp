@@ -30,7 +30,17 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     for( const auto& robot_name : robot_names ) {
         last_loop_edge_accum_distance_map[robot_name] = 0.0;
     }
+    // In case of single robot without namespace, we need to initialize the last loop edge accum distance for empty string
+    std::string own_name = node_ros->get_parameter( "own_name" ).as_string();
+    auto        it       = last_loop_edge_accum_distance_map.find( own_name );
+    if( it == last_loop_edge_accum_distance_map.end() ) {
+        last_loop_edge_accum_distance_map[own_name] = 0.0;
+    }
+    for( const auto& [name, value] : last_loop_edge_accum_distance_map ) {
+        std::cout << "last loop edge accum distance for robot " << name << " is " << value << std::endl;
+    }
 }
+
 
 /**
  * @brief detect loops and add them to the pose graph
@@ -163,8 +173,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     // loop closure hypothesis check. Calculate relative transformation from new keyframe to candidate to its previous/next keyframe and
     // back to new keyframe, which should be the identity transformation if the loop closure hypothesis is correct.
-    // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which might
-    // not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
+    // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which
+    // might not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
     bool consistency_check_passed = false;
 
     if( best_matched != nullptr ) {
