@@ -44,6 +44,7 @@
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_gids.hpp>
 #include <mrg_slam_msgs/srv/get_map.hpp>
+#include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
 #include <mrg_slam_msgs/srv/save_graph.hpp>
@@ -173,6 +174,13 @@ public:
                                                      std::placeholders::_2 );
         save_graph_service_server       = this->create_service<mrg_slam_msgs::srv::SaveGraph>( "/mrg_slam/save_graph",
                                                                                                save_graph_service_callback );
+        // Load graph service
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Response>      res )>
+            load_graph_service_callback = std::bind( &MrgSlamComponent::load_graph_service, this, std::placeholders::_1,
+                                                     std::placeholders::_2 );
+        load_graph_service_server       = this->create_service<mrg_slam_msgs::srv::LoadGraph>( "/mrg_slam/load_graph",
+                                                                                               load_graph_service_callback );
         // Save map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Response>      res )>
@@ -1420,6 +1428,105 @@ private:
     }
 
     /**
+     * \brief   Return the filenames of all files that have the specified extension
+     *          in the specified directory and all subdirectories.
+     */
+    std::vector<boost::filesystem::path> glob_filenames( boost::filesystem::path const &root, std::string const &ext )
+    {
+        std::vector<boost::filesystem::path> paths;
+
+        if( boost::filesystem::exists( root ) && boost::filesystem::is_directory( root ) ) {
+            for( auto const &entry : boost::filesystem::recursive_directory_iterator( root ) ) {
+                if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext )
+                    paths.emplace_back( entry.path().filename() );
+            }
+        }
+
+        return paths;
+    }
+
+    /**
+     * @brief load graph data from a directory that was previously saved with the save_graph service
+     * @param req
+     * @param res
+     * @return
+     */
+    void load_graph_service( mrg_slam_msgs::srv::LoadGraph::Request::ConstSharedPtr req,
+                             mrg_slam_msgs::srv::LoadGraph::Response::SharedPtr     res )
+    {
+        std::lock_guard<std::mutex> lock( main_thread_mutex );
+
+        // map robot_name, graph ros
+        std::map<std::string, mrg_slam_msgs::msg::GraphRos> loaded_graphs;
+
+        // check if the directory exists
+        if( !boost::filesystem::is_directory( req->directory ) ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << req->directory << " does not exist, cannot load graph" );
+            res->success = false;
+            return;
+        }
+
+        // glob all the keyframe files ending on .txt and and point clouds ending on .pcd
+        std::vector<std::string> keyframe_files, pointcloud_files;
+        boost::filesystem::path  keyframe_dir( req->directory + "/keyframes" );
+        if( !boost::filesystem::is_directory( keyframe_dir ) ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
+            res->success = false;
+            return;
+        }
+        auto keyframe_files_tmp   = glob_filenames( keyframe_dir, ".txt" );
+        auto pointcloud_files_tmp = glob_filenames( keyframe_dir, ".pcd" );
+        if( keyframe_files_tmp.size() != pointcloud_files_tmp.size() ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Number of keyframe files and pointcloud files do not match, cannot load keyframes" );
+            res->success = false;
+            return;
+        }
+        // glob all the edge files ending on .txt
+        std::vector<std::string> edge_files;
+        boost::filesystem::path  edge_dir( req->directory + "/edges" );
+        if( !boost::filesystem::is_directory( edge_dir ) ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << edge_dir << " does not exist, cannot load edges" );
+            res->success = false;
+            return;
+        }
+        auto edge_files_tmp = glob_filenames( edge_dir, ".txt" );
+
+        // load all the keyframes, point clouds and edges
+        for( size_t i = 0; i < keyframe_files_tmp.size(); i++ ) {
+            std::string keyframe_file   = keyframe_files_tmp[i].string();
+            std::string pointcloud_file = pointcloud_files_tmp[i].string();
+
+            KeyFrame::Ptr keyframe = KeyFrame::load( keyframe_file );
+            if( !keyframe ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load keyframe from " << keyframe_file );
+                res->success = false;
+                return;
+            }
+
+            pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
+            if( pcl::io::loadPCDFile( pointcloud_file, *cloud ) == -1 ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load point cloud from " << pointcloud_file );
+                res->success = false;
+                return;
+            }
+
+            keyframe->cloud = cloud;
+            keyframes.emplace_back( keyframe );
+            keyframe_hash[keyframe->uuid] = keyframe;
+
+            Edge::Ptr edge = Edge::load( edge_file, keyframe_hash );
+            if( !edge ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load edge from " << edge_file );
+                res->success = false;
+                return;
+            }
+
+            edges.emplace_back( edge );
+            edge_uuids.insert( edge->uuid );
+        }
+    }
+
+    /**
      * @brief save map data as pcd
      * @param req
      * @param res
@@ -1717,6 +1824,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr           request_robot_graph_sub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr              request_robot_graph_pub;
     rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr        save_graph_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr        load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
