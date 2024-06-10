@@ -46,7 +46,6 @@
 #include <mrg_slam_msgs/srv/get_map.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
-#include <mrg_slam_msgs/srv/save_gids.hpp>
 #include <mrg_slam_msgs/srv/save_graph.hpp>
 #include <mrg_slam_msgs/srv/save_map.hpp>
 #include <mutex>
@@ -162,7 +161,6 @@ public:
         slam_status_publisher = this->create_publisher<mrg_slam_msgs::msg::SlamStatus>( "/mrg_slam/slam_status", rclcpp::QoS( 16 ),
                                                                                         pub_options );
 
-
         // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
         // the callback is a class member function, see
         // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
@@ -214,12 +212,6 @@ public:
                                                          std::placeholders::_2 );
         get_graph_gids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphGids>( "/mrg_slam/get_graph_gids",
                                                                                                       get_graph_gids_service_callback );
-        // Save keyframes and edges service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGids::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::SaveGids::Response>      res )>
-            save_gids_service_callback = std::bind( &MrgSlamComponent::save_gids_service, this, std::placeholders::_1,
-                                                    std::placeholders::_2 );
-        save_gids_service_server = this->create_service<mrg_slam_msgs::srv::SaveGids>( "/mrg_slam/save_gids", save_gids_service_callback );
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
@@ -1663,79 +1655,6 @@ private:
         }
     }
 
-    void save_gids_service( mrg_slam_msgs::srv::SaveGids::Request::ConstSharedPtr req,
-                            mrg_slam_msgs::srv::SaveGids::Response::SharedPtr     res )
-    {
-        auto dir = boost::filesystem::path( req->destination ).remove_filename();
-        if( !boost::filesystem::is_directory( dir ) ) {
-            boost::filesystem::create_directory( dir );
-        }
-
-        std::lock_guard<std::mutex> lock( main_thread_mutex );
-
-        std::ofstream ofs( req->destination );
-        ofs << "# keyframes " << keyframes.size() << std::endl;
-        ofs << anchor_kf->readable_id << " g2o " << std::to_string( anchor_kf->id() ) << std::endl;
-        if( req->with_uuid_str ) {
-            ofs << "uuid " << anchor_kf->uuid_str << std::endl;
-        }
-        if( anchor_kf->prev_edge != nullptr ) {
-            ofs << "    prev edge " << anchor_kf->prev_edge->readable_id << " g2o " << std::to_string( anchor_kf->prev_edge->edge->id() )
-                << std::endl;
-            if( req->with_uuid_str ) {
-                ofs << "    uuid " << anchor_kf->prev_edge->uuid_str << std::endl;
-            }
-        } else {
-            ofs << "    prev edge N/A" << std::endl;
-        }
-        if( anchor_kf->next_edge != nullptr ) {
-            ofs << "    next edge " << anchor_kf->next_edge->readable_id << " g2o " << std::to_string( anchor_kf->next_edge->edge->id() );
-            if( req->with_uuid_str ) {
-                ofs << "    uuid " << anchor_kf->next_edge->uuid_str << std::endl;
-            }
-        } else {
-            ofs << "    next edge N/A" << std::endl;
-        }
-        for( const auto &keyframe : keyframes ) {
-            ofs << keyframe->readable_id << " g2o " << std::to_string( keyframe->node->id() ) << std::endl;
-            if( req->with_uuid_str ) {
-                ofs << "    uuid " << keyframe->uuid_str << std::endl;
-            }
-            if( keyframe->prev_edge != nullptr ) {
-                ofs << "    prev edge " << keyframe->prev_edge->readable_id << " g2o " << std::to_string( keyframe->prev_edge->edge->id() )
-                    << std::endl;
-                if( req->with_uuid_str ) {
-                    ofs << "    uuid " << keyframe->prev_edge->uuid_str << std::endl;
-                }
-            } else {
-                ofs << "    prev edge N/A" << std::endl;
-            }
-            if( keyframe->next_edge != nullptr ) {
-                ofs << "    next edge " << keyframe->next_edge->readable_id << " g2o " << std::to_string( keyframe->next_edge->edge->id() )
-                    << std::endl;
-                if( req->with_uuid_str ) {
-                    ofs << "    uuid " << keyframe->next_edge->uuid_str << std::endl;
-                }
-            } else {
-                ofs << "    next edge N/A" << std::endl;
-            }
-        }
-        ofs << std::endl;
-        ofs << "# edges " << edges.size() << std::endl;
-        for( const auto &edge : edges ) {
-            ofs << edge->readable_id << " g2o " << std::to_string( edge->edge->id() ) << std::endl;
-            ofs << "    from " << edge->from_keyframe->readable_id << std::endl;
-            if( req->with_uuid_str ) {
-                ofs << "    uuid " << edge->from_uuid_str << std::endl;
-            }
-            ofs << "    to   " << edge->to_keyframe->readable_id << std::endl;
-            if( req->with_uuid_str ) {
-                ofs << "    uuid " << edge->to_uuid_str << std::endl;
-            }
-        }
-    }
-
-
 private:
     enum GraphExchangeMode {
         CURRENT_PROXIMITY,
@@ -1804,7 +1723,6 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::SaveGids>::SharedPtr         save_gids_service_server;
 
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
