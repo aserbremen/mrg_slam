@@ -1850,7 +1850,8 @@ private:
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
 
-    std::mutex                                                         trans_odom2map_mutex;
+    std::mutex trans_odom2map_mutex;
+    // TODO check if trans_odom2map can be Eigen::Matrix4d and if it used in the right way
     Eigen::Matrix4f                                                    trans_odom2map;
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr odom2map_pub;
     std::unordered_map<std::string, Eigen::Isometry3d>                 others_odom2map;  // odom2map transform for other robots
