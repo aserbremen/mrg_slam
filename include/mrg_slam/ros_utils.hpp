@@ -103,6 +103,11 @@ odom2isometry( const nav_msgs::msg::Odometry::ConstSharedPtr& odom_msg )
     return isometry;
 }
 
+/**
+ * @brief Prints ROS2 parameters for a given node.
+ * @param param_interface
+ * @param logger
+ */
 void
 print_ros2_parameters( rclcpp::node_interfaces::NodeParametersInterface::ConstSharedPtr param_interface, const rclcpp::Logger& logger )
 {

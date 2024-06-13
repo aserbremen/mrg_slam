@@ -649,7 +649,7 @@ private:
 
     /**
      * @brief all edges and keyframes from #graph_queue that are not known yet are added to the graph
-     * @return if true, at least one edge or keyframe is added to the pose graph
+     * @return true if at least one edge or keyframe is added to the pose graph
      */
     bool flush_graph_queue()
     {
@@ -777,6 +777,51 @@ private:
         }
 
         graph_queue.clear();
+        return true;
+    }
+
+    /**
+     * @brief This function adds all keyframes and edges that are loaded by the load_graph service to the pose graph
+     *
+     */
+    bool flush_loaded_keyframes_and_edges()
+    {
+        if( loaded_keyframes.empty() && loaded_edges.empty() ) {
+            return false;
+        }
+
+        RCLCPP_INFO_STREAM( this->get_logger(),
+                            "Flushing loaded " << loaded_keyframes.size() << " keyframes and " << loaded_edges.size() << " edges" );
+
+        for( const auto &keyframe : loaded_keyframes ) {
+            keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform.get() );
+            uuid_keyframe_map[keyframe->uuid] = keyframe;
+            new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
+                                                  // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
+            RCLCPP_INFO_STREAM( this->get_logger(), "Adding loaded keyframe: " << keyframe->readable_id );
+        }
+
+        for( const auto &edge : loaded_edges ) {
+            KeyFrame::Ptr from_keyframe = uuid_keyframe_map[edge->from_uuid];
+            KeyFrame::Ptr to_keyframe   = uuid_keyframe_map[edge->to_uuid];
+            edge->from_keyframe         = from_keyframe;
+            edge->to_keyframe           = to_keyframe;
+
+            // check if the edge is already added
+            if( from_keyframe->edge_exists( *to_keyframe, this->get_logger() ) ) {
+                edge_ignore_uuids.insert( edge->uuid );
+                continue;
+            }
+
+            // TODO load relative pose and information matrix
+            Eigen::Isometry3d relpose     = from_keyframe->estimate().inverse() * to_keyframe->estimate();  // verify this
+            Eigen::MatrixXd   information = Eigen::MatrixXd::Identity( 6, 6 );
+            // TODO fix those hardcoded values
+            information.block<3, 3>( 0, 0 ) *= 4;
+            information.block<3, 3>( 3, 3 ) *= 131.312;
+            auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
+        }
+
         return true;
     }
 
@@ -1175,7 +1220,8 @@ private:
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of very long optimizations
+        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of very long
+        // optimizations
         optimization_timer->cancel();
 
         // add keyframes and floor coeffs in the queues to the pose graph
@@ -1222,9 +1268,9 @@ private:
         auto end = std::chrono::high_resolution_clock::now();
         loop_closure_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
 
-        // move the first node anchor position to the current estimate of the first node pose, so the first node moves freely while trying
-        // to stay around the origin. Fixing the first node adaptively with initial positions that are not the identity transform, leads to
-        // the fixed node moving at every optimization (not implemented atm)
+        // move the first node anchor position to the current estimate of the first node pose, so the first node moves freely while
+        // trying to stay around the origin. Fixing the first node adaptively with initial positions that are not the identity
+        // transform, leads to the fixed node moving at every optimization (not implemented atm)
         if( anchor_node && fix_first_node_adaptive ) {
             Eigen::Isometry3d anchor_target = static_cast<g2o::VertexSE3 *>( anchor_edge_g2o->vertices()[1] )->estimate();
             anchor_node->setEstimate( anchor_target );
@@ -1428,7 +1474,7 @@ private:
     }
 
     /**
-     * \brief   Return the filenames of all files that have the specified extension
+     * \brief   Return the sorted filenames of all files that have the specified extension
      *          in the specified directory and all subdirectories.
      */
     std::vector<boost::filesystem::path> glob_filenames( boost::filesystem::path const &root, std::string const &ext )
@@ -1442,6 +1488,7 @@ private:
             }
         }
 
+        std::sort( paths.begin(), paths.end() );
         return paths;
     }
 
@@ -1455,9 +1502,6 @@ private:
                              mrg_slam_msgs::srv::LoadGraph::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-
-        // map robot_name, graph ros
-        std::map<std::string, mrg_slam_msgs::msg::GraphRos> loaded_graphs;
 
         // check if the directory exists
         if( !boost::filesystem::is_directory( req->directory ) ) {
@@ -1491,39 +1535,34 @@ private:
         }
         auto edge_files_tmp = glob_filenames( edge_dir, ".txt" );
 
-        // load all the keyframes, point clouds and edges
+        // load all the keyframes, point clouds and edges, which will be added to the pose graph in the next optimization
         for( size_t i = 0; i < keyframe_files_tmp.size(); i++ ) {
             std::string keyframe_file   = keyframe_files_tmp[i].string();
             std::string pointcloud_file = pointcloud_files_tmp[i].string();
 
-            KeyFrame::Ptr keyframe = KeyFrame::load( keyframe_file );
+            KeyFrame::Ptr keyframe = std::make_shared<KeyFrame>( keyframe_file, pointcloud_file );
             if( !keyframe ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load keyframe from " << keyframe_file );
                 res->success = false;
                 return;
             }
 
-            pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
-            if( pcl::io::loadPCDFile( pointcloud_file, *cloud ) == -1 ) {
-                RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load point cloud from " << pointcloud_file );
-                res->success = false;
-                return;
-            }
+            loaded_keyframes.emplace_back( keyframe );
+        }
 
-            keyframe->cloud = cloud;
-            keyframes.emplace_back( keyframe );
-            keyframe_hash[keyframe->uuid] = keyframe;
-
-            Edge::Ptr edge = Edge::load( edge_file, keyframe_hash );
+        for( size_t i = 0; i < edge_files_tmp.size(); i++ ) {
+            std::string edge_file = edge_files_tmp[i].string();
+            Edge::Ptr   edge      = std::make_shared<Edge>( edge_file );
             if( !edge ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load edge from " << edge_file );
                 res->success = false;
                 return;
             }
 
-            edges.emplace_back( edge );
-            edge_uuids.insert( edge->uuid );
+            loaded_edges.emplace_back( edge );
         }
+
+        res->success = true;
     }
 
     /**
@@ -1902,7 +1941,10 @@ private:
     std::vector<int>     received_graph_bytes;
     std::vector<int>     sent_graph_bytes;
 
-    // graph slam
+    // keyframe and edges container for loading graph from a previously save_graph call
+    std::vector<KeyFrame::Ptr> loaded_keyframes;
+    std::vector<Edge::Ptr>     loaded_edges;
+
     // all the below members must be accessed after locking main_thread_mutex
     std::mutex main_thread_mutex;
 

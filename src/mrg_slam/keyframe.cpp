@@ -47,6 +47,8 @@ KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
     load( directory, graph );
 }
 
+KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path ) { load( keyframe_path, pcd_path ); }
+
 KeyFrame::~KeyFrame() {}
 
 
@@ -80,6 +82,8 @@ KeyFrame::save( const std::string& result_path )
     ofs << odom.matrix() << "\n";
 
     ofs << "accum_distance " << accum_distance << "\n";
+
+    ofs << "first_keyframe " << first_keyframe << "\n";
 
     if( floor_coeffs ) {
         ofs << "floor_coeffs " << floor_coeffs->transpose() << "\n";
@@ -199,6 +203,67 @@ KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
     return true;
 }
 
+bool
+KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path )
+{
+    auto logger = rclcpp::get_logger( "load_graph" );
+
+    std::ifstream ifs( keyframe_path );
+    if( !ifs ) {
+        RCLCPP_ERROR_STREAM( logger, "Failed to open " << keyframe_path );
+        return false;
+    }
+
+    std::string line;
+    while( std::getline( ifs, line ) ) {
+        std::istringstream iss( line );
+        std::string        key;
+        iss >> key;
+        if( key == "robot_name" ) {
+            iss >> robot_name;
+        } else if( key == "readable_id" ) {
+            iss >> readable_id;
+        } else if( key == "stamp" ) {
+            iss >> stamp.sec >> stamp.nanosec;
+        } else if( key == "estimate" ) {
+            Eigen::Matrix4d& estimate_mat = estimate_transform->matrix();
+            for( int i = 0; i < 4; ++i ) {
+                for( int j = 0; j < 4; ++j ) {
+                    iss >> estimate_mat( i, j );
+                }
+            }
+        } else if( key == "odom_counter" ) {
+            iss >> odom_keyframe_counter;
+        } else if( key == "odom" ) {
+            for( int i = 0; i < 4; ++i ) {
+                for( int j = 0; j < 4; ++j ) {
+                    iss >> odom( i, j );
+                }
+            }
+        } else if( key == "accum_distance" ) {
+            iss >> accum_distance;
+        } else if( key == "uuid" ) {
+            iss >> uuid_str;
+        }
+    }
+
+    // Print all the loaded data
+    RCLCPP_INFO_STREAM( logger, "robot_name: " << robot_name );
+    RCLCPP_INFO_STREAM( logger, "readable_id: " << readable_id );
+    RCLCPP_INFO_STREAM( logger, "stamp: " << stamp.sec << " " << stamp.nanosec );
+    RCLCPP_INFO_STREAM( logger, "estimate: " << estimate_transform->matrix() );
+    RCLCPP_INFO_STREAM( logger, "odom_counter: " << odom_keyframe_counter );
+    RCLCPP_INFO_STREAM( logger, "odom: " << odom.matrix() );
+    RCLCPP_INFO_STREAM( logger, "accum_distance: " << accum_distance );
+    RCLCPP_INFO_STREAM( logger, "uuid: " << uuid_str );
+
+
+    pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
+    pcl::io::loadPCDFile( pcd_path, *cloud_ );
+    cloud = std::move( cloud_ );
+
+    return true;
+}
 
 long
 KeyFrame::id() const

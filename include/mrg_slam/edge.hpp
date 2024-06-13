@@ -34,6 +34,7 @@ public:
     Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, std::shared_ptr<const KeyFrame> from_keyframe,
           const boost::uuids::uuid& from_uuid, std::shared_ptr<const KeyFrame> to_keyframe, const boost::uuids::uuid& to_uuid );
     // Edge(const std::string& directory, g2o::HyperGraph* graph);
+    Edge( const std::string& edge_path );
     virtual ~Edge();
 
     long                               id() const;
@@ -41,6 +42,7 @@ public:
     const Eigen::Matrix<double, 6, 6>& information() const;
 
     void save( const std::string& result_path );
+    void load( const std::string& edge_path );
 
 public:
     const g2o::EdgeSE3*             edge;           // edge instance
@@ -54,6 +56,12 @@ public:
     boost::uuids::uuid              to_uuid;        // to keyframe uuid
     std::string                     to_uuid_str;    // to keyframe uuid as a string for graph exchange
     std::string                     readable_id;    // readable id for visualizing and debugging
+
+private:
+    std::string make_readable_id();
+
+    Type        type_from_string( const std::string& type_str );
+    std::string type_to_string( Type type );
 };
 
 /**

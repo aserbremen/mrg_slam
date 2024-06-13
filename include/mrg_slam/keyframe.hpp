@@ -39,12 +39,19 @@ public:
               int odom_keyframe_counter, const boost::uuids::uuid& uuid, double accum_distance,
               const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
+    KeyFrame( const std::string& keyframe_path, const std::string& pcd_path );
     virtual ~KeyFrame();
 
     Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
 
+    /**
+     * @brief Save the keyframe to the specified .txt file and .pcd file
+     * @param result_path The path to save the keyframe excluding the file extension, e.g. /path/to/keyframe/000003
+     */
     void save( const std::string& result_path );
+
     bool load( const std::string& directory, g2o::HyperGraph* graph );
+    bool load( const std::string& keyframe_path, const std::string& pcd_path );
 
     long              id() const;
     Eigen::Isometry3d estimate() const;
@@ -65,8 +72,11 @@ public:
     boost::optional<Eigen::Vector4d>              floor_coeffs;  // detected floor's coefficients
     boost::optional<Eigen::Vector3d>              utm_coord;     // UTM coord obtained by GPS
 
-    boost::optional<Eigen::Vector3d>    acceleration;  //
-    boost::optional<Eigen::Quaterniond> orientation;   //
+    // Optional data
+    boost::optional<Eigen::Isometry3d> estimate_transform;  // estimated graph pose, only needed for keyframes that are created by
+                                                            // load_graph service
+    boost::optional<Eigen::Vector3d>    acceleration;       //
+    boost::optional<Eigen::Quaterniond> orientation;        //
 
     g2o::VertexSE3* node;  // node instance
 
