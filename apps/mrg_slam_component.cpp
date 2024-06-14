@@ -1,33 +1,36 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-#include <angles/angles.h>
-#include <g2o/types/slam3d/edge_se3.h>
-#include <g2o/types/slam3d/vertex_se3.h>
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/time_synchronizer.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/io/pcd_io.h>
-#include <pcl_conversions/pcl_conversions.h>
-
 #include <Eigen/Dense>
 #include <atomic>
+#include <chrono>
+#include <ctime>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
+// boost
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
-#include <chrono>
-#include <ctime>
-#include <functional>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+// g2o
+#include <g2o/types/slam3d/edge_se3.h>
+#include <g2o/types/slam3d/vertex_se3.h>
+
 #include <g2o/edge_se3_plane.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
-#include <iomanip>
-#include <iostream>
-#include <memory>
+// mrg_slam
 #include <mrg_slam/edge.hpp>
 #include <mrg_slam/floor_coeffs_processor.hpp>
 #include <mrg_slam/gps_processor.hpp>
+#include <mrg_slam/graph_data_base.hpp>
 #include <mrg_slam/graph_slam.hpp>
 #include <mrg_slam/imu_processor.hpp>
 #include <mrg_slam/information_matrix_calculator.hpp>
@@ -49,18 +52,21 @@
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
 #include <mrg_slam_msgs/srv/save_graph.hpp>
 #include <mrg_slam_msgs/srv/save_map.hpp>
-#include <mutex>
+// pcl
+#include <pcl/filters/extract_indices.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl_conversions/pcl_conversions.h>
+// ROS2
+#include <angles/angles.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/time_synchronizer.h>
+
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
-#include <unordered_map>
-#include <unordered_set>
-// boost uuid
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 
 
 namespace mrg_slam {
@@ -1935,8 +1941,7 @@ private:
     double              graph_update_interval;
     double              map_cloud_update_interval;
 
-
-    // Statistics
+    // Timing statistics
     std::vector<int64_t> loop_closure_times;
     std::vector<int64_t> graph_optimization_times;
     std::vector<int>     received_graph_bytes;
@@ -1948,6 +1953,9 @@ private:
 
     // all the below members must be accessed after locking main_thread_mutex
     std::mutex main_thread_mutex;
+
+    std::shared_ptr<mrg_slam::GraphDataBase> graph_database;
+
 
     int                       max_keyframes_per_update;
     std::deque<KeyFrame::Ptr> new_keyframes;
@@ -1962,8 +1970,8 @@ private:
     std::vector<KeyFrame::Ptr> keyframes;
 
     // unique ids
-    boost::uuids::random_generator_pure uuid_generator;
-    boost::uuids::string_generator      uuid_from_string_generator;
+    // boost::uuids::random_generator_pure uuid_generator;
+    // boost::uuids::string_generator      uuid_from_string_generator;
     // std::unordered_map<ros::Time, KeyFrame::Ptr, RosTimeHash> keyframe_hash;
     // TODO clarify whether builtin_interfaces::msg::Time or rclcpp::Time should be used
     std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>          keyframe_hash;
