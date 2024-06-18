@@ -308,7 +308,7 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # floor_detection component
-    remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic'])]
+    remaps = [('/points_topic', shared_params['points_topic'])]
     if model_namespace != '':
         remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
                   ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),

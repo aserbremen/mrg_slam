@@ -13,14 +13,14 @@
 namespace mrg_slam {
 
 KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
-                    int odom_keyframe_counter, const boost::uuids::uuid& uuid, double accum_distance,
+                    int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
                     const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
     robot_name( robot_name ),
     stamp( stamp ),
     odom( odom ),
     odom_keyframe_counter( odom_keyframe_counter ),
     uuid( uuid ),
-    uuid_str( boost::uuids::to_string( uuid ) ),
+    uuid_str( uuid_str ),
     accum_distance( accum_distance ),
     first_keyframe( false ),
     cloud( cloud ),

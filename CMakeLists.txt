@@ -213,6 +213,7 @@ install(
 ##############################
 add_library(mrg_slam_component SHARED
   apps/mrg_slam_component.cpp
+  src/mrg_slam/graph_database.cpp
   src/mrg_slam/graph_slam.cpp
   src/mrg_slam/edge.cpp
   src/mrg_slam/loop_detector.cpp

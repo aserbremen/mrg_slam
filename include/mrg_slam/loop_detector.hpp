@@ -13,6 +13,9 @@
 
 namespace mrg_slam {
 
+// Forward declarations
+class GraphDatabase;
+
 struct Loop {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -46,10 +49,14 @@ public:
      * @brief detect loops and add them to the pose graph
      * @param keyframes       keyframes
      * @param new_keyframes   newly registered keyframes
-     * @param graph_slam      pose graph
      */
     std::vector<Loop::Ptr> detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                                   mrg_slam::GraphSLAM& graph_slam, const std::vector<Edge::Ptr>& edges );
+                                   const std::vector<Edge::Ptr>& edges );
+
+    /**
+     * @brief Detect loops and perform loop consistency checks
+     */
+    std::vector<Loop::Ptr> detect( std::shared_ptr<GraphDatabase> graph_db );
 
     double get_distance_thresh() const;
 
@@ -70,7 +77,7 @@ private:
      * @param graph_slam           graph slam
      */
     Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
-                        mrg_slam::GraphSLAM& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges );
+                        const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges );
 
 
 private:

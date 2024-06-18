@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <mrg_slam/edge.hpp>
+#include <mrg_slam/graph_database.hpp>
 #include <mrg_slam/loop_detector.hpp>
 
 
@@ -41,23 +42,17 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     }
 }
 
-
-/**
- * @brief detect loops and add them to the pose graph
- * @param keyframes       keyframes
- * @param new_keyframes   newly registered keyframes
- * @param graph_slam      pose graph
- */
+// TODO remove redundanct detect function
 std::vector<Loop::Ptr>
 LoopDetector::detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                      mrg_slam::GraphSLAM& graph_slam, const std::vector<Edge::Ptr>& edges )
+                      const std::vector<Edge::Ptr>& edges )
 {
     std::vector<Loop::Ptr> detected_loops;
     for( const auto& new_keyframe : new_keyframes ) {
         auto start = std::chrono::high_resolution_clock::now();
 
         auto candidates = find_candidates( keyframes, new_keyframe );
-        auto loop       = matching( candidates, new_keyframe, graph_slam, keyframes, edges );
+        auto loop       = matching( candidates, new_keyframe, keyframes, edges );
         if( loop ) {
             detected_loops.push_back( loop );
         }
@@ -72,6 +67,32 @@ LoopDetector::detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::de
     return detected_loops;
 }
 
+
+std::vector<Loop::Ptr>
+LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
+{
+    const auto&            keyframes     = graph_db->get_keyframes();
+    const auto&            new_keyframes = graph_db->get_new_keyframes();
+    const auto&            edges         = graph_db->get_edges();
+    std::vector<Loop::Ptr> detected_loops;
+    for( const auto& new_keyframe : new_keyframes ) {
+        auto start = std::chrono::high_resolution_clock::now();
+
+        auto candidates = find_candidates( keyframes, new_keyframe );
+        auto loop       = matching( candidates, new_keyframe, keyframes, edges );
+        if( loop ) {
+            detected_loops.push_back( loop );
+        }
+
+        if( candidates.size() > 0 ) {
+            loop_candidates_sizes.push_back( candidates.size() );
+            auto end = std::chrono::high_resolution_clock::now();
+            loop_detection_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
+        }
+    }
+
+    return detected_loops;
+}
 
 double
 LoopDetector::get_distance_thresh() const
@@ -124,7 +145,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
 
 Loop::Ptr
 LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
-                        mrg_slam::GraphSLAM& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges )
+                        const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges )
 {
     if( candidate_keyframes.empty() ) {
         return nullptr;

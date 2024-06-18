@@ -45,6 +45,7 @@ public:
     void load( const std::string& edge_path );
 
 public:
+    // TODO only save uuid and uuid_str. from_uuid and to_uuid can be derived from from_keyframe and to_keyframe
     const g2o::EdgeSE3*             edge;           // edge instance
     Type                            type;           // edge type
     boost::uuids::uuid              uuid;           // unique id for this edge

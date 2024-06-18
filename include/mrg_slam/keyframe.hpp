@@ -36,7 +36,7 @@ public:
     using ConstPtr = std::shared_ptr<const KeyFrame>;
 
     KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
-              int odom_keyframe_counter, const boost::uuids::uuid& uuid, double accum_distance,
+              int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
               const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
     KeyFrame( const std::string& keyframe_path, const std::string& pcd_path );

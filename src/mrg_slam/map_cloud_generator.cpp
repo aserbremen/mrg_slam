@@ -36,9 +36,8 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
         }
     }
 
-    if( cloud->empty() ) {
-        std::cerr << "warning: cloud empty. Probably only very first keyframes registered so far, that are exclued from final map!!"
-                  << std::endl;
+    if( cloud->empty() && keyframes.size() > 1 ) {
+        std::cerr << "warning: cloud empty" << std::endl;
         return nullptr;
     }
 
