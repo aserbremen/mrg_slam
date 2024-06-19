@@ -1,4 +1,5 @@
 // boost
+#include <boost/filesystem.hpp>
 #include <boost/uuid/uuid_io.hpp>
 // mrg_slam
 #include <mrg_slam/graph_database.hpp>
@@ -59,6 +60,8 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
         return false;
     }
 
+    auto logger = rclcpp::get_logger( "flush_keyframe_queue" );
+
     int num_processed = 0;
     for( int i = 0; i < std::min<int>( keyframe_queue.size(), max_keyframes_per_update ); i++ ) {
         num_processed = i;
@@ -84,7 +87,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
                 for( int i = 0; i < 6; i++ ) {
                     information( i, i ) = 1.0 / ( fix_first_node_stddev_vec[i] * fix_first_node_stddev_vec[i] );
                 }
-                RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_keyframe_queue" ), "fixing first node with information:\n" << information );
+                RCLCPP_INFO_STREAM( logger, "fixing first node with information:\n" << information );
 
                 anchor_node = graph_slam->add_se3_node( Eigen::Isometry3d::Identity() );
                 anchor_node->setFixed( true );
@@ -129,11 +132,9 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
         edges.emplace_back( edge );
         edge_uuids.insert( edge->uuid );
         // Add the edge to the corresponding keyframes
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_keyframe_queue" ),
-                            "added " << edge->readable_id << " as next edge to keyframe " << prev_robot_keyframe->readable_id );
+        RCLCPP_INFO_STREAM( logger, "added " << edge->readable_id << " as next edge to keyframe " << prev_robot_keyframe->readable_id );
         uuid_keyframe_map[prev_robot_keyframe->uuid]->next_edge = edge;
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_keyframe_queue" ),
-                            "added " << edge->readable_id << " as prev edge to keyframe " << keyframe->readable_id );
+        RCLCPP_INFO_STREAM( logger, "added " << edge->readable_id << " as prev edge to keyframe " << keyframe->readable_id );
         keyframe->prev_edge = edge;
         graph_slam->add_robust_kernel( g2o_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         prev_robot_keyframe = keyframe;
@@ -169,7 +170,9 @@ GraphDatabase::flush_graph_queue(
         return false;
     }
 
-    RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ), "Flusing graph, received graph msgs: " << graph_queue.size() );
+    auto logger = rclcpp::get_logger( "flush_graph_queue" );
+
+    RCLCPP_INFO_STREAM( logger, "Flusing graph, received graph msgs: " << graph_queue.size() );
 
     // Create unique keyframes and edges vectors to keep order of received messages
     std::vector<const mrg_slam_msgs::msg::KeyFrameRos *> unique_keyframes;
@@ -227,7 +230,7 @@ GraphDatabase::flush_graph_queue(
                                               // don't add it to keyframe_hash, which is only used for floor_coeffs
                                               // keyframe_hash[keyframe->stamp] = keyframe;
 
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ), "Adding unique keyframe: " << keyframe->readable_id );
+        RCLCPP_INFO_STREAM( logger, "Adding unique keyframe: " << keyframe->readable_id );
     }
 
     for( const auto &edge_ros : unique_edges ) {
@@ -236,7 +239,7 @@ GraphDatabase::flush_graph_queue(
         auto          edge_to_uuid   = uuid_from_string_generator( edge_ros->to_uuid_str );
         KeyFrame::Ptr from_keyframe;
         if( edge_ros->type == Edge::TYPE_ANCHOR ) {
-            RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ), "Handling anchor edge" );
+            RCLCPP_INFO_STREAM( logger, "Handling anchor edge" );
             from_keyframe = anchor_kf;
         } else {
             from_keyframe = uuid_keyframe_map[edge_from_uuid];
@@ -244,7 +247,7 @@ GraphDatabase::flush_graph_queue(
         KeyFrame::Ptr to_keyframe = uuid_keyframe_map[edge_to_uuid];
 
         // check if the edge is already added
-        if( from_keyframe->edge_exists( *to_keyframe, rclcpp::get_logger( "flush_graph_queue" ) ) ) {
+        if( from_keyframe->edge_exists( *to_keyframe, logger ) ) {
             edge_ignore_uuids.insert( edge_uuid );
             continue;
         }
@@ -259,19 +262,18 @@ GraphDatabase::flush_graph_queue(
         edge_uuids.insert( edge->uuid );
 
 
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ), "Adding unique edge: " << edge->readable_id );
+        RCLCPP_INFO_STREAM( logger, "Adding unique edge: " << edge->readable_id );
 
         // Add odometry edges to the corresponding keyframes as prev or next edge
         if( edge->type == Edge::TYPE_ODOM ) {
             // Only set the prev edge for 2nd and later keyframes
             if( from_keyframe->odom_keyframe_counter > 1 ) {
                 from_keyframe->prev_edge = edge;
-                RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ),
+                RCLCPP_INFO_STREAM( logger,
                                     "Setting edge " << edge->readable_id << " as prev edge to keyframe " << from_keyframe->readable_id );
             }
             to_keyframe->next_edge = edge;
-            RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_graph_queue" ),
-                                "Setting edge " << edge->readable_id << " as next edge to keyframe " << to_keyframe->readable_id );
+            RCLCPP_INFO_STREAM( logger, "Setting edge " << edge->readable_id << " as next edge to keyframe " << to_keyframe->readable_id );
         }
 
 
@@ -289,6 +291,187 @@ GraphDatabase::flush_graph_queue(
     }
 
     graph_queue.clear();
+    return true;
+}
+
+
+bool
+GraphDatabase::load_graph( const std::string &directory )
+{
+    // lambda function to glob all files with a specific extension in a directory
+    auto glob_abs_paths = []( boost::filesystem::path const &root, std::string const &ext ) -> std::vector<boost::filesystem::path> {
+        std::vector<boost::filesystem::path> paths;
+
+        if( boost::filesystem::exists( root ) && boost::filesystem::is_directory( root ) ) {
+            for( auto const &entry : boost::filesystem::recursive_directory_iterator( root ) ) {
+                if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext ) paths.emplace_back( entry.path() );
+            }
+        }
+
+        std::sort( paths.begin(), paths.end() );
+        return paths;
+    };
+    // glob all the keyframe files ending on .txt and and point clouds ending on .pcd
+    boost::filesystem::path keyframe_dir( directory + "/keyframes" );
+    if( !boost::filesystem::is_directory( keyframe_dir ) ) {
+        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
+        return false;
+    }
+    auto keyframe_files = glob_abs_paths( keyframe_dir, ".txt" );
+    for( auto &file : keyframe_files ) {
+        std::cout << "keyframe file: " << file << std::endl;
+    }
+    auto pointcloud_files = glob_abs_paths( keyframe_dir, ".pcd" );
+    if( keyframe_files.size() != pointcloud_files.size() ) {
+        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ),
+                            "Number of keyframe files and pointcloud files do not match, cannot load keyframes" );
+        return false;
+    }
+    // glob all the edge files ending on .txt
+    boost::filesystem::path edge_dir( directory + "/edges" );
+    if( !boost::filesystem::is_directory( edge_dir ) ) {
+        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << edge_dir << " does not exist, cannot load edges" );
+        return false;
+    }
+    auto edge_files = glob_abs_paths( edge_dir, ".txt" );
+    for( auto &file : edge_files ) {
+        std::cout << "edge file: " << file << std::endl;
+    }
+
+    // lambda function to load uuid_str from a file and check if the keyframe or edge is already in the graph
+    auto load_string_key = []( const std::string &path, const std::string &_key ) -> std::string {
+        std::ifstream ifs( path );
+        std::cout << "loading file: " << path << std::endl;
+        std::string line;
+        while( std::getline( ifs, line ) ) {
+            std::cout << "line: " << line << std::endl;
+            std::stringstream iss( line );
+            std::string       key;
+            iss >> key;
+            std::cout << "key: " << key << std::endl;
+            if( key == _key ) {
+                std::string str;
+                iss >> str;
+                return str;
+            }
+        }
+        return "";
+    };
+
+    // load all the keyframes, point clouds and edges, which will be added to the pose graph in the next optimization
+    // TODO check if mutex is necessary for loaded keyframes and edges
+    std::lock_guard<std::mutex> lock( loaded_graph_mutex );
+    for( size_t i = 0; i < keyframe_files.size(); i++ ) {
+        std::string keyframe_file   = keyframe_files[i].string();
+        std::string pointcloud_file = pointcloud_files[i].string();
+        std::string uuid_str        = load_string_key( keyframe_file, "uuid_str" );
+        auto        uuid            = uuid_from_string_generator( uuid_str );
+        if( uuid_keyframe_map.find( uuid ) != uuid_keyframe_map.end() ) {
+            RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Keyframe with uuid " << uuid_str << " already exists, skipping" );
+            continue;
+        }
+
+        KeyFrame::Ptr keyframe = std::make_shared<KeyFrame>( keyframe_file, pointcloud_file, uuid, uuid_str );
+        loaded_keyframes.emplace_back( keyframe );
+    }
+
+    for( size_t i = 0; i < edge_files.size(); i++ ) {
+        std::string edge_file = edge_files[i].string();
+        std::string uuid_str  = load_string_key( edge_file, "uuid_str" );
+        auto        uuid      = uuid_from_string_generator( uuid_str );
+        if( edge_uuids.find( uuid ) != edge_uuids.end() ) {
+            RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Edge with uuid " << uuid_str << " already exists, skipping" );
+            continue;
+        }
+        std::string from_uid_str = load_string_key( edge_file, "from_uuid_str" );
+        std::string to_uid_str   = load_string_key( edge_file, "to_uuid_str" );
+        auto        from_uuid    = uuid_from_string_generator( from_uid_str );
+        auto        to_uuid      = uuid_from_string_generator( to_uid_str );
+
+        Edge::Ptr edge = std::make_shared<Edge>( edge_file, uuid, uuid_str, from_uuid, from_uid_str, to_uuid, to_uid_str );
+        loaded_edges.emplace_back( edge );
+    }
+
+    return true;
+}
+
+bool
+GraphDatabase::flush_loaded_graph()
+{
+    std::lock_guard<std::mutex> lock( loaded_graph_mutex );
+
+    if( loaded_keyframes.empty() && loaded_edges.empty() ) {
+        return false;
+    }
+
+    auto logger = rclcpp::get_logger( "flush_loaded_graph" );
+
+    RCLCPP_INFO_STREAM( logger, "Flushing loaded " << loaded_keyframes.size() << " keyframes and " << loaded_edges.size() << " edges" );
+
+    for( const auto &keyframe : loaded_keyframes ) {
+        keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform.get() );
+        uuid_keyframe_map[keyframe->uuid] = keyframe;
+        new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
+                                              // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
+        RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id << " to new keyframes with uuid " << keyframe->uuid_str );
+    }
+
+    for( const auto &edge : loaded_edges ) {
+        RCLCPP_INFO_STREAM( logger, "Adding edge: " << edge->readable_id << " with uuid " << edge->uuid_str );
+        KeyFrame::Ptr from_keyframe;
+        if( edge->type == Edge::TYPE_ANCHOR ) {
+            RCLCPP_INFO_STREAM( logger, "Handling anchor edge" );
+            from_keyframe = anchor_kf;
+        } else {
+            from_keyframe = uuid_keyframe_map[edge->from_uuid];
+        }
+        KeyFrame::Ptr to_keyframe = uuid_keyframe_map[edge->to_uuid];
+        RCLCPP_INFO_STREAM( logger, "Adding from keyframe: " << from_keyframe->readable_id << " with uuid " << from_keyframe->uuid_str
+                                                             << " to " << edge->readable_id );
+        edge->from_keyframe = from_keyframe;
+        RCLCPP_INFO_STREAM( logger, "Adding to keyframe: " << to_keyframe->readable_id << " with uuid " << to_keyframe->uuid_str << " to "
+                                                           << edge->readable_id );
+        edge->to_keyframe = to_keyframe;
+
+        // // check if the edge is already added
+        // if( from_keyframe->edge_exists( *to_keyframe, logger ) ) {
+        //     RCLCPP_WARN_STREAM( logger, "Edge " << edge->readable_id << " already exists, skipping" );
+        //     edge_ignore_uuids.insert( edge->uuid );
+        //     continue;
+        // }
+        if( from_keyframe->node == nullptr ) {
+            RCLCPP_WARN_STREAM( logger, "from_keyframe->node is nullptr" );
+        }
+        if( to_keyframe->node == nullptr ) {
+            RCLCPP_WARN_STREAM( logger, "to_keyframe->node is nullptr" );
+        }
+        auto edge_g2o = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, edge->relative_pose_loaded,
+                                                  edge->information_loaded );
+
+        edge->edge = edge_g2o;
+        edges.emplace_back( edge );
+        edge_uuids.insert( edge->uuid );
+
+        // Add the edge to the corresponding keyframes
+        if( edge->type == Edge::TYPE_ODOM ) {
+            if( from_keyframe->odom_keyframe_counter > 1 ) {
+                from_keyframe->prev_edge = edge;
+                RCLCPP_INFO_STREAM( logger,
+                                    "Setting edge " << edge->readable_id << " as prev edge to keyframe " << from_keyframe->readable_id );
+            }
+            to_keyframe->next_edge = edge;
+            RCLCPP_INFO_STREAM( logger, "Setting edge " << edge->readable_id << " as next edge to keyframe " << to_keyframe->readable_id );
+        }
+
+        if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
+            graph_slam->add_robust_kernel( edge_g2o, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
+        } else if( edge->type == Edge::TYPE_LOOP ) {
+            graph_slam->add_robust_kernel( edge_g2o, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
+        }
+    }
+
+    loaded_keyframes.clear();
+    loaded_edges.clear();
     return true;
 }
 

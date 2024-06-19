@@ -61,6 +61,10 @@ public:
     bool flush_graph_queue(
         std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>>& others_prev_robot_keyframes );
 
+    bool load_graph( const std::string& directory );
+
+    bool flush_loaded_graph();
+
     /**
      * @brief Adds SE3 edges between two keyframes for which a loop was detected. Adds the new_keyframes checked for loop closures to
      * keyframes vector
@@ -92,6 +96,7 @@ private:
     KeyFrame::ConstPtr        prev_robot_keyframe;
 
     // keyframe and edges container for loading graph from a previously save_graph call
+    std::mutex                 loaded_graph_mutex;
     std::vector<KeyFrame::Ptr> loaded_keyframes;
     std::vector<Edge::Ptr>     loaded_edges;
 

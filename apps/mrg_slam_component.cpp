@@ -534,52 +534,6 @@ private:
         trans_odom2map_mutex.unlock();
     }
 
-
-    /**
-     * @brief This function adds all keyframes and edges that are loaded by the load_graph service to the pose graph
-     */
-    // bool flush_loaded_keyframes_and_edges()
-    // {
-    //     if( loaded_keyframes.empty() && loaded_edges.empty() ) {
-    //         return false;
-    //     }
-
-    //     RCLCPP_INFO_STREAM( this->get_logger(),
-    //                         "Flushing loaded " << loaded_keyframes.size() << " keyframes and " << loaded_edges.size() << " edges" );
-
-    //     for( const auto &keyframe : loaded_keyframes ) {
-    //         keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform.get() );
-    //         uuid_keyframe_map[keyframe->uuid] = keyframe;
-    //         new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
-    //                                               // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
-    //         RCLCPP_INFO_STREAM( this->get_logger(), "Adding loaded keyframe: " << keyframe->readable_id );
-    //     }
-
-    //     for( const auto &edge : loaded_edges ) {
-    //         KeyFrame::Ptr from_keyframe = uuid_keyframe_map[edge->from_uuid];
-    //         KeyFrame::Ptr to_keyframe   = uuid_keyframe_map[edge->to_uuid];
-    //         edge->from_keyframe         = from_keyframe;
-    //         edge->to_keyframe           = to_keyframe;
-
-    //         // check if the edge is already added
-    //         if( from_keyframe->edge_exists( *to_keyframe, this->get_logger() ) ) {
-    //             edge_ignore_uuids.insert( edge->uuid );
-    //             continue;
-    //         }
-
-    //         // TODO load relative pose and information matrix
-    //         Eigen::Isometry3d relpose     = from_keyframe->estimate().inverse() * to_keyframe->estimate();  // verify this
-    //         Eigen::MatrixXd   information = Eigen::MatrixXd::Identity( 6, 6 );
-    //         // TODO fix those hardcoded values
-    //         information.block<3, 3>( 0, 0 ) *= 4;
-    //         information.block<3, 3>( 3, 3 ) *= 131.312;
-    //         auto graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
-    //     }
-
-    //     return true;
-    // }
-
-
     void update_pose( const Eigen::Isometry3d &odom2map, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose> &odom_pose )
     {
         auto             &odom     = odom_pose.first;
@@ -587,7 +541,6 @@ private:
         Eigen::Isometry3d new_pose = odom2map * odom;
         tf2::fromMsg( pose, new_pose );
     }
-
 
     void publish_slam_pose( mrg_slam::KeyFrame::ConstPtr kf )
     {
@@ -981,7 +934,7 @@ private:
             read_until_pub->publish( read_until );
         }
 
-        if( !keyframe_updated & !graph_database->flush_graph_queue( others_prev_robot_keyframes )
+        if( !keyframe_updated & !graph_database->flush_graph_queue( others_prev_robot_keyframes ) & !graph_database->flush_loaded_graph()
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )
             & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id ) ) {
@@ -1238,66 +1191,16 @@ private:
                              mrg_slam_msgs::srv::LoadGraph::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-        // move to GraphDatabase class
-        // // check if the directory exists
-        // if( !boost::filesystem::is_directory( req->directory ) ) {
-        //     RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << req->directory << " does not exist, cannot load graph" );
-        //     res->success = false;
-        //     return;
-        // }
 
-        // // glob all the keyframe files ending on .txt and and point clouds ending on .pcd
-        // std::vector<std::string> keyframe_files, pointcloud_files;
-        // boost::filesystem::path  keyframe_dir( req->directory + "/keyframes" );
-        // if( !boost::filesystem::is_directory( keyframe_dir ) ) {
-        //     RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
-        //     res->success = false;
-        //     return;
-        // }
-        // auto keyframe_files_tmp   = glob_filenames( keyframe_dir, ".txt" );
-        // auto pointcloud_files_tmp = glob_filenames( keyframe_dir, ".pcd" );
-        // if( keyframe_files_tmp.size() != pointcloud_files_tmp.size() ) {
-        //     RCLCPP_WARN_STREAM( this->get_logger(), "Number of keyframe files and pointcloud files do not match, cannot load keyframes"
-        //     ); res->success = false; return;
-        // }
-        // // glob all the edge files ending on .txt
-        // std::vector<std::string> edge_files;
-        // boost::filesystem::path  edge_dir( req->directory + "/edges" );
-        // if( !boost::filesystem::is_directory( edge_dir ) ) {
-        //     RCLCPP_WARN_STREAM( this->get_logger(), "Directory " << edge_dir << " does not exist, cannot load edges" );
-        //     res->success = false;
-        //     return;
-        // }
-        // auto edge_files_tmp = glob_filenames( edge_dir, ".txt" );
+        // check if the directory exists
+        if( !boost::filesystem::is_directory( req->directory ) ) {
+            RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph_service" ),
+                                "Directory " << req->directory << " does not exist, cannot load graph" );
+            res->success = false;
+            return;
+        }
 
-        // // load all the keyframes, point clouds and edges, which will be added to the pose graph in the next optimization
-        // for( size_t i = 0; i < keyframe_files_tmp.size(); i++ ) {
-        //     std::string keyframe_file   = keyframe_files_tmp[i].string();
-        //     std::string pointcloud_file = pointcloud_files_tmp[i].string();
-
-        //     KeyFrame::Ptr keyframe = std::make_shared<KeyFrame>( keyframe_file, pointcloud_file );
-        //     if( !keyframe ) {
-        //         RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load keyframe from " << keyframe_file );
-        //         res->success = false;
-        //         return;
-        //     }
-
-        //     loaded_keyframes.emplace_back( keyframe );
-        // }
-
-        // for( size_t i = 0; i < edge_files_tmp.size(); i++ ) {
-        //     std::string edge_file = edge_files_tmp[i].string();
-        //     Edge::Ptr   edge      = std::make_shared<Edge>( edge_file );
-        //     if( !edge ) {
-        //         RCLCPP_WARN_STREAM( this->get_logger(), "Failed to load edge from " << edge_file );
-        //         res->success = false;
-        //         return;
-        //     }
-
-        //     loaded_edges.emplace_back( edge );
-        // }
-
-        // res->success = true;
+        res->success = graph_database->load_graph( req->directory );
     }
 
     /**
@@ -1427,8 +1330,8 @@ private:
                 mrg_slam_msgs::msg::EdgeRos dst;
                 dst.type          = static_cast<uint8_t>( src->type );
                 dst.uuid_str      = src->uuid_str;
-                dst.from_uuid_str = src->from_keyframe->uuid_str;
-                dst.to_uuid_str   = src->to_keyframe->uuid_str;
+                dst.from_uuid_str = src->from_uuid_str;
+                dst.to_uuid_str   = src->to_uuid_str;
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();

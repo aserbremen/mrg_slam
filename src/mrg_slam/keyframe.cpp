@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+// boost
+#include <boost/filesystem.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+// g2o
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/types/slam3d/vertex_se3.h>
+// pcl
 #include <pcl/io/pcd_io.h>
-
-#include <boost/filesystem.hpp>
-#include <boost/uuid/uuid_io.hpp>
+// mrg_slam
 #include <mrg_slam/keyframe.hpp>
-// ROS2 migration
+// ROS2
 #include <rclcpp/logging.hpp>
 
 namespace mrg_slam {
@@ -34,20 +38,11 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     readable_id = robot_name + "." + std::to_string( odom_keyframe_counter );
 }
 
-KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
-    stamp(),
-    odom( Eigen::Isometry3d::Identity() ),
-    accum_distance( -1 ),
-    first_keyframe( false ),
-    cloud( nullptr ),
-    cloud_msg( nullptr ),
-    node( nullptr )
+KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+                    const std::string& _uuid_str )
 {
-    // TODO implement with new way of identifying keyframes
-    load( directory, graph );
+    load( keyframe_path, pcd_path, _uuid, _uuid_str );
 }
-
-KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path ) { load( keyframe_path, pcd_path ); }
 
 KeyFrame::~KeyFrame() {}
 
@@ -105,7 +100,7 @@ KeyFrame::save( const std::string& result_path )
         ofs << "g2o_id " << node->id() << "\n";
     }
 
-    ofs << "uuid " << uuid_str << "\n";
+    ofs << "uuid_str " << uuid_str << "\n";
 
     // Save the point cloud
     pcl::io::savePCDFileBinary( result_path + ".pcd", *cloud );
@@ -204,15 +199,19 @@ KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
 }
 
 bool
-KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path )
+KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+                const std::string& _uuid_str )
 {
-    auto logger = rclcpp::get_logger( "load_graph" );
+    auto logger = rclcpp::get_logger( "KeyFrame::load" );
 
     std::ifstream ifs( keyframe_path );
     if( !ifs ) {
         RCLCPP_ERROR_STREAM( logger, "Failed to open " << keyframe_path );
         return false;
     }
+
+    uuid     = _uuid;
+    uuid_str = _uuid_str;
 
     std::string line;
     while( std::getline( ifs, line ) ) {
@@ -242,8 +241,24 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path )
             }
         } else if( key == "accum_distance" ) {
             iss >> accum_distance;
-        } else if( key == "uuid" ) {
-            iss >> uuid_str;
+        } else if( key == "first_keyframe" ) {
+            iss >> first_keyframe;
+        } else if( key == "floor_coeffs" ) {
+            Eigen::Vector4d coeffs;
+            ifs >> coeffs[0] >> coeffs[1] >> coeffs[2] >> coeffs[3];
+            floor_coeffs = coeffs;
+        } else if( key == "utm_coord" ) {
+            Eigen::Vector3d coord;
+            ifs >> coord[0] >> coord[1] >> coord[2];
+            utm_coord = coord;
+        } else if( key == "acceleration" ) {
+            Eigen::Vector3d acc;
+            ifs >> acc[0] >> acc[1] >> acc[2];
+            acceleration = acc;
+        } else if( key == "orientation" ) {
+            Eigen::Quaterniond quat;
+            ifs >> quat.w() >> quat.x() >> quat.y() >> quat.z();
+            orientation = quat;
         }
     }
 
@@ -255,7 +270,7 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path )
     RCLCPP_INFO_STREAM( logger, "odom_counter: " << odom_keyframe_counter );
     RCLCPP_INFO_STREAM( logger, "odom: " << odom.matrix() );
     RCLCPP_INFO_STREAM( logger, "accum_distance: " << accum_distance );
-    RCLCPP_INFO_STREAM( logger, "uuid: " << uuid_str );
+    RCLCPP_INFO_STREAM( logger, "uuid_str: " << uuid_str );
 
 
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
@@ -264,6 +279,27 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path )
 
     return true;
 }
+
+std::string
+KeyFrame::load_uuid_str( const std::string& keyframe_path )
+{
+    std::ifstream ifs( keyframe_path );
+
+    std::string uuid_str;
+    std::string line;
+    while( std::getline( ifs, line ) ) {
+        std::istringstream iss( line );
+        std::string        key;
+        iss >> key;
+        if( key == "uuid" ) {
+            iss >> uuid_str;
+            break;
+        }
+    }
+
+    return uuid_str;
+}
+
 
 long
 KeyFrame::id() const

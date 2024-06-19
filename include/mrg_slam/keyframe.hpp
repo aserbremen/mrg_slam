@@ -38,8 +38,8 @@ public:
     KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
               int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
               const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
-    KeyFrame( const std::string& directory, g2o::HyperGraph* graph );
-    KeyFrame( const std::string& keyframe_path, const std::string& pcd_path );
+    KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+              const std::string& _uuid_str );
     virtual ~KeyFrame();
 
     Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
@@ -51,7 +51,10 @@ public:
     void save( const std::string& result_path );
 
     bool load( const std::string& directory, g2o::HyperGraph* graph );
-    bool load( const std::string& keyframe_path, const std::string& pcd_path );
+    bool load( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+               const std::string& _uuid_str );
+
+    std::string load_uuid_str( const std::string& keyframe_path );
 
     long              id() const;
     Eigen::Isometry3d estimate() const;

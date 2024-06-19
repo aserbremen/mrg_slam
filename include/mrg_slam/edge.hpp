@@ -4,6 +4,7 @@
 #define EDGE_HPP
 
 #include <Eigen/Dense>
+#include <boost/uuid/uuid.hpp>
 #include <mrg_slam/keyframe.hpp>
 #include <unordered_map>
 
@@ -32,7 +33,8 @@ public:
 
     Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
           std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe );
-    Edge( const std::string& edge_path );
+    Edge( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str, const boost::uuids::uuid& _from_uuid,
+          const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid, const std::string& _to_uuid_str );
     virtual ~Edge();
 
     long                               id() const;
@@ -40,7 +42,9 @@ public:
     const Eigen::Matrix<double, 6, 6>& information() const;
 
     void save( const std::string& result_path );
-    void load( const std::string& edge_path );
+    void load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str,
+               const boost::uuids::uuid& _from_uuid, const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid,
+               const std::string& _to_uuid_str );
 
 public:
     const g2o::EdgeSE3*             edge;           // edge instance
@@ -48,8 +52,15 @@ public:
     boost::uuids::uuid              uuid;           // unique id for this edge
     std::string                     uuid_str;       // unique id for this edge as a string for graph exchange
     std::shared_ptr<const KeyFrame> from_keyframe;  // from keyframe pointer
+    boost::uuids::uuid              from_uuid;      // from keyframe uuid
+    std::string                     from_uuid_str;  // from keyframe uuid as a string for graph exchange
     std::shared_ptr<const KeyFrame> to_keyframe;    // to keyframe pointer
+    boost::uuids::uuid              to_uuid;        // to keyframe uuid
+    std::string                     to_uuid_str;    // to keyframe uuid as a string for graph exchange
     std::string                     readable_id;    // readable id for visualizing and debugging
+
+    Eigen::Isometry3d           relative_pose_loaded;  // relative pose from loaded edge
+    Eigen::Matrix<double, 6, 6> information_loaded;    // information matrix from loaded edge
 
 private:
     std::string make_readable_id();

@@ -3,19 +3,32 @@
 #include <g2o/types/slam3d/edge_se3.h>
 
 #include <boost/filesystem.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <mrg_slam/edge.hpp>
 
 namespace mrg_slam {
 
 Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
             std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe ) :
-    edge( edge ), type( type ), uuid( uuid ), uuid_str( uuid_str ), from_keyframe( from_keyframe ), to_keyframe( to_keyframe )
+    edge( edge ),
+    type( type ),
+    uuid( uuid ),
+    uuid_str( uuid_str ),
+    from_keyframe( from_keyframe ),
+    from_uuid( from_keyframe->uuid ),
+    from_uuid_str( from_keyframe->uuid_str ),
+    to_keyframe( to_keyframe ),
+    to_uuid( to_keyframe->uuid ),
+    to_uuid_str( to_keyframe->uuid_str )
 {
     readable_id = make_readable_id();
 }
 
-Edge::Edge( const std::string& edge_path ) { load( edge_path ); }
+Edge::Edge( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str,
+            const boost::uuids::uuid& _from_uuid, const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid,
+            const std::string& _to_uuid_str )
+{
+    load( edge_path, _uuid, _uuid_str, _from_uuid, _from_uuid_str, _to_uuid, _to_uuid_str );
+}
 
 Edge::~Edge() {}
 
@@ -53,14 +66,23 @@ Edge::save( const std::string& result_path )
     ofs << "information_matrix\n";
     ofs << edge->information().matrix() << "\n";
     ofs << "uuid_str " << uuid_str << "\n";
-    ofs << "from_uuid_str " << from_keyframe->uuid_str << "\n";
-    ofs << "to_uuid_str " << to_keyframe->uuid_str << "\n";
+    ofs << "from_uuid_str " << from_uuid_str << "\n";
+    ofs << "to_uuid_str " << to_uuid_str << "\n";
 }
 
 void
-Edge::load( const std::string& edge_path )
+Edge::load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str,
+            const boost::uuids::uuid& _from_uuid, const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid,
+            const std::string& _to_uuid_str )
 {
     auto logger = rclcpp::get_logger( "load_edge" );
+
+    uuid          = _uuid;
+    uuid_str      = _uuid_str;
+    from_uuid     = _from_uuid;
+    from_uuid_str = _from_uuid_str;
+    to_uuid       = _to_uuid;
+    to_uuid_str   = _to_uuid_str;
 
     std::ifstream ifs( edge_path );
 
@@ -76,17 +98,31 @@ Edge::load( const std::string& edge_path )
             std::string type_str;
             iss >> type_str;
             type = type_from_string( type_str );
-        } else if( key == "uuid_str" ) {
-            iss >> uuid_str;
+        } else if( key == "relative_pose" ) {
+            Eigen::Matrix4d& matrix = relative_pose_loaded.matrix();
+            for( int i = 0; i < 4; i++ ) {
+                for( int j = 0; j < 4; j++ ) {
+                    iss >> matrix( i, j );
+                }
+            }
+        } else if( key == "information_matrix" ) {
+            Eigen::Matrix<double, 6, 6>& matrix = information_loaded;
+            for( int i = 0; i < 6; i++ ) {
+                for( int j = 0; j < 6; j++ ) {
+                    iss >> matrix( i, j );
+                }
+            }
         }
-        // dont load from and to keyframes uuid_str here, because they are loaded from the keyframes
-        // TODO take care of g2o_id, relative_pose, information_matrix... which are graph related
     }
 
     // print the loaded edge information
-    RCLCPP_INFO( logger, "Loaded edge %s", readable_id.c_str() );
-    RCLCPP_INFO( logger, "type %s", type_to_string( type ).c_str() );
-    RCLCPP_INFO( logger, "uuid_str %s", uuid_str.c_str() );
+    RCLCPP_INFO_STREAM( logger, "Loaded edge " << readable_id );
+    RCLCPP_INFO_STREAM( logger, "type " << type_to_string( type ) );
+    RCLCPP_INFO_STREAM( logger, "uuid_str " << uuid_str );
+    RCLCPP_INFO_STREAM( logger, "from_uuid_str " << from_uuid_str );
+    RCLCPP_INFO_STREAM( logger, "to_uuid_str " << to_uuid_str );
+    RCLCPP_INFO_STREAM( logger, "relative_pose\n" << relative_pose_loaded.matrix() );
+    RCLCPP_INFO_STREAM( logger, "information_matrix\n" << information_loaded );
 }
 
 std::string
@@ -95,8 +131,8 @@ Edge::make_readable_id()
     std::string robot_name = from_keyframe->robot_name.empty() ? "\"\"" : from_keyframe->robot_name;
     std::string readable_id;
     if( type == TYPE_ANCHOR ) {
-        readable_id = "anchor." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->" + to_keyframe->robot_name
-                      + "-" + std::to_string( to_keyframe->odom_keyframe_counter );
+        readable_id = "anchor." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
+                      + std::to_string( to_keyframe->odom_keyframe_counter );
 
         return readable_id;
     }
