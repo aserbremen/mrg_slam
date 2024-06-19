@@ -305,7 +305,7 @@ GraphDatabase::insert_loops( const std::vector<Loop::Ptr> &loops )
         graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
     }
 
-    // Add the new keyframes to the keyframes vector
+    // Add the new keyframes that have been checked for loop closures to the keyframes vector
     std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
     new_keyframes.clear();
 }

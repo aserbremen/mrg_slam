@@ -405,7 +405,7 @@ private:
     }
 
     /**
-     * @brief received point clouds are pushed to #keyframe_queue
+     * @brief received point clouds + odometry are added to the keyframe_queue of the graph_database
      * @param odom_msg
      * @param cloud_msg
      */
@@ -422,7 +422,7 @@ private:
         double accum_d         = keyframe_updater->get_accum_distance();
 
         if( !update_required ) {
-            if( keyframe_queue.empty() ) {
+            if( graph_database->get_keyframe_queue().empty() ) {
                 std_msgs::msg::Header read_until;
                 read_until.stamp    = ( rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
                 read_until.frame_id = points_topic;
@@ -511,9 +511,9 @@ private:
     void set_init_pose()
     {
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
-        if( init_pose != nullptr ) {
+        if( init_pose_msg != nullptr ) {
             Eigen::Isometry3d pose;
-            tf2::fromMsg( init_pose->pose.pose, pose );
+            tf2::fromMsg( init_pose_msg->pose.pose, pose );
             pose = pose
                    * graph_database->get_keyframe_queue()[0]->odom.inverse();  // "remove" odom (which will be added later again) such that
                                                                                // the init pose actually corresponds to the received pose
@@ -631,17 +631,16 @@ private:
 
     void slam_pose_broadcast_callback( mrg_slam_msgs::msg::PoseWithName::ConstSharedPtr slam_pose_msg )
     {
-        const auto &prev_robot_keyframe = graph_database->get_prev_robot_keyframe();
+        std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
 
+        const auto &prev_robot_keyframe = graph_database->get_prev_robot_keyframe();
         if( slam_pose_msg->robot_name == own_name || prev_robot_keyframe == nullptr ) {
             return;
         }
 
-        std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
-        const auto                  &keyframes         = graph_database->get_keyframes();
-        const auto                  &edges             = graph_database->get_edges();
-        const auto                  &edge_ignore_uuids = graph_database->get_edge_ignore_uuids();
-
+        const auto &keyframes         = graph_database->get_keyframes();
+        const auto &edges             = graph_database->get_edges();
+        const auto &edge_ignore_uuids = graph_database->get_edge_ignore_uuids();
 
         // Eigen::Vector2d own_position          = prev_robot_keyframe->estimate().translation().head( 2 );
         const auto &other_robot_name      = slam_pose_msg->robot_name;
@@ -714,7 +713,9 @@ private:
             req->processed_edge_uuid_strs.push_back( boost::uuids::to_string( ignore_edge_uuid ) );
         }
 
+        // Unlock main_thread_mutex
         unique_lck.unlock();
+
         auto               result_future = request_graph_service_clients[other_robot_name]->async_send_request( req );
         std::future_status status        = result_future.wait_for( std::chrono::seconds( 20 ) );
 
@@ -737,7 +738,6 @@ private:
         graph_bytes += result->graph.edges.size() * sizeof( mrg_slam_msgs::msg::EdgeRos );
         received_graph_bytes.push_back( graph_bytes );
         // Fill the graph queue with the received graph
-        std::lock_guard<std::mutex> lock( graph_queue_mutex );
         graph_database->add_graph_ros( std::move( result->graph ) );
         slam_status_msg.in_graph_exchange = false;
         slam_status_publisher->publish( slam_status_msg );
@@ -795,26 +795,7 @@ private:
      * @brief receive anchor node pose from topic
      * @param
      */
-    void init_pose_callback( const nav_msgs::msg::Odometry::ConstSharedPtr msg )
-    {
-        std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
-        init_pose = msg;
-    }
-
-    /**
-     * @brief Receive robot name from topic, used to request graph from other robots
-     * @param msg Containing the robot name, which is used to request the graph from the robot with the same name
-     */
-    // TODO this can be removed in the future
-    void request_robot_graph_callback( const std_msgs::msg::String::SharedPtr msg )
-    {
-        // call the publish graph function from within this class if the robot name is the own robot name
-        if( msg->data == own_name ) {
-            auto req = std::make_shared<const mrg_slam_msgs::srv::PublishGraph::Request>();
-            auto res = std::make_shared<mrg_slam_msgs::srv::PublishGraph::Response>();
-            publish_graph_service( req, res );
-        }
-    }
+    void init_pose_callback( const nav_msgs::msg::Odometry::ConstSharedPtr msg ) { init_pose_msg = msg; }
 
     /**
      * @brief update the cloud_msg with the latest map
@@ -1131,6 +1112,8 @@ private:
             boost::filesystem::create_directories( keyframe_directory );
         }
 
+        // TODO move saving of keyframes, edges, and timing information to graph to GraphDatabase
+
         const auto &keyframes = graph_database->get_keyframes();
         const auto &edges     = graph_database->get_edges();
 
@@ -1404,9 +1387,9 @@ private:
                 auto &src = keyframes[i];
                 // Skip adding keyframes that have already been processed by the other robot
 
-                auto it_processed_gids = std::find( req->processed_keyframe_uuid_strs.begin(), req->processed_keyframe_uuid_strs.end(),
-                                                    src->uuid_str );
-                if( it_processed_gids != req->processed_keyframe_uuid_strs.end() ) {
+                auto it_processed_uuids = std::find( req->processed_keyframe_uuid_strs.begin(), req->processed_keyframe_uuid_strs.end(),
+                                                     src->uuid_str );
+                if( it_processed_uuids != req->processed_keyframe_uuid_strs.end() ) {
                     RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped, already processed" );
                     continue;
                 } else {
@@ -1432,9 +1415,9 @@ private:
             for( size_t i = 0; i < edges.size(); i++ ) {
                 auto &src = edges[i];
                 // Skip adding edges that have already been processed by the other robot
-                auto it_processed_gids = std::find( req->processed_edge_uuid_strs.begin(), req->processed_edge_uuid_strs.end(),
-                                                    src->uuid_str );
-                if( it_processed_gids != req->processed_edge_uuid_strs.end() ) {
+                auto it_processed_uuids = std::find( req->processed_edge_uuid_strs.begin(), req->processed_edge_uuid_strs.end(),
+                                                     src->uuid_str );
+                if( it_processed_uuids != req->processed_edge_uuid_strs.end() ) {
                     RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped,already processed" );
                     continue;
                 } else {
@@ -1520,8 +1503,11 @@ private:
                 RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
             }
             auto result = result_future.get();
+
             // Fill the graph queue with the received graph
-            std::lock_guard<std::mutex> lock( graph_queue_mutex );
+            graph_database->add_graph_ros( std::move( result->graph ) );
+
+            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].back().accum_dist;
 
             // Get the syze of megabytes of the received graph
             int graph_size_bytes = 0;
@@ -1531,10 +1517,6 @@ private:
             }
             graph_size_bytes += result->graph.edges.size() * sizeof( mrg_slam_msgs::msg::EdgeRos );
             received_graph_bytes.push_back( graph_size_bytes );
-
-            graph_database->add_graph_ros( std::move( result->graph ) );
-
-            others_last_accum_dist[robot_name] = others_slam_poses[robot_name].back().accum_dist;
         }
         // Call the optimization callback to process the received graphs needed when working with use_sim_time true
         optimization_timer_callback();
@@ -1606,8 +1588,6 @@ private:
     double                                  graph_request_min_time_delay;
     GraphExchangeMode                       graph_exchange_mode;
 
-    // This counter is used to identify all odom keyframes of a robot in the graph (starting from 1), anchor keyframe = 0
-    int                                                                 odom_keyframe_counter = 1;
     rclcpp::Subscription<mrg_slam_msgs::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
@@ -1622,8 +1602,6 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
     // Services
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr           request_robot_graph_sub;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr              request_robot_graph_pub;
     rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr        save_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr        load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
@@ -1633,6 +1611,7 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
 
+    // Processors
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
     FloorCoeffsProcessor floor_coeffs_processor;
@@ -1652,18 +1631,10 @@ private:
     // getting init pose from topic
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr init_pose_sub;
     std::string                                              init_pose_topic;
-    nav_msgs::msg::Odometry::ConstSharedPtr                  init_pose;  // should be accessed with keyframe_queue_mutex locked
-
-    // keyframe queue
-    std::string               base_frame_id;
-    std::mutex                keyframe_queue_mutex;
-    std::deque<KeyFrame::Ptr> keyframe_queue;
-
-    // graph queue
-    std::mutex                                               graph_queue_mutex;
-    std::deque<mrg_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
+    nav_msgs::msg::Odometry::ConstSharedPtr                  init_pose_msg;  // should be accessed with keyframe_queue_mutex locked
 
     // for map cloud generation and graph publishing
+    std::string                        base_frame_id;
     std::string                        map_frame_id;
     std::string                        odom_frame_id;
     double                             map_cloud_resolution;

@@ -47,13 +47,22 @@ public:
      */
     bool flush_keyframe_queue( const Eigen::Isometry3d& odom2map );
 
+    /**
+     * @brief Adds a GraphRos message to the graph queue for later processing
+     * @param graph_ros
+     */
     void add_graph_ros( const mrg_slam_msgs::msg::GraphRos& graph_ros );
 
+    /**
+     * @brief Flushes the graph queue and adds the keyframes and edges to the graph
+     * @param others_prev_robot_keyframes
+     * @return true if at least one unique keyframe or edge was added to the graph
+     */
     bool flush_graph_queue(
         std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>>& others_prev_robot_keyframes );
 
     /**
-     * @brief Adds SE3 edges between two keyframes for which a loop was detected. Adds the keyframes checked for loop closures to
+     * @brief Adds SE3 edges between two keyframes for which a loop was detected. Adds the new_keyframes checked for loop closures to
      * keyframes vector
      * @param loops vector of loops
      */
@@ -69,12 +78,6 @@ public:
     const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>& get_keyframe_hash() const { return keyframe_hash; }
     const g2o::VertexSE3*                                                                get_anchor_node() const { return anchor_node; }
     const g2o::EdgeSE3* get_anchor_edge_g2o() const { return anchor_edge_g2o; }
-
-    std::deque<KeyFrame::Ptr>                                               keyframe_queue_snapshot() const;
-    std::vector<KeyFrame::Ptr>                                              keyframes_snapshot() const;
-    std::vector<Edge::Ptr>                                                  edges_snapshot() const;
-    std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>> edges_ignore_uuids_snapshot() const;
-
 
 private:
     std::shared_ptr<GraphSLAM>                   graph_slam;
