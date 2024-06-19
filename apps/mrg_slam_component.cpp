@@ -1151,16 +1151,6 @@ private:
             edges[i]->save( ss.str() );
         }
 
-        // time info not used at the moment
-        if( directory.empty() ) {
-            std::array<char, 64> buffer;
-            buffer.fill( 0 );
-            time_t rawtime;
-            time( &rawtime );
-            const auto timeinfo = localtime( &rawtime );
-            strftime( buffer.data(), sizeof( buffer ), "%d-%m-%Y %H:%M:%S", timeinfo );
-        }
-
         // Saving g2o files
         std::string g2o_directory = directory + "/g2o";
         if( !boost::filesystem::is_directory( g2o_directory ) ) {
