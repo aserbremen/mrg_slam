@@ -1427,8 +1427,8 @@ private:
                 mrg_slam_msgs::msg::EdgeRos dst;
                 dst.type          = static_cast<uint8_t>( src->type );
                 dst.uuid_str      = src->uuid_str;
-                dst.from_uuid_str = src->from_uuid_str;
-                dst.to_uuid_str   = src->to_uuid_str;
+                dst.from_uuid_str = src->from_keyframe->uuid_str;
+                dst.to_uuid_str   = src->to_keyframe->uuid_str;
                 dst.relative_pose = tf2::toMsg( src->relative_pose() );
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information_map( dst.information.data() );
                 information_map = src->information();

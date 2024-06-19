@@ -30,10 +30,8 @@ public:
         TYPE_LOOP,
     };
 
-    Edge( const g2o::EdgeSE3* edge, Type type );
-    Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, std::shared_ptr<const KeyFrame> from_keyframe,
-          const boost::uuids::uuid& from_uuid, std::shared_ptr<const KeyFrame> to_keyframe, const boost::uuids::uuid& to_uuid );
-    // Edge(const std::string& directory, g2o::HyperGraph* graph);
+    Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
+          std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe );
     Edge( const std::string& edge_path );
     virtual ~Edge();
 
@@ -45,17 +43,12 @@ public:
     void load( const std::string& edge_path );
 
 public:
-    // TODO only save uuid and uuid_str. from_uuid and to_uuid can be derived from from_keyframe and to_keyframe
     const g2o::EdgeSE3*             edge;           // edge instance
     Type                            type;           // edge type
     boost::uuids::uuid              uuid;           // unique id for this edge
     std::string                     uuid_str;       // unique id for this edge as a string for graph exchange
     std::shared_ptr<const KeyFrame> from_keyframe;  // from keyframe pointer
-    boost::uuids::uuid              from_uuid;      // from keyframe uuid
-    std::string                     from_uuid_str;  // from keyframe uuid as a string for graph exchange
     std::shared_ptr<const KeyFrame> to_keyframe;    // to keyframe pointer
-    boost::uuids::uuid              to_uuid;        // to keyframe uuid
-    std::string                     to_uuid_str;    // to keyframe uuid as a string for graph exchange
     std::string                     readable_id;    // readable id for visualizing and debugging
 
 private:

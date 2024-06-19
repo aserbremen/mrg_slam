@@ -8,39 +8,16 @@
 
 namespace mrg_slam {
 
-Edge::Edge( const g2o::EdgeSE3* edge, Type type ) :
-    edge( edge ), type( type ), uuid( boost::uuids::uuid() ), from_uuid( boost::uuids::uuid() ), to_uuid( boost::uuids::uuid() )
-{
-}
-
-Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, std::shared_ptr<const KeyFrame> from_keyframe,
-            const boost::uuids::uuid& from_uuid, std::shared_ptr<const KeyFrame> to_keyframe, const boost::uuids::uuid& to_uuid ) :
-    edge( edge ),
-    type( type ),
-    uuid( uuid ),
-    uuid_str( boost::uuids::to_string( uuid ) ),
-    from_keyframe( from_keyframe ),
-    from_uuid( from_uuid ),
-    from_uuid_str( boost::uuids::to_string( from_uuid ) ),
-    to_keyframe( to_keyframe ),
-    to_uuid( to_uuid ),
-    to_uuid_str( boost::uuids::to_string( to_uuid ) )
+Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
+            std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe ) :
+    edge( edge ), type( type ), uuid( uuid ), uuid_str( uuid_str ), from_keyframe( from_keyframe ), to_keyframe( to_keyframe )
 {
     readable_id = make_readable_id();
 }
 
 Edge::Edge( const std::string& edge_path ) { load( edge_path ); }
 
-/*
-Edge::Edge(const std::string& directory, g2o::HyperGraph* graph) {
-  // TODO: implement
-  // load(directory, graph);
-}
-*/
-
-
 Edge::~Edge() {}
-
 
 long
 Edge::id() const
@@ -48,13 +25,11 @@ Edge::id() const
     return edge->id();
 }
 
-
 const Eigen::Isometry3d&
 Edge::relative_pose() const
 {
     return edge->measurement();
 }
-
 
 const Eigen::Matrix<double, 6, 6>&
 Edge::information() const
@@ -78,8 +53,8 @@ Edge::save( const std::string& result_path )
     ofs << "information_matrix\n";
     ofs << edge->information().matrix() << "\n";
     ofs << "uuid_str " << uuid_str << "\n";
-    ofs << "from_uuid_str " << from_uuid_str << "\n";
-    ofs << "to_uuid_str " << to_uuid_str << "\n";
+    ofs << "from_uuid_str " << from_keyframe->uuid_str << "\n";
+    ofs << "to_uuid_str " << to_keyframe->uuid_str << "\n";
 }
 
 void
@@ -103,11 +78,8 @@ Edge::load( const std::string& edge_path )
             type = type_from_string( type_str );
         } else if( key == "uuid_str" ) {
             iss >> uuid_str;
-        } else if( key == "from_uuid_str" ) {
-            iss >> from_uuid_str;
-        } else if( key == "to_uuid_str" ) {
-            iss >> to_uuid_str;
         }
+        // dont load from and to keyframes uuid_str here, because they are loaded from the keyframes
         // TODO take care of g2o_id, relative_pose, information_matrix... which are graph related
     }
 
@@ -115,8 +87,6 @@ Edge::load( const std::string& edge_path )
     RCLCPP_INFO( logger, "Loaded edge %s", readable_id.c_str() );
     RCLCPP_INFO( logger, "type %s", type_to_string( type ).c_str() );
     RCLCPP_INFO( logger, "uuid_str %s", uuid_str.c_str() );
-    RCLCPP_INFO( logger, "from_uuid_str %s", from_uuid_str.c_str() );
-    RCLCPP_INFO( logger, "to_uuid_str %s", to_uuid_str.c_str() );
 }
 
 std::string
@@ -196,7 +166,7 @@ Edge::type_to_string( Type type )
 
 
 EdgeSnapshot::EdgeSnapshot( const Edge::Ptr& edge ) :
-    type( edge->type ), uuid( edge->uuid ), from_uuid( edge->from_uuid ), to_uuid( edge->to_uuid )
+    type( edge->type ), uuid( edge->uuid ), from_uuid( edge->from_keyframe->uuid ), to_uuid( edge->to_keyframe->uuid )
 {
 }
 

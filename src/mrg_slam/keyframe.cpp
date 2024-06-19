@@ -307,16 +307,6 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
     return exist;
 }
 
-/*
-KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                                    bool first_keyframe, const Eigen::MatrixXd* _covariance ) :
-    id( id ), pose( pose ), first_keyframe( first_keyframe ), cloud( cloud )
-{
-    if( _covariance ) {
-        covariance = *_covariance;
-    }
-}
-*/
 
 KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) :
     stamp( key->stamp ),

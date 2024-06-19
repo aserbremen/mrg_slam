@@ -99,10 +99,6 @@ public:
     using Ptr    = std::shared_ptr<KeyFrameSnapshot>;
 
     KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals = nullptr );
-    /*
-    KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud, bool first_keyframe = false,
-                      const Eigen::MatrixXd* covariance = nullptr );
-                      */
 
     ~KeyFrameSnapshot();
 

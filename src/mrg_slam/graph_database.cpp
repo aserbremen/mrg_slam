@@ -89,10 +89,11 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
                 anchor_node = graph_slam->add_se3_node( Eigen::Isometry3d::Identity() );
                 anchor_node->setFixed( true );
 
-                auto        uuid     = uuid_generator();
-                std::string uuid_str = boost::uuids::to_string( uuid );
-                anchor_kf = std::make_shared<KeyFrame>( own_name, rclcpp::Time(), Eigen::Isometry3d::Identity(), 0, -1, uuid, uuid_str,
-                                                        nullptr );
+                auto        uuid_anchor_kf     = uuid_generator();
+                std::string uuid_anchor_kf_str = boost::uuids::to_string( uuid_anchor_kf );
+
+                anchor_kf = std::make_shared<KeyFrame>( own_name, rclcpp::Time(), Eigen::Isometry3d::Identity(), 0, -1, uuid_anchor_kf,
+                                                        uuid_anchor_kf_str, nullptr );
                 if( fix_first_node_adaptive ) {
                     // TODO if the anchor node is adaptive, handling needs to be implemented
                 }
@@ -100,8 +101,12 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
                 uuid_keyframe_map[anchor_kf->uuid] = anchor_kf;
 
                 anchor_edge_g2o = graph_slam->add_se3_edge( anchor_node, keyframe->node, keyframe->node->estimate(), information );
-                anchor_edge_ptr = std::make_shared<Edge>( anchor_edge_g2o, Edge::TYPE_ANCHOR, uuid_generator(), anchor_kf, anchor_kf->uuid,
-                                                          keyframe, keyframe->uuid );
+
+                auto        uuid_anchor_edge     = uuid_generator();
+                std::string uuid_anchor_edge_str = boost::uuids::to_string( uuid_anchor_edge );
+
+                anchor_edge_ptr = std::make_shared<Edge>( anchor_edge_g2o, Edge::TYPE_ANCHOR, uuid_anchor_edge, uuid_anchor_edge_str,
+                                                          anchor_kf, keyframe );
                 edges.emplace_back( anchor_edge_ptr );
                 edge_uuids.insert( anchor_edge_ptr->uuid );
             }
@@ -115,9 +120,12 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
         // add edge between consecutive keyframes
         Eigen::Isometry3d relative_pose = keyframe->odom.inverse() * prev_robot_keyframe->odom;
         Eigen::MatrixXd information = inf_calclator->calc_information_matrix( keyframe->cloud, prev_robot_keyframe->cloud, relative_pose );
-        auto            graph_edge  = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
-        Edge::Ptr       edge( new Edge( graph_edge, Edge::TYPE_ODOM, uuid_generator(), keyframe, keyframe->uuid, prev_robot_keyframe,
-                                        prev_robot_keyframe->uuid ) );
+        auto            g2o_edge    = graph_slam->add_se3_edge( keyframe->node, prev_robot_keyframe->node, relative_pose, information );
+
+        auto        uuid     = uuid_generator();
+        std::string uuid_str = boost::uuids::to_string( uuid );
+
+        Edge::Ptr edge = std::make_shared<Edge>( g2o_edge, Edge::TYPE_ODOM, uuid, uuid_str, keyframe, prev_robot_keyframe );
         edges.emplace_back( edge );
         edge_uuids.insert( edge->uuid );
         // Add the edge to the corresponding keyframes
@@ -127,7 +135,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
         RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_keyframe_queue" ),
                             "added " << edge->readable_id << " as prev edge to keyframe " << keyframe->readable_id );
         keyframe->prev_edge = edge;
-        graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
+        graph_slam->add_robust_kernel( g2o_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         prev_robot_keyframe = keyframe;
     }
 
@@ -244,9 +252,9 @@ GraphDatabase::flush_graph_queue(
         Eigen::Isometry3d relpose;
         tf2::fromMsg( edge_ros->relative_pose, relpose );
         Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> information( edge_ros->information.data() );
-        auto      graph_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
-        Edge::Ptr edge       = std::make_shared<Edge>( graph_edge, static_cast<Edge::Type>( edge_ros->type ), edge_uuid, from_keyframe,
-                                                       from_keyframe->uuid, to_keyframe, to_keyframe->uuid );
+        auto      g2o_edge = graph_slam->add_se3_edge( from_keyframe->node, to_keyframe->node, relpose, information );
+        Edge::Ptr edge     = std::make_shared<Edge>( g2o_edge, static_cast<Edge::Type>( edge_ros->type ), edge_uuid, edge_ros->uuid_str,
+                                                     from_keyframe, to_keyframe );
         edges.emplace_back( edge );
         edge_uuids.insert( edge->uuid );
 
@@ -268,9 +276,9 @@ GraphDatabase::flush_graph_queue(
 
 
         if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
-            graph_slam->add_robust_kernel( graph_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
+            graph_slam->add_robust_kernel( g2o_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         } else if( edge->type == Edge::TYPE_LOOP ) {
-            graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
+            graph_slam->add_robust_kernel( g2o_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
     }
 
@@ -293,16 +301,15 @@ GraphDatabase::insert_loops( const std::vector<Loop::Ptr> &loops )
     for( const auto &loop : loops ) {
         Eigen::Isometry3d relpose( loop->relative_pose.cast<double>() );
         Eigen::MatrixXd   information_matrix = inf_calclator->calc_information_matrix( loop->key1->cloud, loop->key2->cloud, relpose );
-        auto              graph_edge         = graph_slam->add_se3_edge( loop->key1->node, loop->key2->node, relpose, information_matrix );
+        auto              g2o_edge           = graph_slam->add_se3_edge( loop->key1->node, loop->key2->node, relpose, information_matrix );
 
         auto        uuid     = uuid_generator();
         std::string uuid_str = boost::uuids::to_string( uuid );
 
-        Edge::Ptr edge(
-            new Edge( graph_edge, Edge::TYPE_LOOP, uuid_generator(), loop->key1, loop->key1->uuid, loop->key2, loop->key2->uuid ) );
+        Edge::Ptr edge = std::make_shared<Edge>( g2o_edge, Edge::TYPE_LOOP, uuid, uuid_str, loop->key1, loop->key2 );
         edges.emplace_back( edge );
         edge_uuids.insert( edge->uuid );
-        graph_slam->add_robust_kernel( graph_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
+        graph_slam->add_robust_kernel( g2o_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
     }
 
     // Add the new keyframes that have been checked for loop closures to the keyframes vector
