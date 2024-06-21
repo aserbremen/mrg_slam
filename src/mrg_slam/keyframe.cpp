@@ -64,7 +64,11 @@ KeyFrame::save( const std::string& result_path )
 {
     std::ofstream ofs( result_path + ".txt" );
 
-    ofs << "robot_name " << robot_name << "\n";
+    if( robot_name.empty() ) {
+        ofs << robot_name << "\"\"" << "\n";
+    } else {
+        ofs << "robot_name " << robot_name << "\n";
+    }
     ofs << "readable_id " << readable_id << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
@@ -93,7 +97,7 @@ KeyFrame::save( const std::string& result_path )
     }
 
     if( orientation ) {
-        ofs << "orientation " << orientation->w() << " " << orientation->x() << " " << orientation->y() << " " << orientation->z() << "\n";
+        ofs << "orientation " << orientation->x() << " " << orientation->y() << " " << orientation->z() << " " << orientation->w() << "\n";
     }
 
     if( node ) {
@@ -220,23 +224,32 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
         iss >> key;
         if( key == "robot_name" ) {
             iss >> robot_name;
+            if( robot_name == "\"\"" ) {
+                robot_name = std::string();  // empty string
+            }
         } else if( key == "readable_id" ) {
             iss >> readable_id;
         } else if( key == "stamp" ) {
             iss >> stamp.sec >> stamp.nanosec;
         } else if( key == "estimate" ) {
-            Eigen::Matrix4d& estimate_mat = estimate_transform->matrix();
+            auto& estimate_mat = estimate_transform.matrix();
             for( int i = 0; i < 4; ++i ) {
+                std::getline( ifs, line );
+                std::istringstream matrixStream( line );
                 for( int j = 0; j < 4; ++j ) {
-                    iss >> estimate_mat( i, j );
+                    matrixStream >> estimate_mat( i, j );
                 }
             }
+            estimate_transform.matrix() = estimate_mat;
         } else if( key == "odom_counter" ) {
             iss >> odom_keyframe_counter;
         } else if( key == "odom" ) {
+            auto& odom_mat = odom.matrix();
             for( int i = 0; i < 4; ++i ) {
+                std::getline( ifs, line );
+                std::istringstream matrixStream( line );
                 for( int j = 0; j < 4; ++j ) {
-                    iss >> odom( i, j );
+                    matrixStream >> odom_mat( i, j );
                 }
             }
         } else if( key == "accum_distance" ) {
@@ -257,21 +270,10 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
             acceleration = acc;
         } else if( key == "orientation" ) {
             Eigen::Quaterniond quat;
-            ifs >> quat.w() >> quat.x() >> quat.y() >> quat.z();
+            ifs >> quat.x() >> quat.y() >> quat.z() >> quat.w();
             orientation = quat;
         }
     }
-
-    // Print all the loaded data
-    RCLCPP_INFO_STREAM( logger, "robot_name: " << robot_name );
-    RCLCPP_INFO_STREAM( logger, "readable_id: " << readable_id );
-    RCLCPP_INFO_STREAM( logger, "stamp: " << stamp.sec << " " << stamp.nanosec );
-    RCLCPP_INFO_STREAM( logger, "estimate: " << estimate_transform->matrix() );
-    RCLCPP_INFO_STREAM( logger, "odom_counter: " << odom_keyframe_counter );
-    RCLCPP_INFO_STREAM( logger, "odom: " << odom.matrix() );
-    RCLCPP_INFO_STREAM( logger, "accum_distance: " << accum_distance );
-    RCLCPP_INFO_STREAM( logger, "uuid_str: " << uuid_str );
-
 
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
     pcl::io::loadPCDFile( pcd_path, *cloud_ );

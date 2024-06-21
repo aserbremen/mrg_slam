@@ -91,7 +91,6 @@ Edge::load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const
         std::stringstream iss( line );
         std::string       key;
         iss >> key;
-        // we skip keys <from> and <to> which are given by the respective keyframe pointer
         if( key == "edge" ) {
             iss >> readable_id;
         } else if( key == "type" ) {
@@ -99,30 +98,25 @@ Edge::load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const
             iss >> type_str;
             type = type_from_string( type_str );
         } else if( key == "relative_pose" ) {
-            Eigen::Matrix4d& matrix = relative_pose_loaded.matrix();
+            auto& rel_pose_mat = relative_pose_loaded.matrix();
             for( int i = 0; i < 4; i++ ) {
+                std::getline( ifs, line );
+                std::stringstream matrix_stream( line );
                 for( int j = 0; j < 4; j++ ) {
-                    iss >> matrix( i, j );
+                    matrix_stream >> rel_pose_mat( i, j );
                 }
             }
         } else if( key == "information_matrix" ) {
-            Eigen::Matrix<double, 6, 6>& matrix = information_loaded;
+            auto& inf_mat = information_loaded;
             for( int i = 0; i < 6; i++ ) {
+                std::getline( ifs, line );
+                std::stringstream matrix_stream( line );
                 for( int j = 0; j < 6; j++ ) {
-                    iss >> matrix( i, j );
+                    matrix_stream >> inf_mat( i, j );
                 }
             }
         }
     }
-
-    // print the loaded edge information
-    RCLCPP_INFO_STREAM( logger, "Loaded edge " << readable_id );
-    RCLCPP_INFO_STREAM( logger, "type " << type_to_string( type ) );
-    RCLCPP_INFO_STREAM( logger, "uuid_str " << uuid_str );
-    RCLCPP_INFO_STREAM( logger, "from_uuid_str " << from_uuid_str );
-    RCLCPP_INFO_STREAM( logger, "to_uuid_str " << to_uuid_str );
-    RCLCPP_INFO_STREAM( logger, "relative_pose\n" << relative_pose_loaded.matrix() );
-    RCLCPP_INFO_STREAM( logger, "information_matrix\n" << information_loaded );
 }
 
 std::string

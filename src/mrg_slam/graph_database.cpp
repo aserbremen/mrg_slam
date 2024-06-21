@@ -301,10 +301,12 @@ GraphDatabase::load_graph( const std::string &directory )
     // lambda function to glob all files with a specific extension in a directory
     auto glob_abs_paths = []( boost::filesystem::path const &root, std::string const &ext ) -> std::vector<boost::filesystem::path> {
         std::vector<boost::filesystem::path> paths;
-
         if( boost::filesystem::exists( root ) && boost::filesystem::is_directory( root ) ) {
             for( auto const &entry : boost::filesystem::recursive_directory_iterator( root ) ) {
-                if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext ) paths.emplace_back( entry.path() );
+                std::cout << "entry: " << entry.path() << " ext: " << entry.path().extension() << std::endl;
+                if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext ) {
+                    paths.emplace_back( entry.path() );
+                }
             }
         }
 
@@ -312,43 +314,36 @@ GraphDatabase::load_graph( const std::string &directory )
         return paths;
     };
     // glob all the keyframe files ending on .txt and and point clouds ending on .pcd
-    boost::filesystem::path keyframe_dir( directory + "/keyframes" );
+    boost::filesystem::path keyframe_dir( directory );
+    keyframe_dir /= "keyframes";
     if( !boost::filesystem::is_directory( keyframe_dir ) ) {
         RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
         return false;
     }
-    auto keyframe_files = glob_abs_paths( keyframe_dir, ".txt" );
-    for( auto &file : keyframe_files ) {
-        std::cout << "keyframe file: " << file << std::endl;
-    }
+    auto keyframe_files   = glob_abs_paths( keyframe_dir, ".txt" );
     auto pointcloud_files = glob_abs_paths( keyframe_dir, ".pcd" );
     if( keyframe_files.size() != pointcloud_files.size() ) {
         RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ),
-                            "Number of keyframe files and pointcloud files do not match, cannot load keyframes" );
+                            "Number of keyframe files and pointcloud files do not match, cannot load graph" );
         return false;
     }
     // glob all the edge files ending on .txt
-    boost::filesystem::path edge_dir( directory + "/edges" );
+    boost::filesystem::path edge_dir = boost::filesystem::path( directory );
+    edge_dir /= "edges";
     if( !boost::filesystem::is_directory( edge_dir ) ) {
         RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << edge_dir << " does not exist, cannot load edges" );
         return false;
     }
     auto edge_files = glob_abs_paths( edge_dir, ".txt" );
-    for( auto &file : edge_files ) {
-        std::cout << "edge file: " << file << std::endl;
-    }
 
     // lambda function to load uuid_str from a file and check if the keyframe or edge is already in the graph
     auto load_string_key = []( const std::string &path, const std::string &_key ) -> std::string {
         std::ifstream ifs( path );
-        std::cout << "loading file: " << path << std::endl;
-        std::string line;
+        std::string   line;
         while( std::getline( ifs, line ) ) {
-            std::cout << "line: " << line << std::endl;
             std::stringstream iss( line );
             std::string       key;
             iss >> key;
-            std::cout << "key: " << key << std::endl;
             if( key == _key ) {
                 std::string str;
                 iss >> str;
@@ -409,7 +404,7 @@ GraphDatabase::flush_loaded_graph()
     RCLCPP_INFO_STREAM( logger, "Flushing loaded " << loaded_keyframes.size() << " keyframes and " << loaded_edges.size() << " edges" );
 
     for( const auto &keyframe : loaded_keyframes ) {
-        keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform.get() );
+        keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform );
         uuid_keyframe_map[keyframe->uuid] = keyframe;
         new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
                                               // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
@@ -419,6 +414,7 @@ GraphDatabase::flush_loaded_graph()
     for( const auto &edge : loaded_edges ) {
         RCLCPP_INFO_STREAM( logger, "Adding edge: " << edge->readable_id << " with uuid " << edge->uuid_str );
         KeyFrame::Ptr from_keyframe;
+        // TODO check if anchor keyframe is setup correctly
         if( edge->type == Edge::TYPE_ANCHOR ) {
             RCLCPP_INFO_STREAM( logger, "Handling anchor edge" );
             from_keyframe = anchor_kf;
@@ -433,12 +429,6 @@ GraphDatabase::flush_loaded_graph()
                                                            << edge->readable_id );
         edge->to_keyframe = to_keyframe;
 
-        // // check if the edge is already added
-        // if( from_keyframe->edge_exists( *to_keyframe, logger ) ) {
-        //     RCLCPP_WARN_STREAM( logger, "Edge " << edge->readable_id << " already exists, skipping" );
-        //     edge_ignore_uuids.insert( edge->uuid );
-        //     continue;
-        // }
         if( from_keyframe->node == nullptr ) {
             RCLCPP_WARN_STREAM( logger, "from_keyframe->node is nullptr" );
         }

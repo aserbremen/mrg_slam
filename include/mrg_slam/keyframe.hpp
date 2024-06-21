@@ -76,10 +76,10 @@ public:
     boost::optional<Eigen::Vector3d>              utm_coord;     // UTM coord obtained by GPS
 
     // Optional data
-    boost::optional<Eigen::Isometry3d> estimate_transform;  // estimated graph pose, only needed for keyframes that are created by
-                                                            // load_graph service
-    boost::optional<Eigen::Vector3d>    acceleration;       //
-    boost::optional<Eigen::Quaterniond> orientation;        //
+    Eigen::Isometry3d estimate_transform;              // estimated graph pose, only needed for keyframes that are created by
+                                                       // load_graph service
+    boost::optional<Eigen::Vector3d>    acceleration;  //
+    boost::optional<Eigen::Quaterniond> orientation;   //
 
     g2o::VertexSE3* node;  // node instance
 
