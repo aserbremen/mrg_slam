@@ -298,6 +298,7 @@ GraphDatabase::flush_graph_queue(
 bool
 GraphDatabase::load_graph( const std::string &directory )
 {
+    auto logger = rclcpp::get_logger( "load_graph" );
     // lambda function to glob all files with a specific extension in a directory
     auto glob_abs_paths = []( boost::filesystem::path const &root, std::string const &ext ) -> std::vector<boost::filesystem::path> {
         std::vector<boost::filesystem::path> paths;
@@ -317,21 +318,20 @@ GraphDatabase::load_graph( const std::string &directory )
     boost::filesystem::path keyframe_dir( directory );
     keyframe_dir /= "keyframes";
     if( !boost::filesystem::is_directory( keyframe_dir ) ) {
-        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
+        RCLCPP_WARN_STREAM( logger, "Directory " << keyframe_dir << " does not exist, cannot load keyframes" );
         return false;
     }
     auto keyframe_files   = glob_abs_paths( keyframe_dir, ".txt" );
     auto pointcloud_files = glob_abs_paths( keyframe_dir, ".pcd" );
     if( keyframe_files.size() != pointcloud_files.size() ) {
-        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ),
-                            "Number of keyframe files and pointcloud files do not match, cannot load graph" );
+        RCLCPP_WARN_STREAM( logger, "Number of keyframe files and pointcloud files do not match, cannot load graph" );
         return false;
     }
     // glob all the edge files ending on .txt
     boost::filesystem::path edge_dir = boost::filesystem::path( directory );
     edge_dir /= "edges";
     if( !boost::filesystem::is_directory( edge_dir ) ) {
-        RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Directory " << edge_dir << " does not exist, cannot load edges" );
+        RCLCPP_WARN_STREAM( logger, "Directory " << edge_dir << " does not exist, cannot load edges" );
         return false;
     }
     auto edge_files = glob_abs_paths( edge_dir, ".txt" );
@@ -362,7 +362,7 @@ GraphDatabase::load_graph( const std::string &directory )
         std::string uuid_str        = load_string_key( keyframe_file, "uuid_str" );
         auto        uuid            = uuid_from_string_generator( uuid_str );
         if( uuid_keyframe_map.find( uuid ) != uuid_keyframe_map.end() ) {
-            RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Keyframe with uuid " << uuid_str << " already exists, skipping" );
+            RCLCPP_WARN_STREAM( logger, "Keyframe with uuid " << uuid_str << " already exists, skipping" );
             continue;
         }
 
@@ -375,7 +375,7 @@ GraphDatabase::load_graph( const std::string &directory )
         std::string uuid_str  = load_string_key( edge_file, "uuid_str" );
         auto        uuid      = uuid_from_string_generator( uuid_str );
         if( edge_uuids.find( uuid ) != edge_uuids.end() ) {
-            RCLCPP_WARN_STREAM( rclcpp::get_logger( "load_graph" ), "Edge with uuid " << uuid_str << " already exists, skipping" );
+            RCLCPP_WARN_STREAM( logger, "Edge with uuid " << uuid_str << " already exists, skipping" );
             continue;
         }
         std::string from_uid_str = load_string_key( edge_file, "from_uuid_str" );

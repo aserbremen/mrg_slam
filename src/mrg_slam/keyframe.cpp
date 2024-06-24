@@ -32,10 +32,11 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     node( nullptr )
 {
     if( robot_name.empty() ) {
-        readable_id = "\"\"." + std::to_string( odom_keyframe_counter );
-        return;
+        readable_id = empty_robot_name_str;
+    } else {
+        readable_id = robot_name;
     }
-    readable_id = robot_name + "." + std::to_string( odom_keyframe_counter );
+    readable_id += "." + std::to_string( odom_keyframe_counter );
 }
 
 KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
@@ -46,26 +47,13 @@ KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_pat
 
 KeyFrame::~KeyFrame() {}
 
-
-Eigen::Matrix<double, 6, 6>
-KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const
-{
-    auto hidx = node->hessianIndex();
-    if( hidx >= 0 ) {
-        return *marginals->block( hidx, hidx );
-    } else {
-        return Eigen::Matrix<double, 6, 6>::Zero();
-    }
-}
-
-
 void
 KeyFrame::save( const std::string& result_path )
 {
     std::ofstream ofs( result_path + ".txt" );
 
     if( robot_name.empty() ) {
-        ofs << robot_name << "\"\"" << "\n";
+        ofs << "robot_name " << empty_robot_name_str << "\n";
     } else {
         ofs << "robot_name " << robot_name << "\n";
     }
@@ -111,102 +99,13 @@ KeyFrame::save( const std::string& result_path )
 }
 
 bool
-KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
-{
-    // TODO implement with new way of identifying keyframes
-    RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "KeyFrame::load() not implemented with new saving format!!" );
-    return false;
-    std::ifstream ifs( directory + "/data" );
-    if( !ifs ) {
-        return false;
-    }
-
-    long                               node_id = -1;
-    boost::optional<Eigen::Isometry3d> estimate;
-
-    while( !ifs.eof() ) {
-        std::string token;
-        ifs >> token;
-
-        if( token == "stamp" ) {
-            ifs >> stamp.sec >> stamp.nanosec;
-        } else if( token == "estimate" ) {
-            Eigen::Matrix4d mat;
-            for( int i = 0; i < 4; i++ ) {
-                for( int j = 0; j < 4; j++ ) {
-                    ifs >> mat( i, j );
-                }
-            }
-            estimate                = Eigen::Isometry3d::Identity();
-            estimate->linear()      = mat.block<3, 3>( 0, 0 );
-            estimate->translation() = mat.block<3, 1>( 0, 3 );
-        } else if( token == "odom" ) {
-            Eigen::Matrix4d odom_mat = Eigen::Matrix4d::Identity();
-            for( int i = 0; i < 4; i++ ) {
-                for( int j = 0; j < 4; j++ ) {
-                    ifs >> odom_mat( i, j );
-                }
-            }
-
-            odom.setIdentity();
-            odom.linear()      = odom_mat.block<3, 3>( 0, 0 );
-            odom.translation() = odom_mat.block<3, 1>( 0, 3 );
-        } else if( token == "accum_distance" ) {
-            ifs >> accum_distance;
-        } else if( token == "floor_coeffs" ) {
-            Eigen::Vector4d coeffs;
-            ifs >> coeffs[0] >> coeffs[1] >> coeffs[2] >> coeffs[3];
-            floor_coeffs = coeffs;
-        } else if( token == "utm_coord" ) {
-            Eigen::Vector3d coord;
-            ifs >> coord[0] >> coord[1] >> coord[2];
-            utm_coord = coord;
-        } else if( token == "acceleration" ) {
-            Eigen::Vector3d acc;
-            ifs >> acc[0] >> acc[1] >> acc[2];
-            acceleration = acc;
-        } else if( token == "orientation" ) {
-            Eigen::Quaterniond quat;
-            ifs >> quat.w() >> quat.x() >> quat.y() >> quat.z();
-            orientation = quat;
-        } else if( token == "id" ) {
-            ifs >> node_id;
-        }
-    }
-
-    if( node_id < 0 ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "invalid node id!!" );
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), directory );
-        return false;
-    }
-
-    if( graph->vertices().find( node_id ) == graph->vertices().end() ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "vertex ID=" << node_id << " does not exist!!" );
-        return false;
-    }
-
-    node = dynamic_cast<g2o::VertexSE3*>( graph->vertices()[node_id] );
-    if( node == nullptr ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "failed to downcast!!" );
-        return false;
-    }
-
-    if( estimate ) {
-        node->setEstimate( *estimate );
-    }
-
-    pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
-    pcl::io::loadPCDFile( directory + "/cloud.pcd", *cloud_ );
-    cloud = cloud_;
-
-    return true;
-}
-
-bool
 KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
                 const std::string& _uuid_str )
 {
     auto logger = rclcpp::get_logger( "KeyFrame::load" );
+
+    uuid     = _uuid;
+    uuid_str = _uuid_str;
 
     std::ifstream ifs( keyframe_path );
     if( !ifs ) {
@@ -214,8 +113,8 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
         return false;
     }
 
-    uuid     = _uuid;
-    uuid_str = _uuid_str;
+    // when loading from file, accum_distance is negative so that loaded keyframes are considered when determining loop closure candidates
+    accum_distance = -1.0;
 
     std::string line;
     while( std::getline( ifs, line ) ) {
@@ -224,11 +123,9 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
         iss >> key;
         if( key == "robot_name" ) {
             iss >> robot_name;
-            if( robot_name == "\"\"" ) {
+            if( robot_name == empty_robot_name_str ) {
                 robot_name = std::string();  // empty string
             }
-        } else if( key == "readable_id" ) {
-            iss >> readable_id;
         } else if( key == "stamp" ) {
             iss >> stamp.sec >> stamp.nanosec;
         } else if( key == "estimate" ) {
@@ -252,8 +149,6 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
                     matrixStream >> odom_mat( i, j );
                 }
             }
-        } else if( key == "accum_distance" ) {
-            iss >> accum_distance;
         } else if( key == "first_keyframe" ) {
             iss >> first_keyframe;
         } else if( key == "floor_coeffs" ) {
@@ -275,6 +170,14 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
         }
     }
 
+    // Set the readable id indicating the keyframe is loaded from file
+    if( robot_name.empty() ) {
+        readable_id = empty_robot_name_str;
+    } else {
+        readable_id = robot_name;
+    }
+    readable_id += "(loaded)." + std::to_string( odom_keyframe_counter );
+
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
     pcl::io::loadPCDFile( pcd_path, *cloud_ );
     cloud = std::move( cloud_ );
@@ -282,26 +185,16 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
     return true;
 }
 
-std::string
-KeyFrame::load_uuid_str( const std::string& keyframe_path )
+Eigen::Matrix<double, 6, 6>
+KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const
 {
-    std::ifstream ifs( keyframe_path );
-
-    std::string uuid_str;
-    std::string line;
-    while( std::getline( ifs, line ) ) {
-        std::istringstream iss( line );
-        std::string        key;
-        iss >> key;
-        if( key == "uuid" ) {
-            iss >> uuid_str;
-            break;
-        }
+    auto hidx = node->hessianIndex();
+    if( hidx >= 0 ) {
+        return *marginals->block( hidx, hidx );
+    } else {
+        return Eigen::Matrix<double, 6, 6>::Zero();
     }
-
-    return uuid_str;
 }
-
 
 long
 KeyFrame::id() const
@@ -309,13 +202,11 @@ KeyFrame::id() const
     return node->id();
 }
 
-
 Eigen::Isometry3d
 KeyFrame::estimate() const
 {
     return node->estimate();
 }
-
 
 bool
 KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const
@@ -344,7 +235,6 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
 
     return exist;
 }
-
 
 KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) :
     stamp( key->stamp ),

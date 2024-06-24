@@ -42,19 +42,24 @@ public:
               const std::string& _uuid_str );
     virtual ~KeyFrame();
 
-    Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
-
     /**
      * @brief Save the keyframe to the specified .txt file and .pcd file
      * @param result_path The path to save the keyframe excluding the file extension, e.g. /path/to/keyframe/000003
      */
     void save( const std::string& result_path );
 
-    bool load( const std::string& directory, g2o::HyperGraph* graph );
+    /**
+     * @brief Load the keyframe from the specified .txt file and .pcd file, that is saved by save() method
+     * @param keyframe_path absolute path to the keyframe file
+     * @param pcd_path absolute path to the point cloud file
+     * @param _uuid unique id
+     * @param _uuid_str unique id string
+     * @return true if the keyframe is successfully loaded, otherwise false
+     */
     bool load( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
                const std::string& _uuid_str );
 
-    std::string load_uuid_str( const std::string& keyframe_path );
+    Eigen::Matrix<double, 6, 6> covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const;
 
     long              id() const;
     Eigen::Isometry3d estimate() const;
@@ -89,6 +94,9 @@ public:
     std::shared_ptr<Edge> next_edge = nullptr;  // next edge TYPE_ODOM
 
     std::string readable_id;
+
+    // We use this "" string to represent empty robot name aka using no namespace in ROS2
+    inline static const std::string empty_robot_name_str = "\"\"";
 };
 
 /**
