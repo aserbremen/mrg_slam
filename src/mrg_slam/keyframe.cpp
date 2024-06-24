@@ -113,6 +113,8 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
         return false;
     }
 
+    RCLCPP_INFO_STREAM( logger, "Loading keyframe from " << keyframe_path );
+
     // when loading from file, accum_distance is negative so that loaded keyframes are considered when determining loop closure candidates
     accum_distance = -1.0;
 

@@ -304,7 +304,6 @@ GraphDatabase::load_graph( const std::string &directory )
         std::vector<boost::filesystem::path> paths;
         if( boost::filesystem::exists( root ) && boost::filesystem::is_directory( root ) ) {
             for( auto const &entry : boost::filesystem::recursive_directory_iterator( root ) ) {
-                std::cout << "entry: " << entry.path() << " ext: " << entry.path().extension() << std::endl;
                 if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext ) {
                     paths.emplace_back( entry.path() );
                 }
@@ -408,25 +407,23 @@ GraphDatabase::flush_loaded_graph()
         uuid_keyframe_map[keyframe->uuid] = keyframe;
         new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
                                               // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
-        RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id << " to new keyframes with uuid " << keyframe->uuid_str );
+        RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id << " to new keyframes" );
     }
 
     for( const auto &edge : loaded_edges ) {
-        RCLCPP_INFO_STREAM( logger, "Adding edge: " << edge->readable_id << " with uuid " << edge->uuid_str );
+        RCLCPP_INFO_STREAM( logger, "Adding edge: " << edge->readable_id );
         KeyFrame::Ptr from_keyframe;
         // TODO check if anchor keyframe is setup correctly
         if( edge->type == Edge::TYPE_ANCHOR ) {
-            RCLCPP_INFO_STREAM( logger, "Handling anchor edge" );
+            RCLCPP_INFO_STREAM( logger, "Handling anchor edge, setting from keyframe to anchor keyframe" );
             from_keyframe = anchor_kf;
         } else {
             from_keyframe = uuid_keyframe_map[edge->from_uuid];
         }
         KeyFrame::Ptr to_keyframe = uuid_keyframe_map[edge->to_uuid];
-        RCLCPP_INFO_STREAM( logger, "Adding from keyframe: " << from_keyframe->readable_id << " with uuid " << from_keyframe->uuid_str
-                                                             << " to " << edge->readable_id );
+        RCLCPP_INFO_STREAM( logger, "Adding from keyframe: " << from_keyframe->readable_id << " to edge " << edge->readable_id );
         edge->from_keyframe = from_keyframe;
-        RCLCPP_INFO_STREAM( logger, "Adding to keyframe: " << to_keyframe->readable_id << " with uuid " << to_keyframe->uuid_str << " to "
-                                                           << edge->readable_id );
+        RCLCPP_INFO_STREAM( logger, "Adding to keyframe: " << to_keyframe->readable_id << " to edge " << edge->readable_id );
         edge->to_keyframe = to_keyframe;
 
         if( from_keyframe->node == nullptr ) {
