@@ -97,6 +97,7 @@ public:
 
     // We use this "" string to represent empty robot name aka using no namespace in ROS2
     inline static const std::string empty_robot_name_str = "\"\"";
+    inline static const std::string loaded_keyframe_str  = "(loaded)";
 };
 
 /**

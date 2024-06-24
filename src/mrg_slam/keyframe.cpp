@@ -57,7 +57,12 @@ KeyFrame::save( const std::string& result_path )
     } else {
         ofs << "robot_name " << robot_name << "\n";
     }
-    ofs << "readable_id " << readable_id << "\n";
+    std::string readable_id_write = readable_id;
+    size_t      pos               = readable_id_write.find( loaded_keyframe_str );
+    if( pos != std::string::npos ) {
+        readable_id_write.erase( pos, loaded_keyframe_str.size() );
+    }
+    ofs << "readable_id " << readable_id_write << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
@@ -178,7 +183,7 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
     } else {
         readable_id = robot_name;
     }
-    readable_id += "(loaded)." + std::to_string( odom_keyframe_counter );
+    readable_id += loaded_keyframe_str + "." + std::to_string( odom_keyframe_counter );
 
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
     pcl::io::loadPCDFile( pcd_path, *cloud_ );
