@@ -157,9 +157,9 @@ mrg_slam_component:
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
     # loop closure params
-    distance_thresh: 15.0
-    accum_distance_thresh: 25.0
-    min_edge_interval: 15.0
+    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    accum_distance_thresh: 25.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
+    min_edge_interval: 15.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
     use_planar_registration_guess: false
