@@ -37,34 +37,6 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     if( it == last_loop_edge_accum_distance_map.end() ) {
         last_loop_edge_accum_distance_map[own_name] = 0.0;
     }
-    for( const auto& [name, value] : last_loop_edge_accum_distance_map ) {
-        std::cout << "last loop edge accum distance for robot " << name << " is " << value << std::endl;
-    }
-}
-
-// TODO remove redundanct detect function
-std::vector<Loop::Ptr>
-LoopDetector::detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                      const std::vector<Edge::Ptr>& edges )
-{
-    std::vector<Loop::Ptr> detected_loops;
-    for( const auto& new_keyframe : new_keyframes ) {
-        auto start = std::chrono::high_resolution_clock::now();
-
-        auto candidates = find_candidates( keyframes, new_keyframe );
-        auto loop       = matching( candidates, new_keyframe, keyframes, edges );
-        if( loop ) {
-            detected_loops.push_back( loop );
-        }
-
-        if( candidates.size() > 0 ) {
-            loop_candidates_sizes.push_back( candidates.size() );
-            auto end = std::chrono::high_resolution_clock::now();
-            loop_detection_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
-        }
-    }
-
-    return detected_loops;
 }
 
 

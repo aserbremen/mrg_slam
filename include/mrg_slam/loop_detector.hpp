@@ -46,14 +46,6 @@ public:
     LoopDetector( rclcpp::Node::SharedPtr _node );
 
     /**
-     * @brief detect loops and add them to the pose graph
-     * @param keyframes       keyframes
-     * @param new_keyframes   newly registered keyframes
-     */
-    std::vector<Loop::Ptr> detect( const std::vector<KeyFrame::Ptr>& keyframes, const std::deque<KeyFrame::Ptr>& new_keyframes,
-                                   const std::vector<Edge::Ptr>& edges );
-
-    /**
      * @brief Detect loops and perform loop consistency checks
      */
     std::vector<Loop::Ptr> detect( std::shared_ptr<GraphDatabase> graph_db );
