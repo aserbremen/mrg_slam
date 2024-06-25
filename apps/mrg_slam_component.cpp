@@ -135,6 +135,7 @@ public:
         slam_pose_broadcast_sub                                   = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
             "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
+        // TODO add service client for a slam instance without a namespace by default?
         for( const auto &robot_name : robot_names ) {
             if( robot_name != own_name ) {
                 request_graph_service_clients[robot_name] = this->create_client<mrg_slam_msgs::srv::PublishGraph>(
@@ -512,7 +513,7 @@ private:
     {
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         if( init_pose_msg != nullptr ) {
-            Eigen::Isometry3d pose;
+            Eigen::Isometry3d pose( Eigen::Isometry3d::Identity() );
             tf2::fromMsg( init_pose_msg->pose.pose, pose );
             pose = pose
                    * graph_database->get_keyframe_queue()[0]->odom.inverse();  // "remove" odom (which will be added later again) such that
