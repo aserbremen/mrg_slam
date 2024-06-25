@@ -93,14 +93,14 @@ FloorCoeffsProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::
 bool
 FloorCoeffsProcessor::flush( std::shared_ptr<GraphDatabase> graph_db, std::shared_ptr<GraphSLAM> &graph_slam )
 {
-    std::lock_guard<std::mutex>   lock( floor_coeffs_queue_mutex );
-    builtin_interfaces::msg::Time latest_keyframe_stamp = graph_db->get_prev_robot_keyframe()->stamp;
-    const auto                    keyframe_hash         = graph_db->get_keyframe_hash();
-
+    std::lock_guard<std::mutex> lock( floor_coeffs_queue_mutex );
 
     if( graph_db->get_keyframes().empty() ) {
         return false;
     }
+
+    builtin_interfaces::msg::Time latest_keyframe_stamp = graph_db->get_prev_robot_keyframe()->stamp;
+    const auto                   &keyframe_hash         = graph_db->get_keyframe_hash();
 
     bool updated = false;
     for( const auto &floor_coeffs : floor_coeffs_queue ) {
