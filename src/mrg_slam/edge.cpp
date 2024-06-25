@@ -20,7 +20,7 @@ Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid,
     to_uuid( to_keyframe->uuid ),
     to_uuid_str( to_keyframe->uuid_str )
 {
-    readable_id = make_readable_id();
+    make_readable_id();
 }
 
 Edge::Edge( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str,
@@ -119,51 +119,27 @@ Edge::load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const
     }
 }
 
-std::string
+void
 Edge::make_readable_id()
 {
-    std::string robot_name = from_keyframe->robot_name.empty() ? "\"\"" : from_keyframe->robot_name;
-    std::string readable_id;
+    if( from_keyframe == nullptr || to_keyframe == nullptr ) {
+        throw std::runtime_error( "Edge::make_readable_id: from_keyframe or to_keyframe is null" );
+    }
+
+    std::string from_robot_name = from_keyframe->robot_name.empty() ? KeyFrame::empty_robot_name_str : from_keyframe->robot_name;
+    std::string to_robot_name   = to_keyframe->robot_name.empty() ? KeyFrame::empty_robot_name_str : to_keyframe->robot_name;
     if( type == TYPE_ANCHOR ) {
-        readable_id = "anchor." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
-                      + std::to_string( to_keyframe->odom_keyframe_counter );
-
-        return readable_id;
+        readable_id = "anchor";
+    } else if( type == TYPE_ODOM ) {
+        readable_id = "odom";
+    } else if( type == TYPE_LOOP ) {
+        readable_id = "loop";
+    } else {
+        throw std::runtime_error( "Unknown edge type in Edge constructor" );
     }
 
-    if( type == TYPE_ODOM ) {
-        if( to_keyframe != nullptr && from_keyframe != nullptr ) {
-            readable_id = "odom." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
-                          + to_keyframe->robot_name + "." + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else if( to_keyframe == nullptr && from_keyframe != nullptr ) {
-            readable_id = "odom." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->to_keyframe is null";
-        } else if( to_keyframe != nullptr && from_keyframe == nullptr ) {
-            readable_id = "odom.from_keyframe is null->" + to_keyframe->robot_name + "."
-                          + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else {
-            readable_id = "odom.from_keyframe is null->to_keyframe is null";
-        }
-
-        return readable_id;
-    }
-
-    if( type == TYPE_LOOP ) {
-        if( from_keyframe != nullptr && to_keyframe != nullptr ) {
-            readable_id = "loop." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->"
-                          + to_keyframe->robot_name + "." + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else if( from_keyframe == nullptr && to_keyframe != nullptr ) {
-            readable_id = "loop.from_keyframe is null ->" + to_keyframe->robot_name + "."
-                          + std::to_string( to_keyframe->odom_keyframe_counter );
-        } else if( from_keyframe != nullptr && to_keyframe == nullptr ) {
-            readable_id = "loop." + robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "-> to_keyframe is null";
-        } else {
-            readable_id = "loop from_keyframe is null -> to_keyframe is null";
-        }
-
-        return readable_id;
-    }
-
-    std::runtime_error( "Unknown edge type in Edge constructor" );
+    readable_id += ":" + from_robot_name + "." + std::to_string( from_keyframe->odom_keyframe_counter ) + "->" + to_robot_name + "."
+                   + std::to_string( to_keyframe->odom_keyframe_counter );
 }
 
 Edge::Type

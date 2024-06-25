@@ -63,7 +63,7 @@ public:
     Eigen::Matrix<double, 6, 6> information_loaded;    // information matrix from loaded edge
 
 private:
-    std::string make_readable_id();
+    void make_readable_id();
 
     Type        type_from_string( const std::string& type_str );
     std::string type_to_string( Type type );
