@@ -5,7 +5,6 @@
 
 #include <g2o/types/slam3d/vertex_se3.h>
 
-#include <boost/format.hpp>
 #include <mrg_slam/graph_slam.hpp>
 #include <mrg_slam/keyframe.hpp>
 #include <mrg_slam/registrations.hpp>
@@ -68,8 +67,7 @@ private:
      * @param new_keyframe         loop end keyframe
      * @param graph_slam           graph slam
      */
-    Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe,
-                        const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges );
+    Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe );
 
 
 private:
