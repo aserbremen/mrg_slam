@@ -172,7 +172,7 @@ GraphDatabase::flush_graph_queue(
 
     auto logger = rclcpp::get_logger( "flush_graph_queue" );
 
-    RCLCPP_INFO_STREAM( logger, "Flusing graph, received graph msgs: " << graph_queue.size() );
+    RCLCPP_INFO_STREAM( logger, "Flushing graph, received graph msgs: " << graph_queue.size() );
 
     // Create unique keyframes and edges vectors to keep order of received messages
     std::vector<const mrg_slam_msgs::msg::KeyFrameRos *> unique_keyframes;

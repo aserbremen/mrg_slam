@@ -136,10 +136,14 @@ public:
             "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
         // TODO add service client for a slam instance without a namespace by default?
-        for( const auto &robot_name : robot_names ) {
+        for( const auto &robot_name : multi_robot_names ) {
             if( robot_name != own_name ) {
+                std::string service_topic = "/mrg_slam/publish_graph";
+                if( !robot_name.empty() ) {
+                    service_topic = "/" + robot_name + service_topic;
+                }
                 request_graph_service_clients[robot_name] = this->create_client<mrg_slam_msgs::srv::PublishGraph>(
-                    "/" + robot_name + "/mrg_slam/publish_graph", rmw_qos_profile_services_default, reentrant_callback_group );
+                    service_topic, rmw_qos_profile_services_default, reentrant_callback_group );
                 others_last_accum_dist[robot_name]          = -1.0;
                 others_last_graph_exchange_time[robot_name] = -1.0;
             }
@@ -216,10 +220,14 @@ public:
         // Publish graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Response>      res )>
-            publish_graph_service_callback = std::bind( &MrgSlamComponent::publish_graph_service, this, std::placeholders::_1,
-                                                        std::placeholders::_2 );
-        publish_graph_service_server       = this->create_service<mrg_slam_msgs::srv::PublishGraph>( "/mrg_slam/publish_graph",
-                                                                                                     publish_graph_service_callback );
+                    publish_graph_service_callback = std::bind( &MrgSlamComponent::publish_graph_service, this, std::placeholders::_1,
+                                                                std::placeholders::_2 );
+        std::string publish_graph_service_topic    = "/mrg_slam/publish_graph";
+        if( !own_name.empty() ) {
+            publish_graph_service_topic = "/" + own_name + publish_graph_service_topic;
+        }
+        publish_graph_service_server = this->create_service<mrg_slam_msgs::srv::PublishGraph>( publish_graph_service_topic,
+                                                                                               publish_graph_service_callback );
         // Request graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Response>      res )>
@@ -365,11 +373,11 @@ private:
         }
 
         // Set member variables for this class
-        points_topic    = this->get_parameter( "points_topic" ).as_string();
-        own_name        = this->get_parameter( "own_name" ).as_string();
-        robot_names     = this->get_parameter( "multi_robot_names" ).as_string_array();
-        odom_sub_topic  = this->get_parameter( "odom_sub_topic" ).as_string();
-        cloud_sub_topic = this->get_parameter( "cloud_sub_topic" ).as_string();
+        points_topic      = this->get_parameter( "points_topic" ).as_string();
+        own_name          = this->get_parameter( "own_name" ).as_string();
+        multi_robot_names = this->get_parameter( "multi_robot_names" ).as_string_array();
+        odom_sub_topic    = this->get_parameter( "odom_sub_topic" ).as_string();
+        cloud_sub_topic   = this->get_parameter( "cloud_sub_topic" ).as_string();
 
         map_frame_id              = this->get_parameter( "map_frame_id" ).as_string();
         odom_frame_id             = this->get_parameter( "odom_frame_id" ).as_string();
@@ -637,6 +645,7 @@ private:
             return;
         }
 
+        // TODO handle case of no connection to other robot
         others_last_graph_exchange_time[other_robot_name] = this->now().seconds();
         while( !request_graph_service_clients[other_robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
             if( !rclcpp::ok() ) {
@@ -1383,8 +1392,8 @@ private:
             if( robot_name == own_name ) {
                 continue;
             }
-            auto it = std::find( robot_names.begin(), robot_names.end(), robot_name );
-            if( it == robot_names.end() ) {
+            auto it = std::find( multi_robot_names.begin(), multi_robot_names.end(), robot_name );
+            if( it == multi_robot_names.end() ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "Robot " << robot_name << " is not in the list of known robots to request graph" );
                 continue;
             }
@@ -1553,7 +1562,7 @@ private:
 
     std::string              points_topic;
     std::string              own_name;
-    std::vector<std::string> robot_names;
+    std::vector<std::string> multi_robot_names;
     std::string              result_dir;
 
     float               robot_remove_points_radius;

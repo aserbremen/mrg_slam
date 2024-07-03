@@ -13,7 +13,6 @@
  */
 class RosTimeHash {
 public:
-    // TODO: maybe rclcpp::Time instances are needed for code to function
     size_t operator()( const builtin_interfaces::msg::Time& val ) const
     {
         size_t seed = 0;
