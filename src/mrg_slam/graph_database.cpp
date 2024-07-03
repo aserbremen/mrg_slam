@@ -24,7 +24,10 @@ GraphDatabase::GraphDatabase( rclcpp::Node::SharedPtr _node, std::shared_ptr<Gra
     odometry_edge_robust_kernel_size     = _node->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
     loop_closure_edge_robust_kernel      = _node->get_parameter( "loop_closure_edge_robust_kernel" ).as_string();
     loop_closure_edge_robust_kernel_size = _node->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double();
-
+    result_dir                           = _node->get_parameter( "result_dir" ).as_string();
+    if( result_dir.back() == '/' ) {
+        result_dir.pop_back();
+    }
     // We start the odom_keyframe_counter at 1, because the first keyframe (0) is the anchor keyframe
     odom_keyframe_counter = 1;
 
@@ -485,6 +488,51 @@ GraphDatabase::insert_loops( const std::vector<Loop::Ptr> &loops )
     // Add the new keyframes that have been checked for loop closures to the keyframes vector
     std::copy( new_keyframes.begin(), new_keyframes.end(), std::back_inserter( keyframes ) );
     new_keyframes.clear();
+}
+
+
+void
+GraphDatabase::save_keyframe_poses()
+{
+    static int save_counter = 0;
+
+    if( result_dir.empty() ) {
+        return;
+    }
+
+    std::string name = own_name;
+    if( own_name.empty() ) {
+        name = "no_namespace";
+    }
+
+    std::ostringstream dir_format;
+    dir_format << result_dir << "/" << name;
+    std::string dir_path = dir_format.str();
+
+    if( !boost::filesystem::exists( dir_path ) ) {
+        boost::filesystem::create_directories( dir_path );
+    }
+
+    std::ostringstream file_format;
+    file_format << dir_path << "/" << name << "_" << std::setw( 4 ) << std::setfill( '0' ) << save_counter << ".txt";
+
+    RCLCPP_INFO_STREAM( rclcpp::get_logger( "save_keyframe_poses" ), "Saving keyframe poses to " << file_format.str() );
+    std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
+    std::ofstream               ofs( file_format.str() );
+    for( const auto &keyframe : keyframes ) {
+        if( keyframe->node == nullptr ) {
+            continue;
+        }
+        if( keyframe->robot_name != own_name ) {
+            continue;
+        }
+        Eigen::Isometry3d  pose = keyframe->node->estimate();
+        Eigen::Quaterniond q( pose.linear() );
+        Eigen::Vector3d    t( pose.translation() );
+        ofs << keyframe->stamp.sec << "." << std::setfill( '0' ) << std::setw( 9 ) << keyframe->stamp.nanosec << " " << t.x() << " "
+            << t.y() << " " << t.z() << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+    }
+    save_counter++;
 }
 
 }  // namespace mrg_slam

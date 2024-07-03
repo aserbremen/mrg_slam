@@ -135,7 +135,6 @@ public:
         slam_pose_broadcast_sub                                   = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
             "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
-        // TODO add service client for a slam instance without a namespace by default?
         for( const auto &robot_name : multi_robot_names ) {
             if( robot_name != own_name ) {
                 std::string service_topic = "/mrg_slam/publish_graph";
@@ -407,10 +406,6 @@ private:
         graph_request_min_time_delay         = this->get_parameter( "graph_request_min_time_delay" ).as_double();
         std::string graph_exchange_mode_str  = this->get_parameter( "graph_exchange_mode" ).as_string();
         graph_exchange_mode                  = graph_exchange_mode_from_string( graph_exchange_mode_str );
-        result_dir                           = this->get_parameter( "result_dir" ).as_string();
-        if( result_dir.back() == '/' ) {
-            result_dir.pop_back();
-        }
     }
 
     /**
@@ -560,35 +555,6 @@ private:
         slam_pose_msg.robot_name      = own_name;
         slam_pose_msg.accum_dist      = kf->accum_distance;
         slam_pose_broadcast_pub->publish( slam_pose_msg );
-    }
-
-    // TODO move this function to GraphDatabase
-    void save_keyframe_poses()
-    {
-        static int    save_counter = 0;
-        boost::format dir_fmt( "%s/%s" );
-        dir_fmt % result_dir % own_name;
-        if( !boost::filesystem::exists( dir_fmt.str() ) ) {
-            boost::filesystem::create_directories( dir_fmt.str() );
-        }
-        boost::format file_fmt( "%s/%s_%04d_%04d.txt" );
-        file_fmt % dir_fmt.str() % own_name % save_counter % graph_database->get_keyframes().size();
-
-        std::ofstream ofs( file_fmt.str() );
-        for( const auto &keyframe : graph_database->get_keyframes() ) {
-            if( keyframe->node == nullptr ) {
-                continue;
-            }
-            if( keyframe->robot_name != own_name ) {
-                continue;
-            }
-            Eigen::Isometry3d  pose = keyframe->node->estimate();
-            Eigen::Quaterniond q( pose.linear() );
-            Eigen::Vector3d    t( pose.translation() );
-            ofs << keyframe->stamp.sec << "." << std::setfill( '0' ) << std::setw( 9 ) << keyframe->stamp.nanosec << " " << t.x() << " "
-                << t.y() << " " << t.z() << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
-        }
-        save_counter++;
     }
 
     void slam_pose_broadcast_callback( mrg_slam_msgs::msg::PoseWithName::ConstSharedPtr slam_pose_msg )
@@ -1029,10 +995,7 @@ private:
         // Publish the current optimized slam pose
         publish_slam_pose( prev_robot_keyframe );
 
-        if( !result_dir.empty() ) {
-            std::cout << "Saving keyframe poses with result_dir " << result_dir << std::endl;
-            save_keyframe_poses();
-        }
+        graph_database->save_keyframe_poses();
 
         if( odom2map_pub->get_subscription_count() ) {
             geometry_msgs::msg::TransformStamped ts = matrix2transform( prev_robot_keyframe->stamp, trans.matrix().cast<float>(),
@@ -1052,12 +1015,12 @@ private:
         optimization_timer->reset();
     }
 
-    // /**
-    //  * @brief save all graph information and some timing information to request's directory
-    //  * @param req request containing the directory to save the graph information to
-    //  * @param res
-    //  * @return
-    //  */
+    /**
+     * @brief save all graph information and some timing information to request's directory
+     * @param req request containing the directory to save the graph information to
+     * @param res success boolean
+     * @return
+     */
     void save_graph_service( mrg_slam_msgs::srv::SaveGraph::Request::ConstSharedPtr req,
                              mrg_slam_msgs::srv::SaveGraph::Response::SharedPtr     res )
     {
@@ -1170,25 +1133,6 @@ private:
 
 
         res->success = true;
-    }
-
-    /**
-     * \brief   Return the sorted filenames of all files that have the specified extension
-     *          in the specified directory and all subdirectories.
-     */
-    std::vector<boost::filesystem::path> glob_filenames( boost::filesystem::path const &root, std::string const &ext )
-    {
-        std::vector<boost::filesystem::path> paths;
-
-        if( boost::filesystem::exists( root ) && boost::filesystem::is_directory( root ) ) {
-            for( auto const &entry : boost::filesystem::recursive_directory_iterator( root ) ) {
-                if( boost::filesystem::is_regular_file( entry ) && entry.path().extension() == ext )
-                    paths.emplace_back( entry.path().filename() );
-            }
-        }
-
-        std::sort( paths.begin(), paths.end() );
-        return paths;
     }
 
     /**
@@ -1563,7 +1507,6 @@ private:
     std::string              points_topic;
     std::string              own_name;
     std::vector<std::string> multi_robot_names;
-    std::string              result_dir;
 
     float               robot_remove_points_radius;
     std::vector<double> init_pose_vec;

@@ -72,6 +72,10 @@ public:
      */
     void insert_loops( const std::vector<Loop::Ptr>& loops );
 
+    /**
+     * @brief Saves the poses of the keyframes to a file if the result_dir parameter is not empty
+     */
+    void save_keyframe_poses();
 
     const std::deque<KeyFrame::Ptr>&                                               get_keyframe_queue() const { return keyframe_queue; }
     const std::vector<KeyFrame::Ptr>&                                              get_keyframes() const { return keyframes; }
@@ -133,6 +137,7 @@ private:
     double              odometry_edge_robust_kernel_size;
     std::string         loop_closure_edge_robust_kernel;
     double              loop_closure_edge_robust_kernel_size;
+    std::string         result_dir;
 };
 
 }  // namespace mrg_slam
