@@ -376,7 +376,6 @@ GraphSLAM::optimize( int num_iterations, bool verbose )
 
     std::cout << "optimize!! graph slam iteration #" << optimize_count << std::endl;
     // ROS2 migration use std::chrono::system_clock insteead of ros::Walltime::now(), see https://github.com/ros-planning/moveit2/issues/31
-    // TODO: Potentially use a node handle to get time of a specific node.
     auto t1         = std::chrono::system_clock::now();
     int  iterations = optimizer->optimize( num_iterations );
 

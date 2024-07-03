@@ -21,7 +21,7 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers/node_names",
                                                                                            rclcpp::QoS( 16 ) );
     markers_marginals_pub  = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
-                                                                                          rclcpp::QoS( 16 ) );
+                                                                                           rclcpp::QoS( 16 ) );
 
     // Declare only once across all nodes
     map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
@@ -231,7 +231,6 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
             main_edge_marker.points[i * 2 + 1].y = pt2.y();
             main_edge_marker.points[i * 2 + 1].z = pt2.z();
 
-            // TODO should edge contain robot_name? to check who is the original creator of the edge
             if( edge->from_keyframe->robot_name == own_name && edge->to_keyframe->robot_name == own_name ) {
                 if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red;

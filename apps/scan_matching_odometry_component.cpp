@@ -275,7 +275,7 @@ private:
         } else if( enable_robot_odometry_init_guess && !( prev_time.nanoseconds() == 0 ) ) {
             geometry_msgs::msg::TransformStamped transform;
             // According to https://answers.ros.org/question/312648/could-not-find-waitfortransform-function-in-tf2-package-of-ros2/ the
-            // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout, TODO, verify
+            // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout
             if( tf_buffer->canTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
                                          rclcpp::Duration( 0, 0 ) ) ) {
                 try {

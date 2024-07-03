@@ -61,8 +61,17 @@ public:
     bool flush_graph_queue(
         std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>>& others_prev_robot_keyframes );
 
+    /**
+     * @brief Loads the graph from a directory, which has previously been saved with save_graph service
+     * @param directory
+     * @return true if the graph was successfully loaded
+     */
     bool load_graph( const std::string& directory );
 
+    /**
+     * @brief Flushes the loaded graph and adds the unique keyframes and edges to the graph
+     * @return true if at least one unique keyframe or edge was added to the graph
+     */
     bool flush_loaded_graph();
 
     /**
