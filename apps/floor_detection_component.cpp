@@ -49,11 +49,11 @@ public:
 
 private:
     /**
-     * @brief initialize parameters
+     * @brief initialize ROS2 parameters
      */
     void initialize_params()
     {
-        // Declare all parameters first
+        // Declare and set parameters
         tilt_deg          = this->declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
         sensor_height     = this->declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
         height_clip_range = this->declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height -
@@ -67,16 +67,6 @@ private:
                                                                                                  // normals will be filtered before RANSAC
         normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
         points_topic         = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-
-        // Set the member variables
-        tilt_deg             = this->get_parameter( "tilt_deg" ).as_double();
-        sensor_height        = this->get_parameter( "sensor_height" ).as_double();
-        height_clip_range    = this->get_parameter( "height_clip_range" ).as_double();
-        floor_pts_thresh     = this->get_parameter( "floor_pts_thresh" ).as_int();
-        floor_normal_thresh  = this->get_parameter( "floor_normal_thresh" ).as_double();
-        use_normal_filtering = this->get_parameter( "use_normal_filtering" ).as_bool();
-        normal_filter_thresh = this->get_parameter( "normal_filter_thresh" ).as_double();
-        points_topic         = this->get_parameter( "points_topic" ).as_string();
     }
 
     /**

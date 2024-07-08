@@ -260,28 +260,41 @@ private:
         // Declare all parameters used by this class and its members first
 
         // General and scenario parameters
-        this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-        this->declare_parameter<std::string>( "own_name", "atlas" );
-        this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
-        this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
+        points_topic      = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        own_name          = this->declare_parameter<std::string>( "own_name", "atlas" );
+        multi_robot_names = this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
+        odom_sub_topic    = this->declare_parameter<std::string>( "odom_sub_topic", "/odom" );
+        cloud_sub_topic   = this->declare_parameter<std::string>( "cloud_sub_topic", "/filtered_points" );
 
         // Map parameters
-        this->declare_parameter<std::string>( "map_frame_id", "map" );
-        this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
-        this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
+        map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
+        odom_frame_id             = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        map_cloud_resolution      = this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
+        map_cloud_count_threshold = this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
 
         // Initial pose parameters
-        this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
-        this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
+        init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
+        init_pose_vec   = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
 
         // Removing points of other robots from point cloud
-        this->declare_parameter<double>( "robot_remove_points_radius", 2.0 );
+        robot_remove_points_radius = this->declare_parameter<double>( "robot_remove_points_radius", 2.0 );
 
         // GraphSLAM parameters
+        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", false );
+        g2o_solver_type           = this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
+        g2o_solver_num_iterations = this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
+        save_graph                = this->declare_parameter<bool>( "save_graph", true );
+        this->declare_parameter<bool>( "g2o_verbose", false );
+        graph_update_interval               = this->declare_parameter<double>( "graph_update_interval", 3.0 );
+        map_cloud_update_interval           = this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
+        graph_request_min_accum_dist        = this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
+        graph_request_max_robot_dist        = this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
+        graph_request_min_time_delay        = this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
+        std::string graph_exchange_mode_str = this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
+        graph_exchange_mode                 = graph_exchange_mode_from_string( graph_exchange_mode_str );
+
+        // GraphDatabase parameters (not directly used by this class)
         this->declare_parameter<bool>( "fix_first_node", false );
-        this->declare_parameter<bool>( "fix_first_node_adaptive", false );
         this->declare_parameter<std::vector<double>>( "fix_first_node_stddev",
                                                       std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ),
                                                                            angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
@@ -290,16 +303,6 @@ private:
         this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
         this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel", "Huber" );
         this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
-        this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
-        this->declare_parameter<bool>( "save_graph", true );
-        this->declare_parameter<bool>( "g2o_verbose", false );
-        this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
-        this->declare_parameter<double>( "graph_update_interval", 3.0 );
-        this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-        this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
-        this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
-        this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
-        this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
         this->declare_parameter<std::string>( "result_dir", "" );
 
         // KeyframeUpdater parameters (not directly used by this class)
@@ -313,8 +316,11 @@ private:
         this->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
         this->declare_parameter<double>( "fitness_score_thresh", 0.5 );
         this->declare_parameter<bool>( "use_planar_registration_guess", false );
+        this->declare_parameter<bool>( "use_loop_closure_consistency_check", true );
+        this->declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
+        this->declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
 
-        // Loop closure (scan matching regisration LoopDetector) parameters (not directly used by this class)
+        // Loop closure (scan matching registration LoopDetector) parameters (not directly used by this class)
         this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
         this->declare_parameter<int>( "reg_num_threads", 0 );
         this->declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
@@ -325,9 +331,6 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
-        this->declare_parameter<bool>( "use_loop_closure_consistency_check", true );
-        this->declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
-        this->declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
 
         // InformationMatrixCalculator parameters (not directly used by this class)
         this->declare_parameter<bool>( "use_const_inf_matrix", false );
@@ -363,42 +366,6 @@ private:
         this->declare_parameter<double>( "floor_edge_stddev", 10.0 );
         this->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
         this->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
-
-        // Set member variables for this class
-        points_topic      = this->get_parameter( "points_topic" ).as_string();
-        own_name          = this->get_parameter( "own_name" ).as_string();
-        multi_robot_names = this->get_parameter( "multi_robot_names" ).as_string_array();
-        odom_sub_topic    = this->get_parameter( "odom_sub_topic" ).as_string();
-        cloud_sub_topic   = this->get_parameter( "cloud_sub_topic" ).as_string();
-
-        map_frame_id              = this->get_parameter( "map_frame_id" ).as_string();
-        odom_frame_id             = this->get_parameter( "odom_frame_id" ).as_string();
-        map_cloud_resolution      = this->get_parameter( "map_cloud_resolution" ).as_double();
-        map_cloud_count_threshold = this->get_parameter( "map_cloud_count_threshold" ).as_int();
-
-        init_pose_topic = this->get_parameter( "init_pose_topic" ).as_string();
-        init_pose_vec   = this->get_parameter( "init_pose" ).as_double_array();
-
-        robot_remove_points_radius = static_cast<float>( this->get_parameter( "robot_remove_points_radius" ).as_double() );
-
-        fix_first_node                       = this->get_parameter( "fix_first_node" ).as_bool();
-        fix_first_node_adaptive              = this->get_parameter( "fix_first_node_adaptive" ).as_bool();
-        fix_first_node_stddev_vec            = this->get_parameter( "fix_first_node_stddev" ).as_double_array();
-        max_keyframes_per_update             = this->get_parameter( "max_keyframes_per_update" ).as_int();
-        odometry_edge_robust_kernel          = this->get_parameter( "odometry_edge_robust_kernel" ).as_string();
-        odometry_edge_robust_kernel_size     = this->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
-        loop_closure_edge_robust_kernel      = this->get_parameter( "loop_closure_edge_robust_kernel" ).as_string();
-        loop_closure_edge_robust_kernel_size = this->get_parameter( "loop_closure_edge_robust_kernel_size" ).as_double();
-        g2o_solver_num_iterations            = this->get_parameter( "g2o_solver_num_iterations" ).as_int();
-        g2o_solver_type                      = this->get_parameter( "g2o_solver_type" ).as_string();
-        save_graph                           = this->get_parameter( "save_graph" ).as_bool();
-        graph_update_interval                = this->get_parameter( "graph_update_interval" ).as_double();
-        map_cloud_update_interval            = this->get_parameter( "map_cloud_update_interval" ).as_double();
-        graph_request_min_accum_dist         = this->get_parameter( "graph_request_min_accum_dist" ).as_double();
-        graph_request_max_robot_dist         = this->get_parameter( "graph_request_max_robot_dist" ).as_double();
-        graph_request_min_time_delay         = this->get_parameter( "graph_request_min_time_delay" ).as_double();
-        std::string graph_exchange_mode_str  = this->get_parameter( "graph_exchange_mode" ).as_string();
-        graph_exchange_mode                  = graph_exchange_mode_from_string( graph_exchange_mode_str );
     }
 
     /**
@@ -1501,13 +1468,7 @@ private:
 
     float               robot_remove_points_radius;
     std::vector<double> init_pose_vec;
-    bool                fix_first_node;
     bool                fix_first_node_adaptive;
-    std::vector<double> fix_first_node_stddev_vec;
-    std::string         odometry_edge_robust_kernel;
-    double              odometry_edge_robust_kernel_size;
-    std::string         loop_closure_edge_robust_kernel;
-    double              loop_closure_edge_robust_kernel_size;
     std::string         g2o_solver_type;
     bool                save_graph;
     int                 g2o_solver_num_iterations;
@@ -1522,8 +1483,6 @@ private:
 
     // all the below members must be accessed after locking main_thread_mutex
     std::mutex main_thread_mutex;
-
-    int max_keyframes_per_update;
 
     std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>> others_prev_robot_keyframes;
 

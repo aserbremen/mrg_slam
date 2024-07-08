@@ -98,28 +98,33 @@ public:
 
 private:
     /**
-     * @brief initialize parameters
+     * @brief initialize ROS2 parameters
      */
     void initialize_params()
     {
-        // Declare all parameters first
-        this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-        this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
+        // Declare and set ROS2 parameters
+        points_topic        = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
-        this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
-        this->declare_parameter<double>( "keyframe_delta_angle", 0.15 );
-        this->declare_parameter<double>( "keyframe_delta_time", 1.0 );
+        keyframe_delta_trans = this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
+        keyframe_delta_angle = this->declare_parameter<double>( "keyframe_delta_angle", 0.15 );
+        keyframe_delta_time  = this->declare_parameter<double>( "keyframe_delta_time", 1.0 );
 
-        this->declare_parameter<bool>( "transform_thresholding", false );
-        this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
-        this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
+        transform_thresholding = this->declare_parameter<bool>( "transform_thresholding", false );
+        max_acceptable_trans   = this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
+        max_acceptable_angle   = this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
 
-        this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
-        this->declare_parameter<bool>( "enable_imu_frontend", false );
+        enable_robot_odometry_init_guess = this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
+        enable_imu_frontend              = this->declare_parameter<bool>( "enable_imu_frontend", false );
 
-        this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+
+        result_dir = this->declare_parameter<std::string>( "result_dir", "" );
+        if( result_dir.back() == '/' ) {
+            result_dir.pop_back();
+        }
 
         // Regastration method parameters, used in select_registration_method()
         this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
@@ -132,30 +137,6 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
-        this->declare_parameter<std::string>( "result_dir", "" );
-
-        // Set all member variables
-        downsample_method     = this->get_parameter( "downsample_method" ).as_string();
-        downsample_resolution = this->get_parameter( "downsample_resolution" ).as_double();
-
-        points_topic        = this->get_parameter( "points_topic" ).as_string();
-        odom_frame_id       = this->get_parameter( "odom_frame_id" ).as_string();
-        robot_odom_frame_id = this->get_parameter( "robot_odom_frame_id" ).as_string();
-
-        keyframe_delta_trans = this->get_parameter( "keyframe_delta_trans" ).as_double();
-        keyframe_delta_angle = this->get_parameter( "keyframe_delta_angle" ).as_double();
-        keyframe_delta_time  = this->get_parameter( "keyframe_delta_time" ).as_double();
-
-        transform_thresholding = this->get_parameter( "transform_thresholding" ).as_bool();
-        max_acceptable_trans   = this->get_parameter( "max_acceptable_trans" ).as_double();
-        max_acceptable_angle   = this->get_parameter( "max_acceptable_angle" ).as_double();
-
-        enable_robot_odometry_init_guess = this->get_parameter( "enable_robot_odometry_init_guess" ).as_bool();
-        enable_imu_frontend              = this->get_parameter( "enable_imu_frontend" ).as_bool();
-        result_dir                       = this->get_parameter( "result_dir" ).as_string();
-        if( result_dir.back() == '/' ) {
-            result_dir.pop_back();
-        }
     }
 
     /**
