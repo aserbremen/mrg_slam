@@ -27,13 +27,11 @@ public:
     typedef pcl::PointXYZI PointT;
 
     // We need to pass NodeOptions in ROS2 to register a component
-    PrefilteringComponent( const rclcpp::NodeOptions&            options,
-                           const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "prefiltering_component", options )
+    PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
 
-        initialize_params( param_vec );
+        initialize_params();
 
         if( downsample_method == "VOXELGRID" ) {
             std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
@@ -77,7 +75,7 @@ public:
         }
 
         points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/velodyne_points", rclcpp::QoS( 64 ),
-                                                                               std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                std::bind( &PrefilteringComponent::cloud_callback, this,
                                                                                            std::placeholders::_1 ) );
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
@@ -93,7 +91,7 @@ public:
     virtual ~PrefilteringComponent() {}
 
 private:
-    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
         // Declare all parameters first
         this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
@@ -112,11 +110,6 @@ private:
         this->declare_parameter<double>( "scan_period", 0.1 );
         this->declare_parameter<bool>( "deskewing", false );
         this->declare_parameter<std::string>( "base_link_frame", "base_link" );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
 
         // Set all member variables
         downsample_method     = this->get_parameter( "downsample_method" ).as_string();

@@ -74,9 +74,7 @@ public:
     typedef pcl::PointXYZI                                                                                          PointT;
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
-    MrgSlamComponent( const rclcpp::NodeOptions            &options,
-                      const std::vector<rclcpp::Parameter> &_param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "mrg_slam_component", options ), param_vec( _param_vec )
+    MrgSlamComponent( const rclcpp::NodeOptions &options ) : Node( "mrg_slam_component", options )
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
@@ -92,7 +90,7 @@ public:
         // Deactivate this timer immediately so the initialization is only performed once
         one_shot_initalization_timer->cancel();
 
-        initialize_params( param_vec );
+        initialize_params();
 
         // Get the shared pointer to the ROS2 node to pass it to other classes and functions
         auto node_ros = shared_from_this();
@@ -257,7 +255,7 @@ public:
     }
 
 private:
-    void initialize_params( const std::vector<rclcpp::Parameter> &param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
         // Declare all parameters used by this class and its members first
 
@@ -365,11 +363,6 @@ private:
         this->declare_parameter<double>( "floor_edge_stddev", 10.0 );
         this->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
         this->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
 
         // Set member variables for this class
         points_topic      = this->get_parameter( "points_topic" ).as_string();
@@ -1502,8 +1495,6 @@ private:
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;
 
     // More parameters
-    std::vector<rclcpp::Parameter> param_vec;  // Externally provided by manual composition (debugging)
-
     std::string              points_topic;
     std::string              own_name;
     std::vector<std::string> multi_robot_names;

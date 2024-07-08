@@ -28,13 +28,11 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // We need to pass NodeOptions in ROS2 to register a component
-    ScanMatchingOdometryComponent( const rclcpp::NodeOptions&            options,
-                                   const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "scan_matching_odometry_component", options )
+    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing scan_matching_odometry_component..." );
 
-        initialize_params( param_vec );
+        initialize_params();
 
         if( downsample_method == "VOXELGRID" ) {
             std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
@@ -102,7 +100,7 @@ private:
     /**
      * @brief initialize parameters
      */
-    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
         // Declare all parameters first
         this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
@@ -135,11 +133,6 @@ private:
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
         this->declare_parameter<std::string>( "result_dir", "" );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
 
         // Set all member variables
         downsample_method     = this->get_parameter( "downsample_method" ).as_string();

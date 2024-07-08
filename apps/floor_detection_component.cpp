@@ -24,13 +24,11 @@ public:
     typedef pcl::PointXYZI PointT;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    FloorDetectionComponent( const rclcpp::NodeOptions&            options,
-                             const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "floor_detection_component", options )
+    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
 
-        initialize_params( param_vec );
+        initialize_params();
 
         points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
                                                                                std::bind( &FloorDetectionComponent::cloud_callback, this,
@@ -53,7 +51,7 @@ private:
     /**
      * @brief initialize parameters
      */
-    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
         // Declare all parameters first
         tilt_deg          = this->declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
@@ -69,11 +67,6 @@ private:
                                                                                                  // normals will be filtered before RANSAC
         normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
         points_topic         = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
 
         // Set the member variables
         tilt_deg             = this->get_parameter( "tilt_deg" ).as_double();
