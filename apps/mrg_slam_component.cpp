@@ -153,7 +153,7 @@ public:
         }
 
         // publishers
-        odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/mrg_slam/odom2pub", 16 );
+        odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/mrg_slam/odom2map", 16 );
         map_points_pub          = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/map_points", rclcpp::QoS( 1 ) );
         read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "/mrg_slam/read_until", rclcpp::QoS( 16 ) );
         odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );

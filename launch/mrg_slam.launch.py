@@ -170,7 +170,7 @@ def launch_setup(context, *args, **kwargs):
     # Create the map2odom publisher node
     remaps = []
     if model_namespace != '':
-        remaps = [('/mrg_slam/odom2pub', '/' + model_namespace + '/mrg_slam/odom2pub')]
+        remaps = [('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map')]
     print_remappings(remaps, 'map2odom_publisher_ros2')
     map2odom_publisher_ros2 = Node(
         package='mrg_slam',
@@ -353,7 +353,7 @@ def launch_setup(context, *args, **kwargs):
                       ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
                       ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
                       ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
-                      ('/mrg_slam/odom2pub', '/' + model_namespace + '/mrg_slam/odom2pub'),
+                      ('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map'),
                       ('/mrg_slam/read_until', '/' + model_namespace + '/mrg_slam/read_until'),
                       ('/mrg_slam/others_poses', '/' + model_namespace + '/mrg_slam/others_poses'),
                       ('/mrg_slam/slam_status', '/' + model_namespace + '/mrg_slam/slam_status'),

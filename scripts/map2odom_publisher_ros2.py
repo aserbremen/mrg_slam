@@ -9,11 +9,13 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped, Quaternion, Vector3
 
 
+# Although this node is called map2odom_publisher, it publishes the transform that transforms a point in the odom frame to a point in the map frame.
+# Talking about the tf2 tree, it publishes the transform of the odom frame with respect to the map frame.
 class Map2OdomPublisher(Node):
     def __init__(self):
         super().__init__('map2odom_publisher')
         self.tf_broadcaster = TransformBroadcaster(self)
-        self.subscription = self.create_subscription(TransformStamped, '/mrg_slam/odom2pub', self.odom_callback, 10)
+        self.subscription = self.create_subscription(TransformStamped, '/mrg_slam/odom2map', self.odom_callback, 10)
         self.subscription  # prevent unused variable warning
         # create a timer for simplicity instead of creating a ROS2 spin inside its own thread, see
         # https://answers.ros.org/question/358343/rate-and-sleep-function-in-rclpy-library-for-ros2/
