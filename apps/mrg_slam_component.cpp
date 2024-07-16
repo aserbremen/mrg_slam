@@ -407,7 +407,7 @@ private:
                 if( trans_odom2map.isApprox( Eigen::Isometry3d::Identity() ) ) {
                     map2odom.setIdentity();
                 } else {
-                    map2odom = trans_odom2map.inverse().cast<double>();
+                    map2odom = trans_odom2map.inverse();
                 }
 
                 others_positions.resize( others_odom_poses.size() );
