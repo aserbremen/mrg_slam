@@ -500,10 +500,10 @@ private:
 
     void update_pose( const Eigen::Isometry3d &odom2map, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose> &odom_pose )
     {
-        auto             &odom     = odom_pose.first;
-        auto             &pose     = odom_pose.second;
-        Eigen::Isometry3d new_pose = odom2map * odom;
-        tf2::fromMsg( pose, new_pose );
+        auto             &odom_isometry = odom_pose.first;
+        auto             &odom_msg      = odom_pose.second;
+        Eigen::Isometry3d new_pose      = odom2map * odom_isometry;
+        odom_msg                        = tf2::toMsg( new_pose );
     }
 
     void publish_slam_pose( mrg_slam::KeyFrame::ConstPtr kf )
@@ -571,7 +571,7 @@ private:
             return;
         }
 
-        // TODO handle case of no connection to other robot
+        // TODO handle case of no connection to other robot, only delete the other robot's slam poses if the graph exchange was successful
         others_last_graph_exchange_time[other_robot_name] = this->now().seconds();
         while( !request_graph_service_clients[other_robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
             if( !rclcpp::ok() ) {
@@ -648,8 +648,7 @@ private:
         pose_array_msg.header.stamp    = pose_msg->header.stamp;
         pose_array_msg.header.frame_id = map_frame_id;
 
-        Eigen::Vector3d other_position, own_position;
-        std::string     other_name = pose_msg->robot_name;
+        std::string other_name = pose_msg->robot_name;
 
         // update poses of other robots in own map frame
         {
@@ -658,16 +657,20 @@ private:
             if( iter != others_odom2map.end() ) {
                 auto &odom_pose = others_odom_poses[other_name];
                 tf2::fromMsg( pose_msg->pose, odom_pose.first );
+                std::cout << "odom_broadcast_callback: Updating pose of " << other_name << " with current pos "
+                          << odom_pose.first.translation().transpose() << " and odom2map " << iter->second.translation().transpose()
+                          << std::endl;
                 update_pose( iter->second, odom_pose );
 
-                other_position << odom_pose.second.position.x, odom_pose.second.position.y, odom_pose.second.position.z;
+                std::cout << "odom_broadcast_callback: Updated pose in map frame " << other_name << " x: " << odom_pose.second.position.x
+                          << " y: " << odom_pose.second.position.y << " z: " << odom_pose.second.position.z << std::endl;
 
                 pose_array_msg.poses.resize( others_odom_poses.size() );
                 size_t i = 0;
-                for( const auto &odom_pose : others_odom_poses ) {
+                for( const auto &odom_pair : others_odom_poses ) {
                     pose_array_msg.poses[i].header     = pose_array_msg.header;
-                    pose_array_msg.poses[i].robot_name = odom_pose.first;
-                    pose_array_msg.poses[i].pose       = odom_pose.second.second;
+                    pose_array_msg.poses[i].robot_name = odom_pair.first;
+                    pose_array_msg.poses[i].pose       = odom_pair.second.second;
                     i++;
                 }
             }
@@ -850,8 +853,7 @@ private:
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of very long
-        // optimizations
+        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of long optimizations
         optimization_timer->cancel();
 
         if( graph_database->empty() ) {
