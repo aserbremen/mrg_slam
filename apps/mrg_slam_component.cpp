@@ -160,6 +160,8 @@ public:
         slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast",
                                                                                             rclcpp::QoS( 16 ) );
         others_poses_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithNameArray>( "/mrg_slam/others_poses", rclcpp::QoS( 16 ) );
+        other_robots_removed_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/other_robots_removed_points",
+                                                                                                 rclcpp::QoS( 1 ) );
         // Create another reentrant callback group for the slam_status_publisher and all callbacks it publishes from
         rclcpp::PublisherOptions         pub_options;
         rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
@@ -419,6 +421,7 @@ private:
                     i++;
                 }
             }
+            pcl::PointCloud<PointT>::Ptr removed_cloud( new pcl::PointCloud<PointT>() );
             if( !others_positions.empty() ) {
                 Eigen::Isometry3d map2sensor = odom.inverse() * map2odom;
 
@@ -441,6 +444,7 @@ private:
                         float distSqr = ( point - other_position_sensor ).squaredNorm();
                         if( distSqr < robot_radius_sqr ) {
                             to_be_removed->indices.push_back( i );
+                            removed_cloud->push_back( cloud->at( i ) );
                             break;
                         }
                     }
@@ -457,6 +461,13 @@ private:
                 sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg_tmp( new sensor_msgs::msg::PointCloud2 );
                 pcl::toROSMsg( *cloud, *cloud_msg_tmp );
                 cloud_msg_filtered = cloud_msg_tmp;
+            }
+            if( other_robots_removed_points_pub->get_subscription_count() > 0 ) {
+                sensor_msgs::msg::PointCloud2 cloud_msg_removed;
+                pcl::toROSMsg( *removed_cloud, cloud_msg_removed );
+                cloud_msg_removed.header.stamp    = cloud_msg->header.stamp;
+                cloud_msg_removed.header.frame_id = base_frame_id;
+                other_robots_removed_points_pub->publish( cloud_msg_removed );
             }
 
             // create keyframe and add it to the queue
@@ -657,14 +668,7 @@ private:
             if( iter != others_odom2map.end() ) {
                 auto &odom_pose = others_odom_poses[other_name];
                 tf2::fromMsg( pose_msg->pose, odom_pose.first );
-                std::cout << "odom_broadcast_callback: Updating pose of " << other_name << " with current pos "
-                          << odom_pose.first.translation().transpose() << " and odom2map " << iter->second.translation().transpose()
-                          << std::endl;
                 update_pose( iter->second, odom_pose );
-
-                std::cout << "odom_broadcast_callback: Updated pose in map frame " << other_name << " x: " << odom_pose.second.position.x
-                          << " y: " << odom_pose.second.position.y << " z: " << odom_pose.second.position.z << std::endl;
-
                 pose_array_msg.poses.resize( others_odom_poses.size() );
                 size_t i = 0;
                 for( const auto &odom_pair : others_odom_poses ) {
@@ -1410,6 +1414,8 @@ private:
     rclcpp::Subscription<mrg_slam_msgs::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithNameArray>::SharedPtr others_poses_pub;
+
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr other_robots_removed_points_pub;
 
     std::mutex                                                         trans_odom2map_mutex;
     Eigen::Isometry3d                                                  trans_odom2map;

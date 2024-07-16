@@ -364,7 +364,8 @@ def launch_setup(context, *args, **kwargs):
                       ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
                       ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
                       ('/mrg_slam/save_gids', '/' + model_namespace + '/mrg_slam/save_gids'),
-                      ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),]
+                      ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
+                      ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
         print_remappings(remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
