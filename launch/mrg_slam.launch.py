@@ -10,7 +10,8 @@ from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 import numpy as np
 
-# Parameter type mapping to infer the correct data type from the cli string
+# Parameter type mapping to infer the correct data type from the cli argument string. This is necessary since all cli arguments are strings.
+# The parameters defined in the PARAM_MAPPING can be provided as cli arguments to overwrite the default values from the yaml file.
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
@@ -183,7 +184,6 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Create the container node
-    # container_name = model_namespace + '_mrg_slam_container'
     # If the launch command provides the debug argument we add the prefix to start gdbserver (move this to the node you need to debug)
     # More information can be found in hdl_multi_robot_graph_slam_debug.launch.py and at https://gist.github.com/JADC362/a4425c2d05cdaadaaa71b697b674425f
     if 'debug' in context.launch_configurations:
@@ -330,7 +330,6 @@ def launch_setup(context, *args, **kwargs):
 
     # mrg_slam component
     if mrg_slam_params['enable_graph_slam']:
-        # TODO remove own_name from mrg_slam_params.yaml and use the model_namespace instead
         mrg_slam_params['own_name'] = model_namespace
         # Overwrite init_pose array with the actual values
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
@@ -363,7 +362,6 @@ def launch_setup(context, *args, **kwargs):
                       ('/mrg_slam/get_map', '/' + model_namespace + '/mrg_slam/get_map'),
                       ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
                       ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
-                      ('/mrg_slam/save_gids', '/' + model_namespace + '/mrg_slam/save_gids'),
                       ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
                       ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
         print_remappings(remaps, 'mrg_slam_component')

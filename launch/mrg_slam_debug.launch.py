@@ -49,7 +49,8 @@ If you want to debug another node, you need to move the prefix in the full launc
 '''
 
 
-# Parameter type mapping to infer the correct data type from the cli string
+# Parameter type mapping to infer the correct data type from the cli argument string. This is necessary since all cli arguments are strings.
+# The parameters defined in the PARAM_MAPPING can be provided as cli arguments to overwrite the default values from the yaml file.
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
@@ -114,8 +115,6 @@ def launch_setup(context, *args, **kwargs):
         config_file
     )
 
-    # TODO update this launch script to reflect changes in mrg_slam.launch.py
-
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
         print('Loaded config file: ' + config_file_path)
@@ -153,9 +152,12 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(floor_detection_params, 'floor_detection_params')
     print_yaml_params(mrg_slam_params, 'mrg_slam_params')
 
-    # Create the static transform publisher node
-    frame_id = model_namespace + '/' + static_transform_params['base_frame_id']
-    child_frame_id = model_namespace + '/' + static_transform_params['lidar_frame_id']
+    # Create the static transform publisher node between the base and the lidar frame
+    frame_id = static_transform_params['base_frame_id']
+    child_frame_id = static_transform_params['lidar_frame_id']
+    if model_namespace != '':
+        frame_id = model_namespace + '/' + frame_id
+        child_frame_id = model_namespace + '/' + child_frame_id
     static_transform_publisher = Node(
         name='lidar2base_publisher',
         namespace=model_namespace,
@@ -174,8 +176,8 @@ def launch_setup(context, *args, **kwargs):
         output='both'
     )
 
-    # Create the map2robotmap publisher node
-    if map2robotmap_publisher_params['enable_map2robotmap_publisher']:
+    # Create the map2robotmap publisher node, if it is enabled and a model_namespace is set
+    if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
         map2robotmap_child_frame_id = model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
         map2robotmap_publisher = Node(
             name='map2robotmap_publisher',
@@ -206,7 +208,9 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # Create the map2odom publisher node
-    remaps = [('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map')]
+    remaps = []
+    if model_namespace != '':
+        remaps = [('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map')]
     print_remappings(remaps, 'map2odom_publisher_ros2')
     map2odom_publisher_ros2 = Node(
         package='mrg_slam',
@@ -219,8 +223,9 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # Create the container node
-    # container_name = model_namespace + '_mrg_slam_container'
-    container_name = model_namespace + '/mrg_slam_container'  # used in composable nodes
+    container_name = 'mrg_slam_container'
+    if model_namespace != '':
+        container_name = model_namespace + '/mrg_slam_container'  # used in composable nodes
     container = Node(
         package='rclcpp_components',
         executable='component_container_mt',
@@ -240,7 +245,8 @@ def launch_setup(context, *args, **kwargs):
         with open(velodyne_params_file, 'r') as f:
             driver_node_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
         # overwrite the frame_id to consider the model_namespace
-        driver_node_params['frame_id'] = model_namespace + '/' + velodyne_params['velodyne_driver']['frame_id']
+        if model_namespace != '':
+            driver_node_params['frame_id'] = model_namespace + '/' + velodyne_params['velodyne_driver']['frame_id']
         velodyne_driver_node = ComposableNode(
             package='velodyne_driver',
             plugin='velodyne_driver::VelodyneDriver',
@@ -255,7 +261,8 @@ def launch_setup(context, *args, **kwargs):
         with open(velodyne_transform_params_file, 'r') as f:
             transform_node_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
         # overwrite the frame_id to consider the model_namespace, and set correct calibration file
-        transform_node_params['fixed_frame'] = model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
+        if model_namespace != '':
+            transform_node_params['fixed_frame'] = model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
         transform_node_params['calibration'] = os.path.join(velodyne_transform_share_dir, 'params',
                                                             velodyne_params['velodyne_transform']['calibration'])
         velodyne_transform_node = ComposableNode(
@@ -268,11 +275,15 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
-    prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
-    remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
-              ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
-              ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-              ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points')]
+    # prefiltering component
+    remaps = [('/imu/data', shared_params['imu_topic']),
+              ('/velodyne_points', shared_params['points_topic'])]
+    if model_namespace != '':
+        prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
+        remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
+                  ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
+                  ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                  ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points')]
     print_remappings(remaps, 'prefiltering_component')
     if prefiltering_params['enable_prefiltering']:
         prefiltering_node = ComposableNode(
@@ -285,13 +296,17 @@ def launch_setup(context, *args, **kwargs):
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
-    remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-              ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
-              ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
-              ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
-              ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-              ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),]
+    # scan_matching_odometry component
+    remaps = [('/points_topic', shared_params['points_topic']),
+              ('/filtered_points', '/prefiltering/filtered_points'),]
+    if model_namespace != '':
+        remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                  ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
+                  ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
+                  ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
+                  ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+                  ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),]
     print_remappings(remaps, 'scan_matching_odometry_component')
     # set the correct frame ids according to the model namespace
     scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
@@ -307,8 +322,11 @@ def launch_setup(context, *args, **kwargs):
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
+    # helper node to write the odometry to a file
     if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
-        remaps = [('/odom', '/' + model_namespace + '/scan_matching_odometry/odom')]
+        remaps = [('/odom', '/scan_matching_odometry/odom')]
+        if model_namespace != '':
+            remaps = [('/odom', '/' + model_namespace + '/scan_matching_odometry/odom')]
         odom_to_file_node = Node(
             name='scan_matching_odom_to_file',
             package='mrg_slam',
@@ -320,12 +338,15 @@ def launch_setup(context, *args, **kwargs):
                          'every_n': 1}],
         )
 
-    remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-              ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-              ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-              ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
-              ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
-              ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')]
+    # floor_detection component
+    remaps = [('/points_topic', shared_params['points_topic'])]
+    if model_namespace != '':
+        remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
+                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                  ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+                  ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
+                  ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
+                  ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')]
     print_remappings(remaps, 'floor_detection_component')
     if floor_detection_params['enable_floor_detection']:
         floor_detection_node = ComposableNode(
@@ -338,8 +359,8 @@ def launch_setup(context, *args, **kwargs):
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
+    # mrg_slam component
     if mrg_slam_params['enable_graph_slam']:
-        # TODO remove own_name from mrg_slam_params.yaml and use the model_namespace instead
         mrg_slam_params['own_name'] = model_namespace
         # Overwrite init_pose array with the actual values
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
@@ -349,28 +370,31 @@ def launch_setup(context, *args, **kwargs):
         mrg_slam_params['init_pose'][4] = np.deg2rad(mrg_slam_params['pitch'])
         mrg_slam_params['init_pose'][5] = np.deg2rad(mrg_slam_params['yaw'])
         # set the correct frame ids according to the model namespace
-        mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
-        mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        remaps = [('/imu/data', shared_params['imu_topic']),
-                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                  ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-                  ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-                  ('/mrg_slam/map_points', '/' + model_namespace + '/mrg_slam/map_points'),
-                  ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
-                  ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
-                  ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
-                  ('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map'),
-                  ('/mrg_slam/read_until', '/' + model_namespace + '/mrg_slam/read_until'),
-                  ('/mrg_slam/others_poses', '/' + model_namespace + '/mrg_slam/others_poses'),
-                  ('/mrg_slam/publish_graph', '/' + model_namespace + '/mrg_slam/publish_graph'),
-                  ('/mrg_slam/slam_status', '/' + model_namespace + '/mrg_slam/slam_status'),
-                  ('/mrg_slam/save_graph', '/' + model_namespace + '/mrg_slam/save_graph'),
-                  ('/mrg_slam/save_map', '/' + model_namespace + '/mrg_slam/save_map'),
-                  ('/mrg_slam/get_map', '/' + model_namespace + '/mrg_slam/get_map'),
-                  ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
-                  ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
-                  ('/mrg_slam/save_gids', '/' + model_namespace + '/mrg_slam/save_gids'),
-                  ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),]
+        if model_namespace != '':
+            mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
+            mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
+        remaps = [('/imu/data', shared_params['imu_topic'])]
+        if model_namespace != '':
+            remaps = [('/imu/data', shared_params['imu_topic']),
+                      ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
+                      ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
+                      ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
+                      ('/mrg_slam/map_points', '/' + model_namespace + '/mrg_slam/map_points'),
+                      ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
+                      ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
+                      ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
+                      ('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map'),
+                      ('/mrg_slam/read_until', '/' + model_namespace + '/mrg_slam/read_until'),
+                      ('/mrg_slam/others_poses', '/' + model_namespace + '/mrg_slam/others_poses'),
+                      ('/mrg_slam/slam_status', '/' + model_namespace + '/mrg_slam/slam_status'),
+                      ('/mrg_slam/save_graph', '/' + model_namespace + '/mrg_slam/save_graph'),
+                      ('/mrg_slam/load_graph', '/' + model_namespace + '/mrg_slam/load_graph'),
+                      ('/mrg_slam/save_map', '/' + model_namespace + '/mrg_slam/save_map'),
+                      ('/mrg_slam/get_map', '/' + model_namespace + '/mrg_slam/get_map'),
+                      ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
+                      ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
+                      ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
+                      ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
         print_remappings(remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
@@ -400,6 +424,9 @@ def launch_setup(context, *args, **kwargs):
         target_container=container_name,
         composable_node_descriptions=composable_nodes
     )
+
+    # Note that we only launch the container and the composable nodes, since we are debugging the component container
+    # The remaining nodes are launched in the full version of the launch file
 
     launch_description_list = []
     # launch_description_list = [static_transform_publisher]
