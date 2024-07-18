@@ -9,6 +9,7 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 // pcl
 #include <pcl/io/pcd_io.h>
+#include <pcl_conversions/pcl_conversions.h>
 // mrg_slam
 #include <mrg_slam/keyframe.hpp>
 // ROS2
@@ -188,6 +189,10 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
     pcl::io::loadPCDFile( pcd_path, *cloud_ );
     cloud = std::move( cloud_ );
+
+    sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg_( new sensor_msgs::msg::PointCloud2() );
+    pcl::toROSMsg( *cloud, *cloud_msg_ );
+    cloud_msg = std::move( cloud_msg_ );
 
     return true;
 }
