@@ -8,7 +8,6 @@ from launch.actions import OpaqueFunction, DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
-import numpy as np
 
 # Parameter type mapping to infer the correct data type from the cli argument string. This is necessary since all cli arguments are strings.
 # The parameters defined in the PARAM_MAPPING can be provided as cli arguments to overwrite the default values from the yaml file.
@@ -335,9 +334,9 @@ def launch_setup(context, *args, **kwargs):
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
         mrg_slam_params['init_pose'][1] = mrg_slam_params['y']
         mrg_slam_params['init_pose'][2] = mrg_slam_params['z']
-        mrg_slam_params['init_pose'][3] = np.deg2rad(mrg_slam_params['roll'])
-        mrg_slam_params['init_pose'][4] = np.deg2rad(mrg_slam_params['pitch'])
-        mrg_slam_params['init_pose'][5] = np.deg2rad(mrg_slam_params['yaw'])
+        mrg_slam_params['init_pose'][3] = mrg_slam_params['roll']
+        mrg_slam_params['init_pose'][4] = mrg_slam_params['pitch']
+        mrg_slam_params['init_pose'][5] = mrg_slam_params['yaw']
         # set the correct frame ids according to the model namespace
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
@@ -405,14 +404,16 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list.append(load_composable_nodes)
     if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
         launch_description_list.append(odom_to_file_node)
-    # Return nodes to our OpenFunction
+    # Return nodes to our OpaqueFunction
     return launch_description_list
 
 
 def generate_launch_description():
     launch_description_list = []
+    # This loop enables the user to overwrite the default parameters from the yaml file with the cli arguments
     for param_name, _ in PARAM_MAPPING.items():
         launch_description_list.append(DeclareLaunchArgument(name=param_name, default_value=''))
+    # With the OpaqueFunction we can access launch context in the launch_setup function
     launch_description_list.append(OpaqueFunction(function=launch_setup))
 
     return LaunchDescription(launch_description_list)

@@ -8,7 +8,6 @@ from launch.actions import OpaqueFunction, DeclareLaunchArgument
 from launch_ros.actions import Node
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
-import numpy as np
 
 '''  
 This launch file can be used to debug the mrg_slam multi robot setup. 
@@ -366,9 +365,9 @@ def launch_setup(context, *args, **kwargs):
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
         mrg_slam_params['init_pose'][1] = mrg_slam_params['y']
         mrg_slam_params['init_pose'][2] = mrg_slam_params['z']
-        mrg_slam_params['init_pose'][3] = np.deg2rad(mrg_slam_params['roll'])
-        mrg_slam_params['init_pose'][4] = np.deg2rad(mrg_slam_params['pitch'])
-        mrg_slam_params['init_pose'][5] = np.deg2rad(mrg_slam_params['yaw'])
+        mrg_slam_params['init_pose'][3] = mrg_slam_params['roll']
+        mrg_slam_params['init_pose'][4] = mrg_slam_params['pitch']
+        mrg_slam_params['init_pose'][5] = mrg_slam_params['yaw']
         # set the correct frame ids according to the model namespace
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
@@ -444,14 +443,16 @@ def launch_setup(context, *args, **kwargs):
     # if multi_robot_communicator_params['enable_multi_robot_communicator']:
     #     launch_description_list.append(multi_robot_communicator)
 
-    # Return nodes
+    # Return nodes to our OpaqueFunction
     return launch_description_list
 
 
 def generate_launch_description():
     launch_description_list = []
+    # This loop enables the user to overwrite the default parameters from the yaml file with the cli arguments
     for param_name, _ in PARAM_MAPPING.items():
         launch_description_list.append(DeclareLaunchArgument(name=param_name, default_value=''))
+    # With the OpaqueFunction we can access launch context in the launch_setup function
     launch_description_list.append(OpaqueFunction(function=launch_setup))
 
     return LaunchDescription(launch_description_list)
