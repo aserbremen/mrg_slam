@@ -495,9 +495,9 @@ private:
             pose_mat = pose.matrix();
         } else {
             Eigen::Matrix<double, 6, 1> p( init_pose_vec.data() );
-            pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitX() )
+            pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitZ() )
                                                * Eigen::AngleAxisd( p[4], Eigen::Vector3d::UnitY() )
-                                               * Eigen::AngleAxisd( p[3], Eigen::Vector3d::UnitZ() ) )
+                                               * Eigen::AngleAxisd( p[3], Eigen::Vector3d::UnitX() ) )
                                                  .toRotationMatrix();
             pose_mat.topRightCorner<3, 1>() = p.head<3>();
             // don't remove odom because we assume that the provided pose corresponds to the pose of the rover when starting the
