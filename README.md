@@ -12,7 +12,7 @@ The `floor_detection_component` is optional and can be used to improve the SLAM 
 
 Here are some things to consider when using the `mrg_slam` package:
 
-- The launch file [mrg_slam.launch.py](launch/mrg_slam.launch.py) launches all the components required for the SLAM in a component container with intraprocess communication enabled. 
+- The launch file [mrg_slam.launch.py](launch/mrg_slam.launch.py) launches all the components required for the SLAM in a component container with intraprocess communication enabled. Plus additional nodes that are required for the SLAM to work.
 - Command line arguments can be used in conjunction with the launch file to set certain parameters, such as the robot name and the initial pose of the robot.
   - The `PARAM_MAPPING` dictionary in the launch file maps the command line arguments to the parameters of the components and overwrites if they are given as command line arguments. You can remove and add parameters to the dictionary as needed.
   - All kinds of topics and services are remapped in the launch file to consider the `model_namespace` aka the robot name.
@@ -42,5 +42,5 @@ Here are some things to consider when using the `mrg_slam` package:
 - Depending `keyframe_delta_trans` and `keyframe_delta_angle` parameters, the component decides when to add a new keyframe to the graph. 
 - The graph is updated at `graph_update_interval` parameter.
 - When using multiple robots, the initial poses of all robots should be set w.r.t. the same global frame.
-   - The initial poses of the robots needs to be set using the `x`, `y`, `z` (in meters) and `roll`, `pitch`, and `yaw` (in degrees) parameters in the configuration file. Alternatively, the initial pose can be set using the command line arguments. `ros2 launch mrg_slam mrg_slam.launch.py model_namespace:=robot1 x:=0.0 y:=0.0 z:=0.0 roll:=0.0 pitch:=0.0 yaw:=0.0`.
+   - The initial poses of the robots needs to be set using the `x`, `y`, `z` (in meters) and `roll`, `pitch`, and `yaw` (in radians) parameters in the configuration file. Alternatively, the initial pose can be set using the command line arguments. `ros2 launch mrg_slam mrg_slam.launch.py model_namespace:=robot1 x:=0.0 y:=0.0 z:=0.0 roll:=0.0 pitch:=0.0 yaw:=0.0`.
   - Each robot performs SLAM in its own local frame. We enable a static transform broadcaster `map2robotmap_publisher` node to publish the transform between the global frame `map` and the local frame of the robot `model_namespace/map`. This way the maps of all robots can be visualized in the global frame rviz2.
