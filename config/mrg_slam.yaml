@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "" # is going to be used as namespace for all topics and tf frames
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
@@ -236,7 +236,8 @@ mrg_slam_component:
     # ranging params
     enable_ranging: true
     ranging_sub_topic: "/ranging_measurement"
-    ranging_names: ["atlas", "bestla", "RadioBox0", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"]
+    ranging_robot_sub_topic: "/odom_ground_truth"
+    ranging_names: ["Lander", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"]
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0
