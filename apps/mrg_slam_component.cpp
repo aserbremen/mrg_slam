@@ -38,6 +38,7 @@
 #include <mrg_slam/loop_detector.hpp>
 #include <mrg_slam/map_cloud_generator.hpp>
 #include <mrg_slam/markers_publisher.hpp>
+#include <mrg_slam/ranging_processor.hpp>
 #include <mrg_slam/ros_utils.hpp>
 #include <mrg_slam_msgs/msg/graph_ros.hpp>
 #include <mrg_slam_msgs/msg/pose_with_name.hpp>
@@ -246,6 +247,7 @@ public:
         gps_processor.onInit( node_ros );
         imu_processor.onInit( node_ros );
         floor_coeffs_processor.onInit( node_ros );
+        ranging_processor.onInit( node_ros );
         markers_pub.onInit( node_ros );
 
         slam_status_msg.initialized = true;
@@ -879,7 +881,8 @@ private:
         if( !keyframe_updated & !graph_database->flush_graph_queue( others_prev_robot_keyframes ) & !graph_database->flush_loaded_graph()
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )
-            & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id ) ) {
+            & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id )
+            & !ranging_processor.flush( graph_slam, graph_database->get_keyframes() ) ) {
             optimization_timer->reset();
             return;
         }
@@ -1440,6 +1443,7 @@ private:
     ImuProcessor         imu_processor;
     GpsProcessor         gps_processor;
     FloorCoeffsProcessor floor_coeffs_processor;
+    RangingProcessor     ranging_processor;
 
     MarkersPublisher markers_pub;
 

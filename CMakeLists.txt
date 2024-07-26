@@ -70,6 +70,7 @@ find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
+find_package(ros2_radio_ranging_interfaces REQUIRED)
 # ROS2 python depencencies
 find_package(ament_cmake_python REQUIRED)
 find_package(rclpy REQUIRED)
@@ -213,6 +214,7 @@ add_library(mrg_slam_component SHARED
   src/mrg_slam/imu_processor.cpp
   src/mrg_slam/gps_processor.cpp
   src/mrg_slam/floor_coeffs_processor.cpp
+  src/mrg_slam/ranging_processor.cpp
   src/mrg_slam/markers_publisher.cpp
   src/g2o/robust_kernel_io.cpp
 )
@@ -250,6 +252,7 @@ ament_target_dependencies(mrg_slam_component
   mrg_slam_msgs
   fast_gicp
   ndt_omp
+  ros2_radio_ranging_interfaces
 )
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(mrg_slam_component "mrg_slam::MrgSlamComponent")
