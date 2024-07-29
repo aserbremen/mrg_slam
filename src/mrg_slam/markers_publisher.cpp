@@ -6,6 +6,7 @@
 #include <g2o/edge_se3_plane.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
+#include <g2o/edge_se3_ranging.hpp>
 #include <mrg_slam/markers_publisher.hpp>
 #include <rclcpp/logging.hpp>
 
@@ -83,10 +84,15 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     color_white.b = 1.0;
     color_white.a = 1.0;
 
-    color_gray.r = 0.5;
-    color_gray.g = 0.5;
-    color_gray.b = 0.5;
-    color_gray.a = 1.0;
+    color_light_gray.r = 0.75;
+    color_light_gray.g = 0.75;
+    color_light_gray.b = 0.75;
+    color_light_gray.a = 1.0;
+
+    color_dark_gray.r = 0.45;
+    color_dark_gray.g = 0.45;
+    color_dark_gray.b = 0.45;
+    color_dark_gray.a = 1.0;
 }
 
 
@@ -232,15 +238,19 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
             main_edge_marker.points[i * 2 + 1].z = pt2.z();
 
             if( edge->from_keyframe->robot_name == own_name && edge->to_keyframe->robot_name == own_name ) {
-                if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
+                if( edge->type == Edge::TYPE_ANCHOR ) {
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_dark_gray;
+                } else if( edge->type == Edge::TYPE_ODOM ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red;
-                } else {
+                } else if( edge->type == Edge::TYPE_LOOP ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple;
                 }
             } else {
-                if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
+                if( edge->type == Edge::TYPE_ANCHOR ) {
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_light_gray;
+                } else if( edge->type == Edge::TYPE_ODOM ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_orange;
-                } else {
+                } else if( edge->type == Edge::TYPE_LOOP ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_pink;
                 }
             }
@@ -365,6 +375,31 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
                 i++;
                 continue;
             }
+
+            g2o::EdgeSE3Ranging* edge_ranging = dynamic_cast<g2o::EdgeSE3Ranging*>( edge );
+            if( edge_ranging ) {
+                g2o::VertexSE3* v1  = dynamic_cast<g2o::VertexSE3*>( edge_ranging->vertices()[0] );
+                g2o::VertexSE3* v2  = dynamic_cast<g2o::VertexSE3*>( edge_ranging->vertices()[1] );
+                Eigen::Vector3d pt1 = v1->estimate().translation();
+                Eigen::Vector3d pt2 = v2->estimate().translation();
+
+                misc_edge_marker.points[i * 2].x     = pt1.x();
+                misc_edge_marker.points[i * 2].y     = pt1.y();
+                misc_edge_marker.points[i * 2].z     = pt1.z();
+                misc_edge_marker.points[i * 2 + 1].x = pt2.x();
+                misc_edge_marker.points[i * 2 + 1].y = pt2.y();
+                misc_edge_marker.points[i * 2 + 1].z = pt2.z();
+
+                misc_edge_marker.colors[i * 2].r     = 1.0;
+                misc_edge_marker.colors[i * 2].g     = 1.0;
+                misc_edge_marker.colors[i * 2].a     = 1.0;
+                misc_edge_marker.colors[i * 2 + 1].r = 1.0;
+                misc_edge_marker.colors[i * 2 + 1].g = 1.0;
+                misc_edge_marker.colors[i * 2 + 1].a = 1.0;
+
+                i++;
+                continue;
+            }
         }
 
         if( i == 0 ) {
@@ -378,7 +413,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     sphere_marker.header.stamp                     = stamp;
     sphere_marker.ns                               = "loop_close_radius";
     sphere_marker.id                               = MARKER_SPHERE;
-    sphere_marker.type                             = visualization_msgs::msg::Marker::SPHERE;
+    sphere_marker.type                             = visualization_msgs::msg::Marker::CYLINDER;
 
     if( !keyframes.empty() ) {
         Eigen::Vector3d pos           = last_keyframe->node->estimate().translation();
@@ -387,10 +422,11 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         sphere_marker.pose.position.z = pos.z();
     }
     sphere_marker.pose.orientation.w = 1.0;
-    sphere_marker.scale.x = sphere_marker.scale.y = sphere_marker.scale.z = loop_detector_distance_thresh * 2.0;
+    sphere_marker.scale.x = sphere_marker.scale.y = loop_detector_distance_thresh * 2.0;
+    sphere_marker.scale.z                         = 0.05;
 
     sphere_marker.color.r = 1.0;
-    sphere_marker.color.a = 0.3;
+    sphere_marker.color.a = 0.06;
 
     // markers_pub.publish( markers );
     markers_pub->publish( markers );
