@@ -878,6 +878,7 @@ private:
             read_until_pub->publish( read_until );
         }
 
+        // Check whether optimization is necessary
         if( !keyframe_updated & !graph_database->flush_graph_queue( others_prev_robot_keyframes ) & !graph_database->flush_loaded_graph()
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )

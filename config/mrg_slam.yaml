@@ -235,9 +235,13 @@ mrg_slam_component:
     graph_exchange_mode: "PATH_PROXIMITY"
     # ranging params
     enable_ranging: true
-    ranging_sub_topic: "/ranging_measurement"
-    ranging_robot_sub_topic: "/odom_ground_truth"
+    ranging_topic: "/ranging_measurement" # topic which offers the ranging measurements
+    ranging_position_topic: "/gnss_rtk_rel_nav" # topic which offers the position of the ranging boxes in cartesian coordinates
+    # all ranging (box) names need to be specified here
     ranging_names: ["Lander", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"]
+    ranging_position_stddev: 0.05 # stddev in meter for a stationary ranging box
+    ranging_orientation_stddev: 0.1 # stddev in rad for a stationary ranging box
+    ranging_max_time_diff: 0.05 # [sec] max allowed seconds between keyframe (cloud + odom) and ranging measurement 
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0

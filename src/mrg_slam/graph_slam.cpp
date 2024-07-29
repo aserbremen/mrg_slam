@@ -22,6 +22,7 @@
 #include <g2o/edge_se3_priorvec.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
+#include <g2o/edge_se3_ranging.hpp>
 #include <g2o/robust_kernel_io.hpp>
 #include <mrg_slam/graph_slam.hpp>
 
@@ -35,6 +36,7 @@ G2O_REGISTER_TYPE( EDGE_SE3_PRIORXY, EdgeSE3PriorXY )
 G2O_REGISTER_TYPE( EDGE_SE3_PRIORXYZ, EdgeSE3PriorXYZ )
 G2O_REGISTER_TYPE( EDGE_SE3_PRIORVEC, EdgeSE3PriorVec )
 G2O_REGISTER_TYPE( EDGE_SE3_PRIORQUAT, EdgeSE3PriorQuat )
+G2O_REGISTER_TYPE( EDGE_SE3_RANGING, EdgeSE3Ranging )
 G2O_REGISTER_TYPE( EDGE_PLANE_PRIOR_NORMAL, EdgePlanePriorNormal )
 G2O_REGISTER_TYPE( EDGE_PLANE_PRIOR_DISTANCE, EdgePlanePriorDistance )
 G2O_REGISTER_TYPE( EDGE_PLANE_IDENTITY, EdgePlaneIdentity )
@@ -182,6 +184,20 @@ GraphSLAM::add_se3_point_xyz_edge( g2o::VertexSE3* v_se3, g2o::VertexPointXYZ* v
     edge->setInformation( information_matrix );
     edge->vertices()[0] = v_se3;
     edge->vertices()[1] = v_xyz;
+    graph->addEdge( edge );
+
+    return edge;
+}
+
+g2o::EdgeSE3Ranging*
+GraphSLAM::add_se3_ranging_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, double range, const Eigen::MatrixXd& information_matrix )
+{
+    g2o::EdgeSE3Ranging* edge( new g2o::EdgeSE3Ranging() );
+    edge->setId( static_cast<int>( graph->edges().size() ) );
+    edge->setMeasurement( range );
+    edge->setInformation( information_matrix );
+    edge->vertices()[0] = v1;
+    edge->vertices()[1] = v2;
     graph->addEdge( edge );
 
     return edge;

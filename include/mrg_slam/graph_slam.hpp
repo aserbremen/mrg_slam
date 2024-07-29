@@ -4,6 +4,7 @@
 #define GRAPH_SLAM_HPP
 
 #include <g2o/core/hyper_graph.h>
+#include <g2o/core/optimizable_graph.h>
 #include <g2o/core/sparse_block_matrix.h>
 
 #include <memory>
@@ -20,6 +21,7 @@ class EdgeSE3PriorXY;
 class EdgeSE3PriorXYZ;
 class EdgeSE3PriorVec;
 class EdgeSE3PriorQuat;
+class EdgeSE3Ranging;
 class EdgePlane;
 class EdgePlaneIdentity;
 class EdgePlaneParallel;
@@ -94,6 +96,18 @@ public:
      */
     g2o::EdgeSE3PointXYZ* add_se3_point_xyz_edge( g2o::VertexSE3* v_se3, g2o::VertexPointXYZ* v_xyz, const Eigen::Vector3d& xyz,
                                                   const Eigen::MatrixXd& information_matrix );
+
+
+    /**
+     * @brief add an edge between two SE3 nodes
+     * @param v1 SE3 node of the rover
+     * @param v2 SE3 node of another rover or stationary ranging box
+     * @param range range
+     * @param information_matrix information_matrix (it must be a 1x1)
+     * @return registered edge
+     */
+    g2o::EdgeSE3Ranging* add_se3_ranging_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, double range,
+                                               const Eigen::MatrixXd& information_matrix );
 
     /**
      * @brief add a prior edge to an SE3 node
