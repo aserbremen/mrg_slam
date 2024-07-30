@@ -22,7 +22,6 @@
 #include <g2o/edge_se3_priorvec.hpp>
 #include <g2o/edge_se3_priorxy.hpp>
 #include <g2o/edge_se3_priorxyz.hpp>
-#include <g2o/edge_se3_ranging.hpp>
 #include <g2o/robust_kernel_io.hpp>
 #include <mrg_slam/graph_slam.hpp>
 

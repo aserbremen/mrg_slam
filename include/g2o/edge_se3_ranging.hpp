@@ -33,8 +33,6 @@
 
 #include <Eigen/Core>
 
-#include "vertex_position3d.hpp"
-
 namespace g2o {
 
 class EdgeSE3Ranging : public BaseBinaryEdge<1, double, VertexSE3, VertexSE3> {

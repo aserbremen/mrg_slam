@@ -241,7 +241,9 @@ mrg_slam_component:
     ranging_names: ["Lander", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"]
     ranging_position_stddev: 0.05 # stddev in meter for a stationary ranging box
     ranging_orientation_stddev: 0.1 # stddev in rad for a stationary ranging box
-    ranging_max_time_diff: 0.05 # [sec] max allowed seconds between keyframe (cloud + odom) and ranging measurement 
+    ranging_max_time_diff: 0.005 # [sec] max allowed seconds between keyframe (cloud + odom) and ranging measurement 
+    ranging_edge_robust_kernel: "Huber"
+    ranging_edge_robust_kernel_size: 0.05
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0

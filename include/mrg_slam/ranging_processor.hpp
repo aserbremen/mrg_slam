@@ -21,15 +21,17 @@
 #include <Eigen/Dense>
 
 namespace mrg_slam {
+
+// Ranging data for a single ranging device
 struct RangingData {
 public:
-    RangingData() : initialized( false ), pose( Eigen::Isometry3d::Identity() ), position_sub( nullptr ), se3_vertex( nullptr ) {}
-    bool                                                     initialized;
-    Eigen::Isometry3d                                        pose;
-    std::deque<nav_msgs::msg::Odometry::ConstSharedPtr>      position_deque;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr position_sub;
-    g2o::VertexSE3                                          *se3_vertex;
-    std::vector<g2o::EdgeSE3Ranging *>                       edges_se3_ranging;
+    RangingData() : initialized( false ), position_sub( nullptr ), pose( Eigen::Isometry3d::Identity() ), se3_vertex( nullptr ) {}
+    bool                                                     initialized;     // whether the ranging device has been initialized
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr position_sub;    // subscription to the position (odom) of the ranging device
+    std::deque<nav_msgs::msg::Odometry::ConstSharedPtr>      position_deque;  // odom messages of the ranging device
+    Eigen::Isometry3d                                        pose;            // pose of the ranging device
+    g2o::VertexSE3                                          *se3_vertex;      // for now stationary vertex of the ranging device
+    std::vector<g2o::EdgeSE3Ranging *>                       edges_se3_ranging;  // g2o ranging edges, can be used for visualization
 };
 
 class RangingProcessor {
@@ -38,13 +40,19 @@ public:
 
     void onInit( rclcpp::Node::SharedPtr _node );
 
-    void position_callback( const nav_msgs::msg::Odometry::SharedPtr position_msg );
+    void position_callback( nav_msgs::msg::Odometry::ConstSharedPtr position_msg );
 
     void ranging_callback( ros2_radio_ranging_interfaces::msg::Range::ConstSharedPtr ranging_msg );
 
     bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes );
 
     void init_positions( std::shared_ptr<GraphSLAM> &graph_slam );
+
+    KeyFrame::Ptr find_closest_keyframe( ros2_radio_ranging_interfaces::msg::Range::ConstSharedPtr range_msg,
+                                         const std::vector<KeyFrame::Ptr>                         &keyframes );
+
+    void add_ranging_edge( std::shared_ptr<GraphSLAM> &graph_slam, ros2_radio_ranging_interfaces::msg::Range::ConstSharedPtr range_msg,
+                           KeyFrame::Ptr keyframe );
 
 private:
     rclcpp::Node::SharedPtr node;
@@ -54,9 +62,11 @@ private:
     double                   ranging_position_stddev;
     double                   ranging_orientation_stddev;
     double                   ranging_max_time_diff;
+    std::string              ranging_edge_robust_kernel;
+    double                   ranging_edge_robust_kernel_size;
 
     std::string ranging_position_topic;
-    // ranging name -> all relevant data
+    // ranging device name -> all relevant data
     std::unordered_map<std::string, RangingData> ranging_data_map;
 
     std::string                                                                ranging_topic;

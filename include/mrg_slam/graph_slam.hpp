@@ -7,8 +7,8 @@
 #include <g2o/core/optimizable_graph.h>
 #include <g2o/core/sparse_block_matrix.h>
 
+#include <g2o/edge_se3_ranging.hpp>
 #include <memory>
-// ROS2 migration replaces ros/time.h with std::chrono usage
 
 namespace g2o {
 class VertexSE3;
