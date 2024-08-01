@@ -15,10 +15,10 @@
 #include <memory>
 #include <mrg_slam/registrations.hpp>
 #include <mrg_slam/ros_utils.hpp>
+#include <mrg_slam_msgs/msg/scan_matching_status.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <mrg_slam_msgs/msg/scan_matching_status.hpp>
 
 namespace mrg_slam {
 
@@ -28,13 +28,11 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // We need to pass NodeOptions in ROS2 to register a component
-    ScanMatchingOdometryComponent( const rclcpp::NodeOptions&            options,
-                                   const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "scan_matching_odometry_component", options )
+    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing scan_matching_odometry_component..." );
 
-        initialize_params( param_vec );
+        initialize_params();
 
         if( downsample_method == "VOXELGRID" ) {
             std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
@@ -100,28 +98,33 @@ public:
 
 private:
     /**
-     * @brief initialize parameters
+     * @brief initialize ROS2 parameters
      */
-    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
-        // Declare all parameters first
-        this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
-        this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
+        // Declare and set ROS2 parameters
+        points_topic        = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
-        this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
-        this->declare_parameter<double>( "keyframe_delta_angle", 0.15 );
-        this->declare_parameter<double>( "keyframe_delta_time", 1.0 );
+        keyframe_delta_trans = this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
+        keyframe_delta_angle = this->declare_parameter<double>( "keyframe_delta_angle", 0.15 );
+        keyframe_delta_time  = this->declare_parameter<double>( "keyframe_delta_time", 1.0 );
 
-        this->declare_parameter<bool>( "transform_thresholding", false );
-        this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
-        this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
+        transform_thresholding = this->declare_parameter<bool>( "transform_thresholding", false );
+        max_acceptable_trans   = this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
+        max_acceptable_angle   = this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
 
-        this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
-        this->declare_parameter<bool>( "enable_imu_frontend", false );
+        enable_robot_odometry_init_guess = this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
+        enable_imu_frontend              = this->declare_parameter<bool>( "enable_imu_frontend", false );
 
-        this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+
+        result_dir = this->declare_parameter<std::string>( "result_dir", "" );
+        if( result_dir.back() == '/' ) {
+            result_dir.pop_back();
+        }
 
         // Regastration method parameters, used in select_registration_method()
         this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
@@ -134,35 +137,6 @@ private:
         this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
         this->declare_parameter<double>( "reg_resolution", 1.0 );
         this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
-        this->declare_parameter<std::string>( "result_dir", "" );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
-
-        // Set all member variables
-        downsample_method     = this->get_parameter( "downsample_method" ).as_string();
-        downsample_resolution = this->get_parameter( "downsample_resolution" ).as_double();
-
-        points_topic        = this->get_parameter( "points_topic" ).as_string();
-        odom_frame_id       = this->get_parameter( "odom_frame_id" ).as_string();
-        robot_odom_frame_id = this->get_parameter( "robot_odom_frame_id" ).as_string();
-
-        keyframe_delta_trans = this->get_parameter( "keyframe_delta_trans" ).as_double();
-        keyframe_delta_angle = this->get_parameter( "keyframe_delta_angle" ).as_double();
-        keyframe_delta_time  = this->get_parameter( "keyframe_delta_time" ).as_double();
-
-        transform_thresholding = this->get_parameter( "transform_thresholding" ).as_bool();
-        max_acceptable_trans   = this->get_parameter( "max_acceptable_trans" ).as_double();
-        max_acceptable_angle   = this->get_parameter( "max_acceptable_angle" ).as_double();
-
-        enable_robot_odometry_init_guess = this->get_parameter( "enable_robot_odometry_init_guess" ).as_bool();
-        enable_imu_frontend              = this->get_parameter( "enable_imu_frontend" ).as_bool();
-        result_dir                       = this->get_parameter( "result_dir" ).as_string();
-        if( result_dir.back() == '/' ) {
-            result_dir.pop_back();
-        }
     }
 
     /**
@@ -185,11 +159,13 @@ private:
         registration_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
         cloud_sizes.push_back( cloud->size() );
         if( counter % 100 == 0 ) {
-            std::cout << "Average scan matching odom registration time: "
-                      << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 ) / registration_times.size() << "us"
-                      << std::endl;
-            std::cout << "average scan matching odom cloud size: "
-                      << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 ) / cloud_sizes.size() << std::endl;
+            RCLCPP_DEBUG_STREAM( this->get_logger(), "Average scan matching odom registration time: "
+                                                         << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 )
+                                                                / registration_times.size()
+                                                         << "us" );
+            RCLCPP_DEBUG_STREAM( this->get_logger(),
+                                 "average scan matching odom cloud size: " << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 )
+                                                                                  / cloud_sizes.size() );
         }
 
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
@@ -273,7 +249,7 @@ private:
         } else if( enable_robot_odometry_init_guess && !( prev_time.nanoseconds() == 0 ) ) {
             geometry_msgs::msg::TransformStamped transform;
             // According to https://answers.ros.org/question/312648/could-not-find-waitfortransform-function-in-tf2-package-of-ros2/ the
-            // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout, TODO, verify
+            // equivalent for waitforTranform is to use canTransform of tfBuffer with a timeout
             if( tf_buffer->canTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
                                          rclcpp::Duration( 0, 0 ) ) ) {
                 try {
@@ -452,11 +428,11 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr msf_pose_after_update_sub;
 
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                  odom_pub;
-    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr     trans_pub;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr                odom_pub;
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr   trans_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::ScanMatchingStatus>::SharedPtr status_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr            aligned_points_pub;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                    read_until_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr          aligned_points_pub;
+    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                  read_until_pub;
 
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
@@ -500,7 +476,7 @@ private:
 
     std::string         result_dir;
     std::vector<double> registration_times;
-    std::vector<int>    cloud_sizes;
+    std::vector<int>    cloud_sizes;  // for debugging
 };
 
 }  // namespace mrg_slam

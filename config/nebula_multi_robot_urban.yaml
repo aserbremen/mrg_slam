@@ -5,7 +5,6 @@
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
-    start_rviz2: false
 
 # Transform between lidar and base_link
 lidar2base_publisher:
@@ -80,7 +79,7 @@ scan_matching_odometry_component:
 
     transform_thresholding: false
     max_acceptable_trans: 1.0
-    max_acceptable_angle: 1.0
+    max_acceptable_angle: 1.0 # rad
 
     enable_robot_odometry_init_guess: false
     enable_imu_frontend: false
@@ -121,8 +120,10 @@ floor_detection_component:
 mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
+    # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "husky1"
-    /properties/scenario/rovers/names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
+    # The names of the robots that are part of the multi-robot system need to be specified here
+    multi_robot_names: ["husky1", "husky2", "husky3", "husky4", "spot1", "spot2", "spot4"] # list all possible robot names, even if not used
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -130,9 +131,9 @@ mrg_slam_component:
     x: 0.0
     y: 0.0
     z: 0.0
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
+    roll: 0.0 # rad
+    pitch: 0.0 # rad
+    yaw: 0.0 # rad
     # init_pose array is overwritten by above values
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
     init_pose_topic: "NONE"
@@ -151,15 +152,15 @@ mrg_slam_component:
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 2.0
-    keyframe_delta_angle: 2.0
+    keyframe_delta_angle: 2.0 # rad
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
     # loop closure params
-    distance_thresh: 15.0
-    accum_distance_thresh: 25.0
-    min_edge_interval: 15.0
+    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    accum_distance_thresh: 25.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
+    min_edge_interval: 15.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
     use_planar_registration_guess: false

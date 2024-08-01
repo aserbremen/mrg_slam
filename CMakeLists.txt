@@ -22,7 +22,6 @@ message(STATUS "PCL_DEFINITIONS:" ${PCL_DEFINITIONS})
 find_package(G2O REQUIRED)
 include_directories(SYSTEM ${G2O_INCLUDE_DIR} ${G2O_INCLUDE_DIRS})
 link_directories(${G2O_LIBRARY_DIRS})
-# link_libraries(${G2O_LIBRARIES})
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
@@ -82,9 +81,6 @@ endif ()
 ###########
 ## Build ##
 ###########
-# create ament index resource which references the libraries in the binary dir
-# TODO what is this actually for?
-set(node_plugins "")
 
 # Include local mrg_slam headers
 include_directories(include)
@@ -117,12 +113,8 @@ ament_target_dependencies(floor_detection_component
   ndt_omp
   fast_gicp
 )
-# Make the component depend on custom messages in its own package.
-# rosidl_target_interfaces(floor_detection_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(floor_detection_component "mrg_slam::FloorDetectionComponent")
-set(node_plugins "{node_plugins}mrg_slam::FloorDetectionComponent;$<TARGET_FILE:floor_detection_component>\n")
-
 # Install the floor_detection_component (libfloor_detection_component.so) in workspace install folder
 install(
   TARGETS floor_detection_component
@@ -160,8 +152,6 @@ ament_target_dependencies(scan_matching_odometry_component
 )
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(scan_matching_odometry_component "mrg_slam::ScanMatchingOdometryComponent")
-set(node_plugins "{node_plugins}mrg_slam::ScanMatchingOdometryComponent;$<TARGET_FILE:scan_matching_odometry_component>\n")
-
 # Install the scan_matching_odometry_component (scan_matching_odometry_component.so) in workspace install folder
 install(
   TARGETS scan_matching_odometry_component
@@ -197,8 +187,6 @@ ament_target_dependencies(prefiltering_component
 )
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(prefiltering_component "mrg_slam::PrefilteringComponent")
-set(node_plugins "{node_plugins}mrg_slam::PrefilteringComponent;$<TARGET_FILE:prefiltering_component>\n")
-
 # Install the prefiltering_component (prefiltering_component.so) in workspace install folder
 install(
   TARGETS prefiltering_component
@@ -213,6 +201,7 @@ install(
 ##############################
 add_library(mrg_slam_component SHARED
   apps/mrg_slam_component.cpp
+  src/mrg_slam/graph_database.cpp
   src/mrg_slam/graph_slam.cpp
   src/mrg_slam/edge.cpp
   src/mrg_slam/loop_detector.cpp
@@ -264,7 +253,6 @@ ament_target_dependencies(mrg_slam_component
 )
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(mrg_slam_component "mrg_slam::MrgSlamComponent")
-set(node_plugins "{node_plugins}mrg_slam::MrgSlamComponent;$<TARGET_FILE:mrg_slam_component>\n")
 # Install the mrg_slam_component (mrg_slam_component.so) in workspace install folder
 install(
   TARGETS mrg_slam_component
@@ -274,28 +262,6 @@ install(
   RUNTIME DESTINATION bin
 )
 
-#######################################
-## HDL Graph Slam manual composition ##
-#######################################
-option(BUILD_MANUAL_COMPOSITION "Build manual composition of components" OFF)
-# only build if debugging mrg_slam is needed, saving compile time
-if (BUILD_MANUAL_COMPOSITION)
-  add_executable(mrg_slam_manual_composition
-    apps/mrg_slam_manual_composition.cpp
-  )
-  target_link_libraries(mrg_slam_manual_composition
-    prefiltering_component
-    scan_matching_odometry_component
-    floor_detection_component
-    mrg_slam_component
-  )
-  ament_target_dependencies(mrg_slam_manual_composition
-    rclcpp
-  )
-  install(TARGETS mrg_slam_manual_composition
-    DESTINATION lib/${PROJECT_NAME}
-  )
-endif()
 
 # Here we can export all downstream dependencies and include directories
 # TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892

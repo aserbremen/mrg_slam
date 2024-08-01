@@ -5,7 +5,6 @@
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "/velodyne_points"
     imu_topic: "/imu/data"
-    start_rviz2: false
 
 # Transform between lidar and base_link
 lidar2base_publisher:
@@ -35,6 +34,21 @@ map2robotmap_publisher:
 clock_publisher_ros2:
   ros__parameters:
     imu_topic: "/gpsimu_driver/imu_data"
+
+# Parameters for the Velodyne driver and transform
+velodyne:
+  ros__parameters:
+    enable_velodyne: false
+    velodyne_driver:
+        # This file will be loaded from the velodyne_driver package config share directory
+        driver_node_params_file: VLP16-velodyne_driver_node-params.yaml
+        frame_id: velodyne # is prepended by model_namespace
+    velodyne_transform:
+        # This file will be loaded from the velodyne_transform package config share directory
+        transform_node_params_file: VLP16-velodyne_transform_node-params.yaml
+        # This params file will be loaded from the velodyne_transform params package share directory
+        calibration: VLP16db.yaml
+        fixed_frame: "velodyne" # is prepended by model_namespace
 
 # Prefiltering component parameters
 prefiltering_component:
@@ -76,12 +90,12 @@ scan_matching_odometry_component:
     robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
-    keyframe_delta_angle: 1.0
+    keyframe_delta_angle: 0.5236 # == 30 degrees
     keyframe_delta_time: 10000.0
 
     transform_thresholding: false
     max_acceptable_trans: 1.0
-    max_acceptable_angle: 1.0
+    max_acceptable_angle: 1.0 # rad
 
     enable_robot_odometry_init_guess: false
     enable_imu_frontend: false
@@ -122,8 +136,10 @@ floor_detection_component:
 mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
-    own_name: "atlas"
-    /properties/scenario/rovers/names: ["atlas", "bestla"]
+    # The own_name is set to the model_namespace in the launch file, so don't worry about it
+    own_name: "atlas" # is overwritten by the model_namespace
+    # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
+    multi_robot_names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
@@ -131,15 +147,17 @@ mrg_slam_component:
     x: 0.0
     y: 0.0
     z: 0.0
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
+    roll: 0.0 # rad
+    pitch: 0.0 # rad
+    yaw: 0.0 # rad
     # init_pose array is overwritten by above values
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
     init_pose_topic: "NONE"
     # Frame settings
     map_frame_id: "map"
     odom_frame_id: "odom"
+    odom_sub_topic: "/scan_matching_odometry/odom" # topic should include / at the beginning, is prepended by model_namespace
+    cloud_sub_topic: "/prefiltering/filtered_points" # topic should include / at the beginning, is prepended by model_namespace
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
@@ -152,15 +170,15 @@ mrg_slam_component:
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
-    keyframe_delta_angle: 1.0
+    keyframe_delta_angle: 1.0 # rad
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
-    fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665]
+    fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
     # loop closure params
-    distance_thresh: 15.0
-    accum_distance_thresh: 25.0
-    min_edge_interval: 15.0
+    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
+    min_edge_interval: 5.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
     fitness_score_thresh: 2.5
     use_planar_registration_guess: false

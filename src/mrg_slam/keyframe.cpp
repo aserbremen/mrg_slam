@@ -1,70 +1,69 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+// boost
+#include <boost/filesystem.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+// g2o
 #include <g2o/core/sparse_optimizer.h>
 #include <g2o/types/slam3d/vertex_se3.h>
+// pcl
 #include <pcl/io/pcd_io.h>
-
-#include <boost/filesystem.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <pcl_conversions/pcl_conversions.h>
+// mrg_slam
 #include <mrg_slam/keyframe.hpp>
-// ROS2 migration
+// ROS2
 #include <rclcpp/logging.hpp>
 
 namespace mrg_slam {
 
 KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
-                    int odom_keyframe_counter, const boost::uuids::uuid& uuid, double accum_distance,
+                    int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
                     const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
     robot_name( robot_name ),
     stamp( stamp ),
     odom( odom ),
     odom_keyframe_counter( odom_keyframe_counter ),
     uuid( uuid ),
-    uuid_str( boost::uuids::to_string( uuid ) ),
+    uuid_str( uuid_str ),
     accum_distance( accum_distance ),
     first_keyframe( false ),
     cloud( cloud ),
     cloud_msg( cloud_msg ),
     node( nullptr )
 {
-    readable_id = robot_name + "-" + std::to_string( odom_keyframe_counter );
+    if( robot_name.empty() ) {
+        readable_id = empty_robot_name_str;
+    } else {
+        readable_id = robot_name;
+    }
+    readable_id += "." + std::to_string( odom_keyframe_counter );
 }
 
-KeyFrame::KeyFrame( const std::string& directory, g2o::HyperGraph* graph ) :
-    stamp(),
-    odom( Eigen::Isometry3d::Identity() ),
-    accum_distance( -1 ),
-    first_keyframe( false ),
-    cloud( nullptr ),
-    cloud_msg( nullptr ),
-    node( nullptr )
+KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+                    const std::string& _uuid_str )
 {
-    // TODO implement with new way of identifying keyframes
-    load( directory, graph );
+    load( keyframe_path, pcd_path, _uuid, _uuid_str );
 }
 
 KeyFrame::~KeyFrame() {}
-
-
-Eigen::Matrix<double, 6, 6>
-KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const
-{
-    auto hidx = node->hessianIndex();
-    if( hidx >= 0 ) {
-        return *marginals->block( hidx, hidx );
-    } else {
-        return Eigen::Matrix<double, 6, 6>::Zero();
-    }
-}
-
 
 void
 KeyFrame::save( const std::string& result_path )
 {
     std::ofstream ofs( result_path + ".txt" );
 
-    ofs << "robot_name " << robot_name << "\n";
-    ofs << "readable_id " << readable_id << "\n";
+    if( robot_name.empty() ) {
+        ofs << "robot_name " << empty_robot_name_str << "\n";
+    } else {
+        ofs << "robot_name " << robot_name << "\n";
+    }
+    std::string readable_id_write = readable_id;
+    size_t      pos               = readable_id_write.find( loaded_keyframe_str );
+    if( pos != std::string::npos ) {
+        readable_id_write.erase( pos, loaded_keyframe_str.size() );
+    }
+    ofs << "readable_id " << readable_id_write << "\n";
     ofs << "stamp " << stamp.sec << " " << stamp.nanosec << "\n";
 
     ofs << "estimate\n";
@@ -76,6 +75,8 @@ KeyFrame::save( const std::string& result_path )
     ofs << odom.matrix() << "\n";
 
     ofs << "accum_distance " << accum_distance << "\n";
+
+    ofs << "first_keyframe " << first_keyframe << "\n";
 
     if( floor_coeffs ) {
         ofs << "floor_coeffs " << floor_coeffs->transpose() << "\n";
@@ -90,111 +91,122 @@ KeyFrame::save( const std::string& result_path )
     }
 
     if( orientation ) {
-        ofs << "orientation " << orientation->w() << " " << orientation->x() << " " << orientation->y() << " " << orientation->z() << "\n";
+        ofs << "orientation " << orientation->x() << " " << orientation->y() << " " << orientation->z() << " " << orientation->w() << "\n";
     }
 
     if( node ) {
         ofs << "g2o_id " << node->id() << "\n";
     }
 
-    ofs << "uuid " << uuid_str << "\n";
+    ofs << "uuid_str " << uuid_str << "\n";
 
     // Save the point cloud
     pcl::io::savePCDFileBinary( result_path + ".pcd", *cloud );
 }
 
 bool
-KeyFrame::load( const std::string& directory, g2o::HyperGraph* graph )
+KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
+                const std::string& _uuid_str )
 {
-    // TODO implement with new way of identifying keyframes
-    RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "KeyFrame::load() not implemented with new saving format!!" );
-    return false;
-    std::ifstream ifs( directory + "/data" );
+    auto logger = rclcpp::get_logger( "KeyFrame::load" );
+
+    uuid     = _uuid;
+    uuid_str = _uuid_str;
+
+    std::ifstream ifs( keyframe_path );
     if( !ifs ) {
+        RCLCPP_ERROR_STREAM( logger, "Failed to open " << keyframe_path );
         return false;
     }
 
-    long                               node_id = -1;
-    boost::optional<Eigen::Isometry3d> estimate;
+    RCLCPP_INFO_STREAM( logger, "Loading keyframe from " << keyframe_path );
 
-    while( !ifs.eof() ) {
-        std::string token;
-        ifs >> token;
+    // when loading from file, accum_distance is negative so that loaded keyframes are considered when determining loop closure candidates
+    accum_distance = -1.0;
 
-        if( token == "stamp" ) {
-            ifs >> stamp.sec >> stamp.nanosec;
-        } else if( token == "estimate" ) {
-            Eigen::Matrix4d mat;
-            for( int i = 0; i < 4; i++ ) {
-                for( int j = 0; j < 4; j++ ) {
-                    ifs >> mat( i, j );
+    std::string line;
+    while( std::getline( ifs, line ) ) {
+        std::istringstream iss( line );
+        std::string        key;
+        iss >> key;
+        if( key == "robot_name" ) {
+            iss >> robot_name;
+            if( robot_name == empty_robot_name_str ) {
+                robot_name = std::string();  // empty string
+            }
+        } else if( key == "stamp" ) {
+            iss >> stamp.sec >> stamp.nanosec;
+        } else if( key == "estimate" ) {
+            auto& estimate_mat = estimate_transform.matrix();
+            for( int i = 0; i < 4; ++i ) {
+                std::getline( ifs, line );
+                std::istringstream matrixStream( line );
+                for( int j = 0; j < 4; ++j ) {
+                    matrixStream >> estimate_mat( i, j );
                 }
             }
-            estimate                = Eigen::Isometry3d::Identity();
-            estimate->linear()      = mat.block<3, 3>( 0, 0 );
-            estimate->translation() = mat.block<3, 1>( 0, 3 );
-        } else if( token == "odom" ) {
-            Eigen::Matrix4d odom_mat = Eigen::Matrix4d::Identity();
-            for( int i = 0; i < 4; i++ ) {
-                for( int j = 0; j < 4; j++ ) {
-                    ifs >> odom_mat( i, j );
+            estimate_transform.matrix() = estimate_mat;
+        } else if( key == "odom_counter" ) {
+            iss >> odom_keyframe_counter;
+        } else if( key == "odom" ) {
+            auto& odom_mat = odom.matrix();
+            for( int i = 0; i < 4; ++i ) {
+                std::getline( ifs, line );
+                std::istringstream matrixStream( line );
+                for( int j = 0; j < 4; ++j ) {
+                    matrixStream >> odom_mat( i, j );
                 }
             }
-
-            odom.setIdentity();
-            odom.linear()      = odom_mat.block<3, 3>( 0, 0 );
-            odom.translation() = odom_mat.block<3, 1>( 0, 3 );
-        } else if( token == "accum_distance" ) {
-            ifs >> accum_distance;
-        } else if( token == "floor_coeffs" ) {
+        } else if( key == "first_keyframe" ) {
+            iss >> first_keyframe;
+        } else if( key == "floor_coeffs" ) {
             Eigen::Vector4d coeffs;
             ifs >> coeffs[0] >> coeffs[1] >> coeffs[2] >> coeffs[3];
             floor_coeffs = coeffs;
-        } else if( token == "utm_coord" ) {
+        } else if( key == "utm_coord" ) {
             Eigen::Vector3d coord;
             ifs >> coord[0] >> coord[1] >> coord[2];
             utm_coord = coord;
-        } else if( token == "acceleration" ) {
+        } else if( key == "acceleration" ) {
             Eigen::Vector3d acc;
             ifs >> acc[0] >> acc[1] >> acc[2];
             acceleration = acc;
-        } else if( token == "orientation" ) {
+        } else if( key == "orientation" ) {
             Eigen::Quaterniond quat;
-            ifs >> quat.w() >> quat.x() >> quat.y() >> quat.z();
+            ifs >> quat.x() >> quat.y() >> quat.z() >> quat.w();
             orientation = quat;
-        } else if( token == "id" ) {
-            ifs >> node_id;
         }
     }
 
-    if( node_id < 0 ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "invalid node id!!" );
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), directory );
-        return false;
+    // Set the readable id indicating the keyframe is loaded from file
+    if( robot_name.empty() ) {
+        readable_id = empty_robot_name_str;
+    } else {
+        readable_id = robot_name;
     }
-
-    if( graph->vertices().find( node_id ) == graph->vertices().end() ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "vertex ID=" << node_id << " does not exist!!" );
-        return false;
-    }
-
-    node = dynamic_cast<g2o::VertexSE3*>( graph->vertices()[node_id] );
-    if( node == nullptr ) {
-        RCLCPP_ERROR_STREAM( rclcpp::get_logger( "rclcpp" ), "failed to downcast!!" );
-        return false;
-    }
-
-    if( estimate ) {
-        node->setEstimate( *estimate );
-    }
+    readable_id += loaded_keyframe_str + "." + std::to_string( odom_keyframe_counter );
 
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
-    pcl::io::loadPCDFile( directory + "/cloud.pcd", *cloud_ );
-    cloud = cloud_;
+    pcl::io::loadPCDFile( pcd_path, *cloud_ );
+    cloud = std::move( cloud_ );
+
+    sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg_( new sensor_msgs::msg::PointCloud2() );
+    pcl::toROSMsg( *cloud, *cloud_msg_ );
+    cloud_msg = std::move( cloud_msg_ );
 
     return true;
 }
 
+Eigen::Matrix<double, 6, 6>
+KeyFrame::covariance( const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) const
+{
+    auto hidx = node->hessianIndex();
+    if( hidx >= 0 ) {
+        return *marginals->block( hidx, hidx );
+    } else {
+        return Eigen::Matrix<double, 6, 6>::Zero();
+    }
+}
 
 long
 KeyFrame::id() const
@@ -202,13 +214,11 @@ KeyFrame::id() const
     return node->id();
 }
 
-
 Eigen::Isometry3d
 KeyFrame::estimate() const
 {
     return node->estimate();
 }
-
 
 bool
 KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const
@@ -237,17 +247,6 @@ KeyFrame::edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) con
 
     return exist;
 }
-
-/*
-KeyFrameSnapshot::KeyFrameSnapshot( long id, const Eigen::Isometry3d& pose, const pcl::PointCloud<PointT>::ConstPtr& cloud,
-                                    bool first_keyframe, const Eigen::MatrixXd* _covariance ) :
-    id( id ), pose( pose ), first_keyframe( first_keyframe ), cloud( cloud )
-{
-    if( _covariance ) {
-        covariance = *_covariance;
-    }
-}
-*/
 
 KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals ) :
     stamp( key->stamp ),

@@ -27,13 +27,11 @@ public:
     typedef pcl::PointXYZI PointT;
 
     // We need to pass NodeOptions in ROS2 to register a component
-    PrefilteringComponent( const rclcpp::NodeOptions&            options,
-                           const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() ) :
-        Node( "prefiltering_component", options )
+    PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
 
-        initialize_params( param_vec );
+        initialize_params();
 
         if( downsample_method == "VOXELGRID" ) {
             std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
@@ -77,7 +75,7 @@ public:
         }
 
         points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/velodyne_points", rclcpp::QoS( 64 ),
-                                                                               std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                std::bind( &PrefilteringComponent::cloud_callback, this,
                                                                                            std::placeholders::_1 ) );
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
@@ -93,48 +91,25 @@ public:
     virtual ~PrefilteringComponent() {}
 
 private:
-    void initialize_params( const std::vector<rclcpp::Parameter>& param_vec = std::vector<rclcpp::Parameter>() )
+    void initialize_params()
     {
-        // Declare all parameters first
-        this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        // Declare and set parameters
+        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
 
-        this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
-        this->declare_parameter<int>( "statistical_mean_k", 20 );
-        this->declare_parameter<double>( "statistical_stddev", 1.0 );
-        this->declare_parameter<double>( "radius_radius", 0.8 );
-        this->declare_parameter<int>( "radius_min_neighbors", 2 );
+        outlier_removal_method        = this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        statistical_mean_k            = this->declare_parameter<int>( "statistical_mean_k", 20 );
+        statistical_stddev_mul_thresh = this->declare_parameter<double>( "statistical_stddev", 1.0 );
+        radius_radius                 = this->declare_parameter<double>( "radius_radius", 0.8 );
+        radius_min_neighbors          = this->declare_parameter<int>( "radius_min_neighbors", 2 );
 
-        this->declare_parameter<bool>( "use_distance_filter", true );
-        this->declare_parameter<double>( "distance_near_thresh", 1.0 );
-        this->declare_parameter<double>( "distance_far_thresh", 100.0 );
+        use_distance_filter  = this->declare_parameter<bool>( "use_distance_filter", true );
+        distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
+        distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
 
-        this->declare_parameter<double>( "scan_period", 0.1 );
-        this->declare_parameter<bool>( "deskewing", false );
-        this->declare_parameter<std::string>( "base_link_frame", "base_link" );
-
-        // Overwrite parameters if param_vec is provided, use case manual composition (debugging)
-        if( !param_vec.empty() ) {
-            this->set_parameters( param_vec );
-        }
-
-        // Set all member variables
-        downsample_method     = this->get_parameter( "downsample_method" ).as_string();
-        downsample_resolution = this->get_parameter( "downsample_resolution" ).as_double();
-
-        outlier_removal_method        = this->get_parameter( "outlier_removal_method" ).as_string();
-        statistical_mean_k            = this->get_parameter( "statistical_mean_k" ).as_int();
-        statistical_stddev_mul_thresh = this->get_parameter( "statistical_stddev" ).as_double();
-        radius_radius                 = this->get_parameter( "radius_radius" ).as_double();
-        radius_min_neighbors          = this->get_parameter( "radius_min_neighbors" ).as_int();
-
-        use_distance_filter  = this->get_parameter( "use_distance_filter" ).as_bool();
-        distance_near_thresh = this->get_parameter( "distance_near_thresh" ).as_double();
-        distance_far_thresh  = this->get_parameter( "distance_far_thresh" ).as_double();
-
-        scan_period     = this->get_parameter( "scan_period" ).as_double();
-        use_deskewing   = this->get_parameter( "deskewing" ).as_bool();
-        base_link_frame = this->get_parameter( "base_link_frame" ).as_string();
+        scan_period     = this->declare_parameter<double>( "scan_period", 0.1 );
+        use_deskewing   = this->declare_parameter<bool>( "deskewing", false );
+        base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "base_link" );
     }
 
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -152,10 +127,6 @@ private:
 
         // if base_link_frame is defined, transform the input cloud to the frame
         if( !base_link_frame.empty() ) {
-            if( !tf_buffer->canTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ) ) ) {
-                std::cerr << "failed to find transform between " << base_link_frame << " and " << src_cloud->header.frame_id << std::endl;
-            }
-
             geometry_msgs::msg::TransformStamped transform;
             try {
                 // lookupTransform contains a Duration as parameter

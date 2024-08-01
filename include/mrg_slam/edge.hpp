@@ -4,6 +4,7 @@
 #define EDGE_HPP
 
 #include <Eigen/Dense>
+#include <boost/uuid/uuid.hpp>
 #include <mrg_slam/keyframe.hpp>
 #include <unordered_map>
 
@@ -30,10 +31,10 @@ public:
         TYPE_LOOP,
     };
 
-    Edge( const g2o::EdgeSE3* edge, Type type );
-    Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, std::shared_ptr<const KeyFrame> from_keyframe,
-          const boost::uuids::uuid& from_uuid, std::shared_ptr<const KeyFrame> to_keyframe, const boost::uuids::uuid& to_uuid );
-    // Edge(const std::string& directory, g2o::HyperGraph* graph);
+    Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
+          std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe );
+    Edge( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str, const boost::uuids::uuid& _from_uuid,
+          const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid, const std::string& _to_uuid_str );
     virtual ~Edge();
 
     long                               id() const;
@@ -41,6 +42,9 @@ public:
     const Eigen::Matrix<double, 6, 6>& information() const;
 
     void save( const std::string& result_path );
+    void load( const std::string& edge_path, const boost::uuids::uuid& _uuid, const std::string& _uuid_str,
+               const boost::uuids::uuid& _from_uuid, const std::string& _from_uuid_str, const boost::uuids::uuid& _to_uuid,
+               const std::string& _to_uuid_str );
 
 public:
     const g2o::EdgeSE3*             edge;           // edge instance
@@ -54,6 +58,15 @@ public:
     boost::uuids::uuid              to_uuid;        // to keyframe uuid
     std::string                     to_uuid_str;    // to keyframe uuid as a string for graph exchange
     std::string                     readable_id;    // readable id for visualizing and debugging
+
+    Eigen::Isometry3d           relative_pose_loaded;  // relative pose from loaded edge
+    Eigen::Matrix<double, 6, 6> information_loaded;    // information matrix from loaded edge
+
+private:
+    void make_readable_id();
+
+    Type        type_from_string( const std::string& type_str );
+    std::string type_to_string( Type type );
 };
 
 /**
