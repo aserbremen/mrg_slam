@@ -234,7 +234,7 @@ mrg_slam_component:
     graph_request_min_time_delay: 2.0
     graph_exchange_mode: "PATH_PROXIMITY"
     # ranging params
-    enable_ranging: true
+    enable_ranging: false
     ranging_topic: "/ranging_measurement" # topic which offers the ranging measurements
     ranging_position_topic: "/gnss_rtk_rel_nav" # topic which offers the position of the ranging boxes in cartesian coordinates
     # all ranging (box) names need to be specified here

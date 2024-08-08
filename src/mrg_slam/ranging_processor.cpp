@@ -11,6 +11,7 @@ RangingProcessor::onInit( rclcpp::Node::SharedPtr _node )
 
     own_name = node->get_parameter( "own_name" ).as_string();
 
+    enable_ranging                  = node->declare_parameter( "enable_ranging", false );
     ranging_topic                   = node->declare_parameter( "ranging_topic", "/ranging_measurement" );
     ranging_position_topic          = node->declare_parameter( "ranging_position_topic", "/gnss_rtk_rel_nav" );
     ranging_names                   = node->declare_parameter( "ranging_names", std::vector<std::string>() );
@@ -20,19 +21,22 @@ RangingProcessor::onInit( rclcpp::Node::SharedPtr _node )
     ranging_edge_robust_kernel      = node->declare_parameter( "ranging_edge_robust_kernel", "NONE" );
     ranging_edge_robust_kernel_size = node->declare_parameter( "ranging_edge_robust_kernel_size", 1.0 );
 
-    std::string prefix = own_name.empty() ? "" : "/" + own_name;
-    ranging_topic      = prefix + ranging_topic;
-    RCLCPP_INFO_STREAM( node->get_logger(), "Subscribing to ranging topic: " << ranging_topic );
-    ranging_sub = node->create_subscription<ros2_radio_ranging_interfaces::msg::Range>( ranging_topic, rclcpp::QoS( 10 ),
-                                                                                        std::bind( &RangingProcessor::ranging_callback,
-                                                                                                   this, std::placeholders::_1 ) );
 
-    for( const auto &name : ranging_names ) {
-        std::string prefix = name.empty() ? "" : "/" + name;
-        std::string topic  = prefix + ranging_position_topic;
-        ranging_data_map.insert( { name, RangingData() } );
-        ranging_data_map[name].position_sub = node->create_subscription<nav_msgs::msg::Odometry>(
-            topic, rclcpp::QoS( 10 ), std::bind( &RangingProcessor::position_callback, this, std::placeholders::_1 ) );
+    if( enable_ranging ) {
+        std::string prefix = own_name.empty() ? "" : "/" + own_name;
+        ranging_topic      = prefix + ranging_topic;
+        RCLCPP_INFO_STREAM( node->get_logger(), "Subscribing to ranging topic: " << ranging_topic );
+        ranging_sub = node->create_subscription<ros2_radio_ranging_interfaces::msg::Range>( ranging_topic, rclcpp::QoS( 10 ),
+                                                                                            std::bind( &RangingProcessor::ranging_callback,
+                                                                                                       this, std::placeholders::_1 ) );
+
+        for( const auto &name : ranging_names ) {
+            std::string prefix = name.empty() ? "" : "/" + name;
+            std::string topic  = prefix + ranging_position_topic;
+            ranging_data_map.insert( { name, RangingData() } );
+            ranging_data_map[name].position_sub = node->create_subscription<nav_msgs::msg::Odometry>(
+                topic, rclcpp::QoS( 10 ), std::bind( &RangingProcessor::position_callback, this, std::placeholders::_1 ) );
+        }
     }
 }
 
@@ -56,6 +60,9 @@ RangingProcessor::ranging_callback( ros2_radio_ranging_interfaces::msg::Range::C
 bool
 RangingProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes )
 {
+    if( !enable_ranging ) {
+        return false;
+    }
     std::lock_guard<std::mutex> lock( range_queue_mutex );
     if( range_queue.empty() || keyframes.empty() ) {
         RCLCPP_INFO_STREAM( node->get_logger(), "No ranging messages or keyframes" );
