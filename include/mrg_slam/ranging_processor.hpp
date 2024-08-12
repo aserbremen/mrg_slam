@@ -64,6 +64,7 @@ private:
     double                   ranging_max_time_diff;
     std::string              ranging_edge_robust_kernel;
     double                   ranging_edge_robust_kernel_size;
+    double                   ranging_edge_extra_stddev;
 
     std::string ranging_position_topic;
     // ranging device name -> all relevant data

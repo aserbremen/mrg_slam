@@ -3,7 +3,7 @@
   ros__parameters:
     model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
-    points_topic: "/velodyne_points"
+    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
     imu_topic: "/imu/data"
 
 # Transform between lidar and base_link
@@ -176,7 +176,7 @@ mrg_slam_component:
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
     # loop closure params
-    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    distance_thresh: 7.5 # maximum allowed xy distance threshold for loop closure candidates
     accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
     min_edge_interval: 5.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
@@ -234,16 +234,16 @@ mrg_slam_component:
     graph_request_min_time_delay: 2.0
     graph_exchange_mode: "PATH_PROXIMITY"
     # ranging params
-    enable_ranging: true
+    enable_ranging: false
     ranging_topic: "/ranging_measurement" # topic which offers the ranging measurements
     ranging_position_topic: "/gnss_rtk_rel_nav" # topic which offers the position of the ranging boxes in cartesian coordinates
-    # all ranging (box) names need to be specified here
-    ranging_names: ["Lander", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"]
+    ranging_names: ["Lander", "RadioBox1", "RadioBox2", "RadioBox3", "RadioBox4", "RadioBox5", "RadioBox6", "RadioBox7"] # all ranging (box) names need to be specified here
     ranging_position_stddev: 0.05 # stddev in meter for a stationary ranging box
     ranging_orientation_stddev: 0.1 # stddev in rad for a stationary ranging box
     ranging_max_time_diff: 0.005 # [sec] max allowed seconds between keyframe (cloud + odom) and ranging measurement 
-    ranging_edge_robust_kernel: "Huber"
-    ranging_edge_robust_kernel_size: 0.05
+    ranging_edge_robust_kernel: "NONE"
+    ranging_edge_robust_kernel_size: 1.0
+    ranging_edge_extra_stddev: 1.2
     # update params
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0

@@ -19,6 +19,7 @@ RangingProcessor::onInit( rclcpp::Node::SharedPtr _node )
     ranging_max_time_diff           = node->declare_parameter( "ranging_max_time_diff", 0.05 );
     ranging_edge_robust_kernel      = node->declare_parameter( "ranging_edge_robust_kernel", "NONE" );
     ranging_edge_robust_kernel_size = node->declare_parameter( "ranging_edge_robust_kernel_size", 1.0 );
+    ranging_edge_extra_stddev       = node->declare_parameter( "ranging_edge_extra_stddev", 0.0 );
 
     std::string prefix = own_name.empty() ? "" : "/" + own_name;
     ranging_topic      = prefix + ranging_topic;
@@ -58,7 +59,6 @@ RangingProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vect
 {
     std::lock_guard<std::mutex> lock( range_queue_mutex );
     if( range_queue.empty() || keyframes.empty() ) {
-        RCLCPP_INFO_STREAM( node->get_logger(), "No ranging messages or keyframes" );
         return false;
     }
 
@@ -66,7 +66,9 @@ RangingProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vect
 
     bool added_edge = false;
 
-    for( const auto &range_msg : range_queue ) {
+    size_t last_added_ranging_index = 0;
+    for( size_t i = 0; i < range_queue.size(); i++ ) {
+        const auto &range_msg = range_queue[i];
         if( ranging_data_map.find( range_msg->neighbor_name ) == ranging_data_map.end()
             || !ranging_data_map[range_msg->neighbor_name].initialized ) {
             RCLCPP_WARN_STREAM( node->get_logger(), "No information for " << range_msg->neighbor_name << ", cannot add ranging edge" );
@@ -75,12 +77,13 @@ RangingProcessor::flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vect
         KeyFrame::Ptr closest_keyframe = find_closest_keyframe( range_msg, keyframes );
         if( closest_keyframe != nullptr ) {
             add_ranging_edge( graph_slam, range_msg, closest_keyframe );
-            added_edge = true;
+            added_edge               = true;
+            last_added_ranging_index = i;
         }
     }
 
     if( added_edge ) {
-        range_queue.clear();
+        range_queue.erase( range_queue.begin(), range_queue.begin() + last_added_ranging_index + 1 );
     }
 
     return added_edge;
@@ -155,6 +158,7 @@ RangingProcessor::add_ranging_edge( std::shared_ptr<GraphSLAM>                  
     double          range      = range_msg->bias_compensation_valid ? range_msg->range_compensated : range_msg->range_raw;
     Eigen::MatrixXd inf_matrix = Eigen::MatrixXd::Identity( 1, 1 );
     inf_matrix( 0, 0 ) = range_msg->bias_compensation_valid ? ( 1 / range_msg->var_range_compensated ) : ( 1 / range_msg->var_range_raw );
+    inf_matrix( 0, 0 ) += ( 1 / ( ranging_edge_extra_stddev * ranging_edge_extra_stddev ) );
     RCLCPP_INFO_STREAM( node->get_logger(), "Adding ranging edge from " << range_msg->self_name << " to " << range_msg->neighbor_name
                                                                         << " with range " << range << " and inf " << inf_matrix.value() );
     g2o::EdgeSE3Ranging *g2o_ranging_edge = graph_slam->add_se3_ranging_edge( keyframe->node,
