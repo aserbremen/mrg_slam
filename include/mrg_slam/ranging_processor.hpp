@@ -58,6 +58,7 @@ private:
     rclcpp::Node::SharedPtr node;
 
     std::string              own_name;
+    bool                     enable_ranging;
     std::vector<std::string> ranging_names;
     double                   ranging_position_stddev;
     double                   ranging_orientation_stddev;
