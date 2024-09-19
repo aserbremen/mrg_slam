@@ -162,10 +162,11 @@ RangingProcessor::add_ranging_edge( std::shared_ptr<GraphSLAM>                  
 {
     RCLCPP_INFO_STREAM( node->get_logger(), "Ranging message from " << range_msg->self_name << " to " << range_msg->neighbor_name
                                                                     << " close to " << keyframe->readable_id );
-    double          range      = range_msg->bias_compensation_valid ? range_msg->range_compensated : range_msg->range_raw;
-    Eigen::MatrixXd inf_matrix = Eigen::MatrixXd::Identity( 1, 1 );
-    inf_matrix( 0, 0 ) = range_msg->bias_compensation_valid ? ( 1 / range_msg->var_range_compensated ) : ( 1 / range_msg->var_range_raw );
-    inf_matrix( 0, 0 ) += ( 1 / ( ranging_edge_extra_stddev * ranging_edge_extra_stddev ) );
+    double          range       = range_msg->bias_compensation_valid ? range_msg->range_compensated : range_msg->range_raw;
+    Eigen::MatrixXd inf_matrix  = Eigen::MatrixXd::Identity( 1, 1 );
+    double          ranging_var = range_msg->bias_compensation_valid ? range_msg->var_range_compensated : range_msg->var_range_raw;
+    ranging_var += ranging_edge_extra_stddev * ranging_edge_extra_stddev;
+    inf_matrix( 0, 0 ) = 1.0 / ranging_var;
     RCLCPP_INFO_STREAM( node->get_logger(), "Adding ranging edge from " << range_msg->self_name << " to " << range_msg->neighbor_name
                                                                         << " with range " << range << " and inf " << inf_matrix.value() );
     g2o::EdgeSE3Ranging *g2o_ranging_edge = graph_slam->add_se3_ranging_edge( keyframe->node,
