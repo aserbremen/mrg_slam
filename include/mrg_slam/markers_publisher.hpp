@@ -37,7 +37,7 @@ private:
     std::string own_name;
 
     std_msgs::msg::ColorRGBA color_blue, color_orange, color_green, color_red, color_purple, color_brown, color_pink, color_olive,
-        color_cyan, color_black, color_white, color_gray;
+        color_cyan, color_black, color_white, color_dark_gray, color_light_gray;
 };
 
 }  // namespace mrg_slam
