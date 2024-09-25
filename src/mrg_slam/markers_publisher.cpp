@@ -105,7 +105,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         MARKER_LAST_NODES,
         // MARKER_IMU,
         MARKER_MAIN_EDGES,
-        MARKER_SPHERE,
+        MARKER_CIRCLE,
         MARKER_MISC_EDGES,
         __NUM_MARKERS__,
     };
@@ -381,28 +381,33 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         }
     }
 
-    // sphere
-    visualization_msgs::msg::Marker& sphere_marker = markers.markers[MARKER_SPHERE];
-    sphere_marker.header.frame_id                  = map_frame_id;
-    sphere_marker.header.stamp                     = stamp;
-    sphere_marker.ns                               = "loop_close_radius";
-    sphere_marker.id                               = MARKER_SPHERE;
-    sphere_marker.type                             = visualization_msgs::msg::Marker::CYLINDER;
+    // Publish a flat cylinder to represent the loop closure radius
+    visualization_msgs::msg::Marker& circle_marker = markers.markers[MARKER_CIRCLE];
+    circle_marker.header.frame_id                  = map_frame_id;
+    circle_marker.header.stamp                     = stamp;
+    circle_marker.ns                               = "loop_close_radius";
+    circle_marker.id                               = MARKER_CIRCLE;
+    circle_marker.type                             = visualization_msgs::msg::Marker::LINE_STRIP;
+    circle_marker.action                           = visualization_msgs::msg::Marker::ADD;
+    circle_marker.pose.orientation.w               = 1.0;
+    circle_marker.scale.x                          = 0.1;  // thickness
+    circle_marker.color.r                          = 1.0;
+    circle_marker.color.a                          = 0.3;
 
     if( !keyframes.empty() ) {
-        Eigen::Vector3d pos           = last_keyframe->node->estimate().translation();
-        sphere_marker.pose.position.x = pos.x();
-        sphere_marker.pose.position.y = pos.y();
-        sphere_marker.pose.position.z = pos.z();
+        double                 radius     = loop_detector_distance_thresh;
+        const Eigen::Vector3d& p_center   = last_keyframe->node->estimate().translation();
+        int                    num_points = 50;
+        for( int i = 0; i <= num_points; i++ ) {
+            double                    angle = 2.0 * M_PI * i / num_points;
+            geometry_msgs::msg::Point p;
+            p.x = p_center.x() + radius * std::cos( angle );
+            p.y = p_center.y() + radius * std::sin( angle );
+            p.z = p_center.z();
+            circle_marker.points.push_back( p );
+        }
     }
-    sphere_marker.pose.orientation.w = 1.0;
-    sphere_marker.scale.x = sphere_marker.scale.y = loop_detector_distance_thresh * 2.0;
-    sphere_marker.scale.z                         = 0.05;
 
-    sphere_marker.color.r = 1.0;
-    sphere_marker.color.a = 0.06;
-
-    // markers_pub.publish( markers );
     markers_pub->publish( markers );
 
     // Publish node names
