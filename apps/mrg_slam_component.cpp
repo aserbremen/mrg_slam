@@ -97,6 +97,17 @@ public:
 
         // Initialize variables
         trans_odom2map.setIdentity();
+        auto static_cloud_pcl = pcl::PointCloud<PointT>::Ptr( new pcl::PointCloud<PointT>() );
+        if( !static_cloud_path.empty() ) {
+            if( pcl::io::loadPCDFile( static_cloud_path, *static_cloud_pcl ) == -1 )
+                RCLCPP_ERROR( this->get_logger(), "Failed to load static map from %s", static_cloud_path.c_str() );
+        }
+        RCLCPP_INFO_STREAM( this->get_logger(), "Loaded static cloud with " << static_cloud_pcl->size() << " points" );
+        if( !static_cloud_msg ) {
+            static_cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
+        }
+        pcl::toROSMsg( *static_cloud_pcl, *static_cloud_msg );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Coverted cloud message to ROS with " << static_cloud_msg->width << " points" );
 
         graph_slam.reset( new GraphSLAM( g2o_solver_type ) );
         graph_slam->set_save_graph( save_graph );
@@ -294,6 +305,7 @@ private:
         graph_request_min_time_delay        = this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
         std::string graph_exchange_mode_str = this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
         graph_exchange_mode                 = graph_exchange_mode_from_string( graph_exchange_mode_str );
+        static_cloud_path                   = this->declare_parameter<std::string>( "static_cloud_path", "" );
 
         // GraphDatabase parameters (not directly used by this class)
         this->declare_parameter<bool>( "fix_first_node", false );
@@ -725,6 +737,14 @@ private:
             cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
         }
         pcl::toROSMsg( *cloud, *cloud_msg );
+
+        size_t                                         cloud_size = cloud->size();
+        std::chrono::high_resolution_clock::time_point t1         = std::chrono::high_resolution_clock::now();
+        pcl::concatenatePointCloud( *cloud_msg, *static_cloud_msg, *cloud_msg );
+        std::chrono::high_resolution_clock::time_point t2        = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double>                  time_span = std::chrono::duration_cast<std::chrono::duration<double>>( t2 - t1 );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Time to add clouds: " << time_span.count() );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Cloud before: " << cloud_size << " Cloud after: " << cloud->size() );
 
         return true;
     }
@@ -1447,6 +1467,8 @@ private:
     std::mutex                               cloud_msg_mutex;
     std::atomic_bool                         cloud_msg_update_required;
     sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg;
+    std::string                              static_cloud_path;
+    sensor_msgs::msg::PointCloud2::SharedPtr static_cloud_msg = nullptr;
 
     // latest graph estimate
     std::mutex                                   graph_estimate_msg_mutex;

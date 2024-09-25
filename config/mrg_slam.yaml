@@ -158,6 +158,8 @@ mrg_slam_component:
     odom_frame_id: "odom"
     odom_sub_topic: "/scan_matching_odometry/odom" # topic should include / at the beginning, is prepended by model_namespace
     cloud_sub_topic: "/prefiltering/filtered_points" # topic should include / at the beginning, is prepended by model_namespace
+    # Static map cloud / .pcd file (optional), which is added as a static cloud to the graph
+    static_cloud_path: "/home/serov/code/cpp/Multi-Robot-Graph-SLAM/src/mrg_slam_sim/models/langenaltheim_mission_terrain/meshes/la_mission_samples_1000000_intensity.pcd"
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
