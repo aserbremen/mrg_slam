@@ -28,16 +28,14 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     uuid_str( uuid_str ),
     accum_distance( accum_distance ),
     first_keyframe( false ),
+    static_keyframe( false ),
     cloud( cloud ),
     cloud_msg( cloud_msg ),
     node( nullptr )
 {
-    if( robot_name.empty() ) {
-        readable_id = empty_robot_name_str;
-    } else {
-        readable_id = robot_name;
-    }
-    readable_id += "." + std::to_string( odom_keyframe_counter );
+    readable_id = robot_name.empty() ? empty_robot_name_str : robot_name;
+    readable_id += odom_keyframe_counter >= 0 ? "." + std::to_string( odom_keyframe_counter )
+                                              : "." + uuid_str[0] + uuid_str[1] + uuid_str[2] + uuid_str[3];
 }
 
 KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,

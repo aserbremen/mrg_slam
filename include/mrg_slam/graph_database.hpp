@@ -48,6 +48,12 @@ public:
     bool flush_keyframe_queue( const Eigen::Isometry3d& odom2map );
 
     /**
+     * @brief Adds static keyframes to the queue
+     * @param keyframes vector of keyframes from the static map provider
+     */
+    void add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes );
+
+    /**
      * @brief Adds a GraphRos message to the graph queue for later processing
      * @param graph_ros
      */
@@ -104,6 +110,9 @@ private:
 
     std::mutex                keyframe_queue_mutex;  // keyframes to be added to the graph
     std::deque<KeyFrame::Ptr> keyframe_queue;
+
+    std::mutex                static_keyframe_queue_mutex;  // keyframes from the static map provider
+    std::deque<KeyFrame::Ptr> static_keyframe_queue;
 
     std::deque<KeyFrame::Ptr> new_keyframes;  // keyframes to be checked for loop closure
     KeyFrame::ConstPtr        prev_robot_keyframe;

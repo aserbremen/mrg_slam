@@ -43,6 +43,7 @@
 #include <mrg_slam_msgs/msg/pose_with_name.hpp>
 #include <mrg_slam_msgs/msg/pose_with_name_array.hpp>
 #include <mrg_slam_msgs/msg/slam_status.hpp>
+#include <mrg_slam_msgs/srv/add_static_map.hpp>
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_gids.hpp>
 #include <mrg_slam_msgs/srv/get_map.hpp>
@@ -195,6 +196,13 @@ public:
         // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
         // work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
+        // Add static map service
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::AddStaticMap::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::AddStaticMap::Response>      res )>
+            add_static_map_service_callback = std::bind( &MrgSlamComponent::add_static_map_service, this, std::placeholders::_1,
+                                                         std::placeholders::_2 );
+        add_static_map_service_server       = this->create_service<mrg_slam_msgs::srv::AddStaticMap>( "/mrg_slam/add_static_map",
+                                                                                                      add_static_map_service_callback );
         // Save graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Response>      res )>
@@ -1001,6 +1009,14 @@ private:
         optimization_timer->reset();
     }
 
+
+    void add_static_map_service( mrg_slam_msgs::srv::AddStaticMap::Request::ConstSharedPtr req,
+                                 mrg_slam_msgs::srv::AddStaticMap::Response::SharedPtr     res )
+    {
+        graph_database->add_static_map( req->keyframes );
+        res->success = true;
+    }
+
     /**
      * @brief save all graph information and some timing information to request's directory
      * @param req request containing the directory to save the graph information to
@@ -1240,14 +1256,15 @@ private:
                 }
 
                 mrg_slam_msgs::msg::KeyFrameRos dst;
-                dst.robot_name     = src->robot_name;
-                dst.uuid_str       = src->uuid_str;
-                dst.stamp          = src->stamp;
-                dst.odom_counter   = src->odom_keyframe_counter;
-                dst.first_keyframe = src->first_keyframe;
-                dst.accum_distance = src->accum_distance;
-                dst.estimate       = tf2::toMsg( src->estimate() );
-                dst.cloud          = *src->cloud_msg;
+                dst.robot_name      = src->robot_name;
+                dst.uuid_str        = src->uuid_str;
+                dst.stamp           = src->stamp;
+                dst.odom_counter    = src->odom_keyframe_counter;
+                dst.first_keyframe  = src->first_keyframe;
+                dst.static_keyframe = src->static_keyframe;
+                dst.accum_distance  = src->accum_distance;
+                dst.estimate        = tf2::toMsg( src->estimate() );
+                dst.cloud           = *src->cloud_msg;
                 res->graph.keyframes.push_back( std::move( dst ) );
                 added_keyframes++;
             }
@@ -1447,6 +1464,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
     // Services
+    rclcpp::Service<mrg_slam_msgs::srv::AddStaticMap>::SharedPtr     add_static_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr        save_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr        load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;

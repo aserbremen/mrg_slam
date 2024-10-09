@@ -94,6 +94,7 @@ include_directories(
 add_library(floor_detection_component SHARED
   apps/floor_detection_component.cpp
   src/mrg_slam/registrations.cpp
+  src/ros_utils.cpp
 )
 # Link non ament packages
 target_link_libraries(floor_detection_component
@@ -130,6 +131,7 @@ install(
 add_library(scan_matching_odometry_component SHARED
   apps/scan_matching_odometry_component.cpp
   src/mrg_slam/registrations.cpp
+  src/ros_utils.cpp
 )
 # Link non ament packages
 target_link_libraries(scan_matching_odometry_component
@@ -166,6 +168,7 @@ install(
 ############################
 add_library(prefiltering_component SHARED
   apps/prefiltering_component.cpp
+  src/ros_utils.cpp
 )
 # Link non ament packages
 target_link_libraries(prefiltering_component
@@ -215,6 +218,7 @@ add_library(mrg_slam_component SHARED
   src/mrg_slam/floor_coeffs_processor.cpp
   src/mrg_slam/markers_publisher.cpp
   src/g2o/robust_kernel_io.cpp
+  src/ros_utils.cpp
 )
 # Link non ament packages
 target_link_libraries(mrg_slam_component

@@ -3,6 +3,7 @@
 #include <boost/uuid/uuid_io.hpp>
 // mrg_slam
 #include <mrg_slam/graph_database.hpp>
+#include <mrg_slam/ros_utils.hpp>
 // ROS2
 #include <pcl_conversions/pcl_conversions.h>
 
@@ -142,6 +143,19 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
         graph_slam->add_robust_kernel( g2o_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         prev_robot_keyframe = keyframe;
     }
+    keyframe_queue.erase( keyframe_queue.begin(), keyframe_queue.begin() + num_processed + 1 );
+
+    // Add static keyframes to the graph. Static keyframes are not connected to any other keyframes.
+    // They are not added to new_keyframes, because they cannot have loop closures among themselves.
+    // However, new_keyframes will also be tested for loop closure against static keyframes.
+    for( const auto &static_keyframe : static_keyframe_queue ) {
+        // add pose node
+        static_keyframe->node                    = graph_slam->add_se3_node( static_keyframe->estimate_transform );
+        uuid_keyframe_map[static_keyframe->uuid] = static_keyframe;
+        keyframe_hash[static_keyframe->stamp]    = static_keyframe;
+        keyframes.push_back( static_keyframe );
+    }
+    static_keyframe_queue.clear();
 
     // TODO remove read_until ?
     // std_msgs::msg::Header read_until;
@@ -152,9 +166,31 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     // read_until.frame_id = "/filtered_points";
     // read_until_pub->publish( read_until );
 
-    keyframe_queue.erase( keyframe_queue.begin(), keyframe_queue.begin() + num_processed + 1 );
     return true;
 }
+
+void
+GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos> &keyframes )
+{
+    std::lock_guard<std::mutex> lock( static_keyframe_queue_mutex );
+
+    for( const auto &keyframe_ros : keyframes ) {
+        pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
+        pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
+        sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
+
+        auto          uuid        = uuid_from_string_generator( keyframe_ros.uuid_str );
+        KeyFrame::Ptr keyframe    = std::make_shared<KeyFrame>( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
+                                                                keyframe_ros.odom_counter, keyframe_ros.accum_distance, uuid,
+                                                                keyframe_ros.uuid_str, std::move( cloud ), std::move( cloud_ros ) );
+        keyframe->static_keyframe = true;
+        keyframe->estimate_transform = pose2isometry( keyframe_ros.estimate );
+
+        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ), "Adding static keyframe: " << keyframe->readable_id );
+        static_keyframe_queue.push_back( keyframe );
+    }
+}
+
 
 void
 GraphDatabase::add_graph_ros( const mrg_slam_msgs::msg::GraphRos &graph_ros )

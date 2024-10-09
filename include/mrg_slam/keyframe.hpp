@@ -74,7 +74,8 @@ public:
     boost::uuids::uuid            uuid;                   // unique id
     std::string                   uuid_str;               // unique id string
     double                        accum_distance;         // accumulated distance from the first node (by scan_matching_odometry)
-    bool                          first_keyframe;  // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    bool                          first_keyframe;   // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    bool                          static_keyframe;  // keyframes that are part of the static map
     pcl::PointCloud<PointT>::ConstPtr             cloud;         // point cloud
     sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg;     // point cloud ROS msg
     boost::optional<Eigen::Vector4d>              floor_coeffs;  // detected floor's coefficients
