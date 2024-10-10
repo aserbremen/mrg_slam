@@ -150,7 +150,8 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     // However, new_keyframes will also be tested for loop closure against static keyframes.
     for( const auto &static_keyframe : static_keyframe_queue ) {
         // add pose node
-        static_keyframe->node                    = graph_slam->add_se3_node( static_keyframe->estimate_transform );
+        static_keyframe->node = graph_slam->add_se3_node( static_keyframe->estimate_transform );
+        static_keyframe->node->setFixed( true );
         uuid_keyframe_map[static_keyframe->uuid] = static_keyframe;
         keyframe_hash[static_keyframe->stamp]    = static_keyframe;
         keyframes.push_back( static_keyframe );
@@ -267,11 +268,21 @@ GraphDatabase::flush_graph_queue(
         keyframe->node                    = graph_slam->add_se3_node( pose );
         keyframe->first_keyframe          = keyframe_ros->first_keyframe;
         uuid_keyframe_map[keyframe->uuid] = keyframe;
-        new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure
-                                              // don't add it to keyframe_hash, which is only used for floor_coeffs
-                                              // keyframe_hash[keyframe->stamp] = keyframe;
 
         RCLCPP_INFO_STREAM( logger, "Adding unique keyframe: " << keyframe->readable_id );
+        // Immediately add static keyframes to keyframes, since they are not connected to other keyframes.
+        // New keyframes will be tested for loop closure against static keyframes. Static keyframes are not added to new_keyframes.
+        if( keyframe->static_keyframe ) {
+            keyframe->static_keyframe = keyframe_ros->static_keyframe;
+            keyframe->node->setFixed( true );
+            keyframe->estimate_transform = pose;
+            keyframes.push_back( keyframe );
+            continue;
+        }
+        // new_keyframes will be tested later for loop closure
+        // don't add it to keyframe_hash, which is only used for floor_coeffs
+        // keyframe_hash[keyframe->stamp] = keyframe;
+        new_keyframes.push_back( keyframe );
     }
 
     for( const auto &edge_ros : unique_edges ) {
