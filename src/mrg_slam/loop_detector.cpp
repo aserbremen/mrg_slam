@@ -160,6 +160,10 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         rel_pose_new_to_best_matched = registration->getFinalTransformation();  // New to candidate
     }
 
+    if( best_matched != nullptr ) {
+        std::cout << std::endl << "best matched candidate: " << best_matched->readable_id << " score " << best_score << std::endl;
+    }
+
     bool consistency_check_passed = perform_loop_closure_consistency_check( new_keyframe_estimate, rel_pose_new_to_best_matched,
                                                                             best_matched, best_score );
 
