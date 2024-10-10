@@ -128,8 +128,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     KeyFrame::Ptr   best_matched = nullptr;
     Eigen::Matrix4f rel_pose_new_to_best_matched;
 
-    std::cout << std::endl;
-    std::cout << "--- loop detection ---" << std::endl;
+    std::cout << std::endl << "--- loop detection ---" << std::endl;
     std::cout << "new keyframe " << new_keyframe->readable_id << " has " << candidate_keyframes.size() << " candidates, matching..."
               << std::endl;
     for( const auto& cand : candidate_keyframes ) {
@@ -138,14 +137,13 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     auto t1 = std::chrono::system_clock::now();
 
     pcl::PointCloud<PointT>::Ptr aligned( new pcl::PointCloud<PointT>() );
-    Eigen::Isometry3d            new_keyframe_estimate = new_keyframe->node->estimate();
-    new_keyframe_estimate.linear() = Eigen::Quaterniond( new_keyframe_estimate.linear() ).normalized().toRotationMatrix();
+    Eigen::Isometry3d            new_keyframe_estimate = normalize_estimate( new_keyframe->node->estimate() );
+
     for( const auto& candidate : candidate_keyframes ) {
         registration->setInputSource( candidate->cloud );
 
-        Eigen::Isometry3d candidate_estimate = candidate->node->estimate();
-        candidate_estimate.linear()          = Eigen::Quaterniond( candidate_estimate.linear() ).normalized().toRotationMatrix();
-        Eigen::Matrix4f guess                = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
+        Eigen::Isometry3d candidate_estimate = normalize_estimate( candidate->node->estimate() );
+        Eigen::Matrix4f   guess              = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
         if( use_planar_registration_guess ) {
             guess( 2, 3 ) = 0.0;
         }
@@ -162,93 +160,8 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         rel_pose_new_to_best_matched = registration->getFinalTransformation();  // New to candidate
     }
 
-    // loop closure hypothesis check. Calculate relative transformation from new keyframe to candidate to its previous/next keyframe and
-    // back to new keyframe, which should be the identity transformation if the loop closure hypothesis is correct.
-    // Dont perform consistency check if the best matched candidate is the first keyframe (upTimeId == 0) from another robot, which
-    // might not have a previous edge or next edge yet. This is the case when graphs are exchanged and the robot hasn't moved yet.
-    bool consistency_check_passed = false;
-
-    // First frame is excluded from map and is always used as a loop closure candidate without the consistency check
-    if( use_loop_closure_consistency_check && best_matched != nullptr && best_matched->first_keyframe == false
-        && best_score < fitness_score_thresh ) {
-        std::cout << "Performing loop closure consistency check with best matched " << best_matched->readable_id << " score " << best_score
-                  << std::endl;
-
-        pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
-        if( best_matched->prev_edge != nullptr ) {
-            Eigen::Matrix4f rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
-
-            const auto& prev_kf = best_matched->prev_edge->to_keyframe;
-
-            registration->setInputSource( prev_kf->cloud );
-            Eigen::Isometry3d prev_kf_estimate = prev_kf->node->estimate();
-            prev_kf_estimate.linear()          = Eigen::Quaterniond( prev_kf_estimate.linear() ).normalized().toRotationMatrix();
-            Eigen::Matrix4f prev_guess         = ( new_keyframe_estimate.inverse() * prev_kf_estimate ).matrix().cast<float>();
-            if( use_planar_registration_guess ) {
-                prev_guess( 2, 3 ) = 0.0;
-            }
-            registration->align( *prev_aligned, prev_guess );
-            // We dont check if the registration has converged here, since we are only interested in the relative pose
-
-            Eigen::Matrix4f rel_pose_new_to_prev = registration->getFinalTransformation();
-            // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
-            auto  rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * rel_pose_new_to_best_matched * rel_pose_candidate_to_prev;
-            float delta_trans_prev             = rel_pose_identity_check_prev.block<3, 1>( 0, 3 ).norm();
-            float delta_angle_prev =
-                Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
-            if( delta_trans_prev < loop_closure_consistency_max_delta_trans
-                && delta_angle_prev < loop_closure_consistency_max_delta_angle ) {
-                std::cout << "Consistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans_prev
-                          << " delta angle (deg) " << delta_angle_prev * 180.0 / M_PI << std::endl;
-                consistency_check_passed = true;
-            } else {
-                std::cout << "Inconsistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans_prev
-                          << " delta angle (deg)" << delta_angle_prev * 180.0 / M_PI << std::endl;
-            }
-        } else {
-            std::cout << "candidate " << best_matched->readable_id << " has no prev edge" << std::endl;
-        }
-        // Only perform the identity check with next keyframe if the consistency check with previous keyframe failed
-        if( !consistency_check_passed ) {
-            // Identity transform consistency check with next keyframe, maybe only done for best score?
-            pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
-            if( best_matched->next_edge != nullptr ) {
-                Eigen::Matrix4f rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
-
-                const auto& next_kf = best_matched->next_edge->from_keyframe;
-                registration->setInputSource( next_kf->cloud );
-                Eigen::Isometry3d next_kf_estimate = next_kf->node->estimate();
-                next_kf_estimate.linear()          = Eigen::Quaterniond( next_kf_estimate.linear() ).normalized().toRotationMatrix();
-                Eigen::Matrix4f next_guess         = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
-                if( use_planar_registration_guess ) {
-                    next_guess( 2, 3 ) = 0.0;
-                }
-                registration->align( *next_aligned, next_guess );
-
-                Eigen::Matrix4f rel_pose_new_to_next = registration->getFinalTransformation();
-                // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
-                auto rel_pose_identity_check_next = rel_pose_new_to_best_matched.inverse() * rel_pose_new_to_next
-                                                    * rel_pose_next_to_candidate;
-                // Alternative way to calculate the identity transform
-                // auto rel_pose_identity_check_next2 = rel_pose_new_to_next.inverse() * rel_pose_new_to_best_matched
-                //                                      * rel_pose_next_to_candidate.inverse();
-                float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
-                float delta_angle_next = Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) )
-                                             .angularDistance( Eigen::Quaternionf::Identity() );
-                if( delta_trans_next < loop_closure_consistency_max_delta_trans
-                    && delta_angle_next < loop_closure_consistency_max_delta_angle ) {
-                    std::cout << "Consistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next
-                              << " delta angle " << delta_angle_next * 180.0 / M_PI << std::endl;
-                    consistency_check_passed = true;
-                } else {
-                    std::cout << "Inconsistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next
-                              << " delta angle " << delta_angle_next * 180.0 / M_PI << std::endl;
-                }
-            } else {
-                std::cout << "candidate " << best_matched->readable_id << " has no next edge" << std::endl;
-            }
-        }
-    }
+    bool consistency_check_passed = perform_loop_closure_consistency_check( new_keyframe_estimate, rel_pose_new_to_best_matched,
+                                                                            best_matched, best_score );
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
     std::cout << "elapsed time in loop closure: " << elapsed_ms.count() << "[msec]" << std::endl;
@@ -275,6 +188,129 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     }
 
     return std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );
+}
+
+
+Eigen::Isometry3d
+LoopDetector::normalize_estimate( const Eigen::Isometry3d& estimate ) const
+{
+    Eigen::Isometry3d normalized_estimate = estimate;
+    normalized_estimate.linear()          = Eigen::Quaterniond( normalized_estimate.linear() ).normalized().toRotationMatrix();
+    return normalized_estimate;
+}
+
+
+bool
+LoopDetector::perform_loop_closure_consistency_check( const Eigen::Isometry3d& new_keyframe_estimate,
+                                                      const Eigen::Matrix4f&   rel_pose_new_to_best_matched,
+                                                      const KeyFrame::Ptr& best_matched, double best_score ) const
+{
+    // If the best matched candidate is the first keyframe from a robot, we dont perform the consistency check
+    // Also if the keyframe is static (no prev or next edge), i.e. given by the static map provider we dont perform the consistency check
+    if( best_matched != nullptr && ( best_matched->first_keyframe || best_matched->static_keyframe ) ) {
+        return true;
+    }
+
+    if( best_matched == nullptr || !use_loop_closure_consistency_check || best_score > fitness_score_thresh ) {
+        return false;
+    }
+
+    std::cout << "Performing loop closure consistency check with best matched candidate " << best_matched->readable_id << " score "
+              << best_score << std::endl;
+
+    if( check_consistency_with_prev_keyframe( new_keyframe_estimate, rel_pose_new_to_best_matched, best_matched ) ) {
+        return true;
+    }
+    // Check with next keyframe only if the consistency check with prev keyframe failed
+    return check_consistency_with_next_keyframe( new_keyframe_estimate, rel_pose_new_to_best_matched, best_matched );
+}
+
+bool
+LoopDetector::check_consistency_with_prev_keyframe( const Eigen::Isometry3d& new_keyframe_estimate,
+                                                    const Eigen::Matrix4f&   rel_pose_new_to_best_matched,
+                                                    const KeyFrame::Ptr&     best_matched ) const
+{
+    if( best_matched->prev_edge == nullptr ) {
+        std::cout << "candidate " << best_matched->readable_id << " has no prev edge" << std::endl;
+        return false;
+    }
+
+    Eigen::Matrix4f rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
+
+    const auto& prev_kf = best_matched->prev_edge->to_keyframe;
+    registration->setInputSource( prev_kf->cloud );
+    Eigen::Isometry3d prev_kf_estimate = normalize_estimate( prev_kf->node->estimate() );
+    Eigen::Matrix4f   prev_guess       = ( new_keyframe_estimate.inverse() * prev_kf_estimate ).matrix().cast<float>();
+    if( use_planar_registration_guess ) {
+        prev_guess( 2, 3 ) = 0.0;
+    }
+    pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
+    registration->align( *prev_aligned, prev_guess );
+
+    // We dont check if the registration has converged here, since we are only interested in the relative pose
+    Eigen::Matrix4f rel_pose_new_to_prev = registration->getFinalTransformation();
+
+    // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
+    auto  rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * rel_pose_new_to_best_matched * rel_pose_candidate_to_prev;
+    float delta_trans                  = rel_pose_identity_check_prev.block<3, 1>( 0, 3 ).norm();
+    float delta_angle =
+        Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
+
+    if( delta_trans > loop_closure_consistency_max_delta_trans || delta_angle > loop_closure_consistency_max_delta_angle ) {
+        std::cout << "Inconsistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans << " delta angle (deg)"
+                  << delta_angle * 180.0 / M_PI << std::endl;
+        return false;
+    }
+    // Success
+    std::cout << "Consistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans << " delta angle (deg) "
+              << delta_angle * 180.0 / M_PI << std::endl;
+    return true;
+}
+
+
+bool
+LoopDetector::check_consistency_with_next_keyframe( const Eigen::Isometry3d& new_keyframe_estimate,
+                                                    const Eigen::Matrix4f&   rel_pose_new_to_best_matched,
+                                                    const KeyFrame::Ptr&     best_matched ) const
+{
+    if( best_matched->next_edge == nullptr ) {
+        std::cout << "candidate " << best_matched->readable_id << " has no next edge" << std::endl;
+        return false;
+    }
+
+    Eigen::Matrix4f rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
+
+    const auto& next_kf = best_matched->next_edge->from_keyframe;
+    registration->setInputSource( next_kf->cloud );
+    Eigen::Isometry3d next_kf_estimate = normalize_estimate( next_kf->node->estimate() );
+    Eigen::Matrix4f   next_guess       = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
+    if( use_planar_registration_guess ) {
+        next_guess( 2, 3 ) = 0.0;
+    }
+    pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
+    registration->align( *next_aligned, next_guess );
+
+    // We dont check if the registration has converged here, since we are only interested in the relative pose
+    Eigen::Matrix4f rel_pose_new_to_next = registration->getFinalTransformation();
+
+    // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
+    auto rel_pose_identity_check_next = rel_pose_new_to_best_matched.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
+    // Alternative way to calculate the identity transform
+    // auto rel_pose_identity_check_next2 = rel_pose_new_to_next.inverse() * rel_pose_new_to_best_matched
+    //                                      * rel_pose_next_to_candidate.inverse();
+    float delta_trans_next = rel_pose_identity_check_next.block<3, 1>( 0, 3 ).norm();
+    float delta_angle_next =
+        Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
+
+    if( delta_trans_next > loop_closure_consistency_max_delta_trans || delta_angle_next > loop_closure_consistency_max_delta_angle ) {
+        std::cout << "Inconsistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next << " delta angle "
+                  << delta_angle_next * 180.0 / M_PI << std::endl;
+        return false;
+    }
+
+    std::cout << "Consistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next << " delta angle "
+              << delta_angle_next * 180.0 / M_PI << std::endl;
+    return true;
 }
 
 

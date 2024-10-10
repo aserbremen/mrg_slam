@@ -70,6 +70,53 @@ private:
     Loop::Ptr matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe );
 
 
+    /**
+     * @brief Normalize the estimate by normalizing the quaternion
+     *
+     * @param estimate Eigen::Isoemtry3d given by the g2o node
+     * @return Eigen::Isometry3d
+     */
+    Eigen::Isometry3d normalize_estimate( const Eigen::Isometry3d& estimate ) const;
+
+    /**
+     * @brief Calculate relative transformation from new keyframe to candidate to its previous/next keyframe and back to new keyframe, which
+     * should be the identity transformation if the loop closure hypothesis is correct.
+     *
+     * @param new_keyframe_estimate Normalized graph estimate of the new keyframe
+     * @param rel_pose_new_to_best_matched Relative transformation from new keyframe to best matched candidate
+     * @param best_matched Best matched candidate keyframe
+     * @param best_score Fitness score of the best matched candidate
+     * @return true if the loop closure consistency check passed
+     */
+    bool perform_loop_closure_consistency_check( const Eigen::Isometry3d& new_keyframe_estimate,
+                                                 const Eigen::Matrix4f& rel_pose_new_to_best_matched, const KeyFrame::Ptr& best_matched,
+                                                 double best_score ) const;
+
+    /**
+     * @brief Performs the consistency check with the previous keyframe
+     *
+     * @param new_keyframe_estimate Normalized graph estimate of the new keyframe
+     * @param rel_pose_new_to_best_matched Relative transformation from new keyframe to best matched candidate
+     * @param best_matched Best matched candidate keyframe
+     * @return true if the consistency check passed
+     */
+    bool check_consistency_with_prev_keyframe( const Eigen::Isometry3d& new_keyframe_estimate,
+                                               const Eigen::Matrix4f&   rel_pose_new_to_best_matched,
+                                               const KeyFrame::Ptr&     best_matched ) const;
+
+    /**
+     * @brief Performs the consistency check with the next keyframe
+     *
+     * @param new_keyframe_estimate Normalized graph estimate of the new keyframe
+     * @param rel_pose_new_to_best_matched Relative transformation from new keyframe to best matched candidate
+     * @param best_matched Best matched candidate keyframe
+     * @return true if the consistency check passed
+     */
+    bool check_consistency_with_next_keyframe( const Eigen::Isometry3d& new_keyframe_estimate,
+                                               const Eigen::Matrix4f&   rel_pose_new_to_best_matched,
+                                               const KeyFrame::Ptr&     best_matched ) const;
+
+
 private:
     rclcpp::Node::SharedPtr node_ros;
 
