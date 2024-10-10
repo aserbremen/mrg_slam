@@ -178,8 +178,6 @@ GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
         pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
         sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ), "Cloud ros has " << cloud_ros->width * cloud_ros->height << " points" );
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ), "Cloud ros frame_id " << cloud_ros->header.frame_id );
 
         auto          uuid        = uuid_from_string_generator( keyframe_ros.uuid_str );
         KeyFrame::Ptr keyframe    = std::make_shared<KeyFrame>( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
@@ -190,7 +188,7 @@ GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos
 
         RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ),
                             "Adding static keyframe: " << keyframe->readable_id << " and center "
-                                                       << keyframe->estimate_transform.translation().transpose() );
+                                                       << keyframe->estimate_transform.translation().transpose().head( 2 ) );
         static_keyframe_queue.push_back( keyframe );
     }
 }
