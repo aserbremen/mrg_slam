@@ -30,8 +30,11 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
         Eigen::Matrix4f pose = keyframe->pose.matrix().cast<float>();
         for( const auto& src_pt : keyframe->cloud->points ) {
             PointT dst_pt;
-            dst_pt.getVector4fMap() = pose * src_pt.getVector4fMap();
-            dst_pt.intensity        = src_pt.intensity;
+            // Static keyframes are already given in the global map frame
+            Eigen::Vector4f transformed_point = keyframe->static_keyframe ? Eigen::Vector4f( src_pt.getVector4fMap() )
+                                                                          : pose * src_pt.getVector4fMap();
+            dst_pt.getVector4fMap()           = transformed_point;
+            dst_pt.intensity                  = src_pt.intensity;
             cloud->push_back( dst_pt );
         }
     }

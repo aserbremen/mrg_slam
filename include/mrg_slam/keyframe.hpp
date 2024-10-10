@@ -117,12 +117,13 @@ public:
 
 public:
     // TODO find out whether to use uuid or uuid_str
-    builtin_interfaces::msg::Time     stamp;  // timestamp
-    long                              id;
-    boost::uuids::uuid                uuid;   // global id
-    Eigen::Isometry3d                 pose;   // pose estimated by graph optimization
+    builtin_interfaces::msg::Time stamp;  // timestamp
+    long                          id;
+    boost::uuids::uuid            uuid;  // global id
+    Eigen::Isometry3d pose;  // pose estimated by graph optimization (regular keyframe), center of a static map patch (static keyframe)
     pcl::PointCloud<PointT>::ConstPtr cloud;  // point cloud
     bool            first_keyframe;           // first keyframe of slam, the corresponding point cloud should be excluded from the map
+    bool            static_keyframe;          // keyframes that are part of the static map
     Eigen::MatrixXd covariance;
 };
 

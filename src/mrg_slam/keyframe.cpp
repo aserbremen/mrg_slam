@@ -252,7 +252,8 @@ KeyFrameSnapshot::KeyFrameSnapshot( const KeyFrame::Ptr& key, const std::shared_
     uuid( key->uuid ),
     pose( key->node->estimate() ),
     cloud( key->cloud ),
-    first_keyframe( key->first_keyframe )
+    first_keyframe( key->first_keyframe ),
+    static_keyframe( key->static_keyframe )
 {
     if( marginals ) {
         covariance = key->covariance( marginals );
