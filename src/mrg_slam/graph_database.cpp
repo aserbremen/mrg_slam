@@ -148,6 +148,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     // Add static keyframes to the graph. Static keyframes are not connected to any other keyframes.
     // They are not added to new_keyframes, because they cannot have loop closures among themselves.
     // However, new_keyframes will also be tested for loop closure against static keyframes.
+    std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
     for( const auto &static_keyframe : static_keyframe_queue ) {
         // add pose node
         static_keyframe->node = graph_slam->add_se3_node( static_keyframe->estimate_transform );
@@ -173,7 +174,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
 void
 GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos> &keyframes )
 {
-    std::lock_guard<std::mutex> lock( static_keyframe_queue_mutex );
+    std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
 
     for( const auto &keyframe_ros : keyframes ) {
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
@@ -188,8 +189,8 @@ GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos
         keyframe->estimate_transform = pose2isometry( keyframe_ros.estimate );
 
         RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ),
-                            "Adding static keyframe: " << keyframe->readable_id << " and center "
-                                                       << keyframe->estimate_transform.translation().transpose().head( 2 ) );
+                            "Adding static keyframe: " << keyframe->readable_id << " with center "
+                                                       << keyframe->estimate_transform.translation().transpose() );
         static_keyframe_queue.push_back( keyframe );
     }
 }
