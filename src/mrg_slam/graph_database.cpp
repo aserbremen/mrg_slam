@@ -60,7 +60,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
 {
     std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
 
-    if( keyframe_queue.empty() ) {
+    if( keyframe_queue.empty() && static_keyframe_queue.empty() ) {
         return false;
     }
 
