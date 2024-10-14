@@ -76,6 +76,8 @@ KeyFrame::save( const std::string& result_path )
 
     ofs << "first_keyframe " << first_keyframe << "\n";
 
+    ofs << "static_keyframe " << static_keyframe << "\n";
+
     if( floor_coeffs ) {
         ofs << "floor_coeffs " << floor_coeffs->transpose() << "\n";
     }
@@ -132,6 +134,9 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
             if( robot_name == empty_robot_name_str ) {
                 robot_name = std::string();  // empty string
             }
+        } else if( key == "readable_id" ) {
+            iss >> readable_id;
+            readable_id += loaded_keyframe_str;
         } else if( key == "stamp" ) {
             iss >> stamp.sec >> stamp.nanosec;
         } else if( key == "estimate" ) {
@@ -157,6 +162,8 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
             }
         } else if( key == "first_keyframe" ) {
             iss >> first_keyframe;
+        } else if( key == "static_keyframe" ) {
+            iss >> static_keyframe;
         } else if( key == "floor_coeffs" ) {
             Eigen::Vector4d coeffs;
             ifs >> coeffs[0] >> coeffs[1] >> coeffs[2] >> coeffs[3];
@@ -175,14 +182,6 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
             orientation = quat;
         }
     }
-
-    // Set the readable id indicating the keyframe is loaded from file
-    if( robot_name.empty() ) {
-        readable_id = empty_robot_name_str;
-    } else {
-        readable_id = robot_name;
-    }
-    readable_id += loaded_keyframe_str + "." + std::to_string( odom_keyframe_counter );
 
     pcl::PointCloud<PointT>::Ptr cloud_( new pcl::PointCloud<PointT>() );
     pcl::io::loadPCDFile( pcd_path, *cloud_ );
