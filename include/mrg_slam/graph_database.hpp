@@ -54,6 +54,13 @@ public:
     void add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes );
 
     /**
+     * @brief Process keyframes in the static keyframe queue and add them to the graph
+     *
+     * @return true if at least one static keyframe was processed
+     */
+    bool flush_static_keyframe_queue();
+
+    /**
      * @brief Adds a GraphRos message to the graph queue for later processing
      * @param graph_ros
      */

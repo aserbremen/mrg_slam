@@ -60,7 +60,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
 {
     std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
 
-    if( keyframe_queue.empty() && static_keyframe_queue.empty() ) {
+    if( keyframe_queue.empty() ) {
         return false;
     }
 
@@ -145,20 +145,6 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     }
     keyframe_queue.erase( keyframe_queue.begin(), keyframe_queue.begin() + num_processed + 1 );
 
-    // Add static keyframes to the graph. Static keyframes are not connected to any other keyframes.
-    // They are not added to new_keyframes, because they cannot have loop closures among themselves.
-    // However, new_keyframes will also be tested for loop closure against static keyframes.
-    std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
-    for( const auto &static_keyframe : static_keyframe_queue ) {
-        // add pose node
-        static_keyframe->node = graph_slam->add_se3_node( static_keyframe->estimate_transform );
-        static_keyframe->node->setFixed( true );
-        uuid_keyframe_map[static_keyframe->uuid] = static_keyframe;
-        keyframe_hash[static_keyframe->stamp]    = static_keyframe;
-        keyframes.push_back( static_keyframe );
-    }
-    static_keyframe_queue.clear();
-
     // TODO remove read_until ?
     // std_msgs::msg::Header read_until;
     // read_until.stamp =
@@ -176,23 +162,63 @@ GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos
 {
     std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
 
+
+    auto logger = rclcpp::get_logger( "add_static_map" );
+
     for( const auto &keyframe_ros : keyframes ) {
+        auto uuid = uuid_from_string_generator( keyframe_ros.uuid_str );
+        // Check if the static keyframe is already in the graph
+        if( uuid_keyframe_map.find( uuid ) != uuid_keyframe_map.end()
+            || std::find_if( static_keyframe_queue.begin(), static_keyframe_queue.end(), [uuid]( const KeyFrame::Ptr &keyframe ) {
+                   return keyframe->uuid == uuid;
+               } ) != static_keyframe_queue.end() ) {
+            RCLCPP_INFO_STREAM( logger, "Static keyframe " << keyframe_ros.uuid_str << " already in the graph or queue" );
+            continue;
+        }
+
         pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
         pcl::fromROSMsg( keyframe_ros.cloud, *cloud );
         sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros.cloud );
 
-        auto          uuid        = uuid_from_string_generator( keyframe_ros.uuid_str );
         KeyFrame::Ptr keyframe    = std::make_shared<KeyFrame>( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
                                                                 keyframe_ros.odom_counter, keyframe_ros.accum_distance, uuid,
                                                                 keyframe_ros.uuid_str, std::move( cloud ), std::move( cloud_ros ) );
         keyframe->static_keyframe = true;
         keyframe->estimate_transform = pose2isometry( keyframe_ros.estimate );
 
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_static_map" ),
-                            "Adding static keyframe: " << keyframe->readable_id << " with center "
-                                                       << keyframe->estimate_transform.translation().transpose() );
         static_keyframe_queue.push_back( keyframe );
     }
+}
+
+
+bool
+GraphDatabase::flush_static_keyframe_queue()
+{
+    std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
+
+    if( static_keyframe_queue.empty() ) {
+        return false;
+    }
+
+    auto logger = rclcpp::get_logger( "flush_static_keyframe_queue" );
+
+    // Add static keyframes to the graph. Static keyframes are not connected to any other keyframes.
+    // They are not added to new_keyframes, because they cannot have loop closures among themselves.
+    // However, new_keyframes will also be tested for loop closure against static keyframes.
+    for( const auto &static_keyframe : static_keyframe_queue ) {
+        // add pose node
+        RCLCPP_INFO_STREAM( logger, "Adding static keyframe: " << static_keyframe->readable_id << " with center "
+                                                               << static_keyframe->estimate_transform.translation().transpose() );
+        static_keyframe->node = graph_slam->add_se3_node( static_keyframe->estimate_transform );
+        static_keyframe->node->setFixed( true );
+        uuid_keyframe_map[static_keyframe->uuid] = static_keyframe;
+        keyframe_hash[static_keyframe->stamp]    = static_keyframe;
+        keyframes.push_back( static_keyframe );
+    }
+
+    static_keyframe_queue.clear();
+
+    return true;
 }
 
 
