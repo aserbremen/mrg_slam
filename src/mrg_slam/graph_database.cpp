@@ -299,7 +299,7 @@ GraphDatabase::flush_graph_queue(
         RCLCPP_INFO_STREAM( logger, "Adding unique keyframe: " << keyframe->readable_id );
         // Immediately add static keyframes to keyframes, since they are not connected to other keyframes.
         // New keyframes will be tested for loop closure against static keyframes. Static keyframes are not added to new_keyframes.
-        if( keyframe->static_keyframe ) {
+        if( keyframe_ros->static_keyframe ) {
             keyframe->static_keyframe = keyframe_ros->static_keyframe;
             keyframe->node->setFixed( true );
             keyframe->estimate_transform = pose;
@@ -484,8 +484,13 @@ GraphDatabase::flush_loaded_graph()
     for( const auto &keyframe : loaded_keyframes ) {
         keyframe->node                    = graph_slam->add_se3_node( keyframe->estimate_transform );
         uuid_keyframe_map[keyframe->uuid] = keyframe;
-        new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
-                                              // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
+        if( keyframe->static_keyframe ) {
+            keyframe->node->setFixed( true );
+            keyframes.push_back( keyframe );
+        } else {
+            new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
+                                                  // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
+        }
         RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id << " to new keyframes" );
     }
 
