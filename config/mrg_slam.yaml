@@ -9,6 +9,7 @@
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
+    enable_lidar2base_publisher: true
     lidar2base_x: 0.0012
     lidar2base_y: 0.0
     lidar2base_z: 0.716
