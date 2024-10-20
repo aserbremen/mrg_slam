@@ -152,7 +152,8 @@ mrg_slam_component:
     yaw: 0.0 # rad
     # init_pose array is overwritten by above values
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
-    init_pose_topic: "NONE"
+    init_odom_topic: "NONE" # nav_msgs/Odometry to set initial pose, if this is set init_pose_topic is ignored
+    init_pose_topic: "NONE" # geometry_msgs/PoseStamped to set initial pose
     # Frame settings
     map_frame_id: "map"
     odom_frame_id: "odom"
@@ -226,7 +227,7 @@ mrg_slam_component:
     min_stddev_q: 0.05
     max_stddev_q: 0.2
     # graph exchange params
-    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
+    # on which basis to trigger graph exchange between robots options [CURRENT_PROMIXITY, PATH_PROXIMITY]
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
     graph_request_min_accum_dist: 2.0

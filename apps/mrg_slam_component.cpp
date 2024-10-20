@@ -62,6 +62,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/time_synchronizer.h>
 
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -147,10 +148,14 @@ public:
             }
         }
 
-        if( init_pose_topic != "NONE" ) {
-            init_pose_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_pose_topic, rclcpp::QoS( 32 ),
-                                                                                std::bind( &MrgSlamComponent::init_pose_callback, this,
+        if( init_odom_topic != "NONE" ) {
+            init_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_odom_topic, rclcpp::QoS( 32 ),
+                                                                                std::bind( &MrgSlamComponent::init_odom_callback, this,
                                                                                            std::placeholders::_1 ) );
+        } else if( init_pose_topic != "NONE" ) {
+            init_pose_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>( init_pose_topic, rclcpp::QoS( 32 ),
+                                                                                        std::bind( &MrgSlamComponent::init_pose_callback,
+                                                                                                   this, std::placeholders::_1 ) );
         }
 
         // publishers
@@ -283,6 +288,7 @@ private:
         map_cloud_count_threshold = this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
 
         // Initial pose parameters
+        init_odom_topic = this->declare_parameter<std::string>( "init_odom_topic", "NONE" );
         init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
         init_pose_vec   = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
 
@@ -496,7 +502,7 @@ private:
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         if( init_pose_msg != nullptr ) {
             Eigen::Isometry3d pose( Eigen::Isometry3d::Identity() );
-            tf2::fromMsg( init_pose_msg->pose.pose, pose );
+            tf2::fromMsg( init_pose_msg->pose, pose );
             pose = pose
                    * graph_database->get_keyframe_queue()[0]->odom.inverse();  // "remove" odom (which will be added later again) such that
                                                                                // the init pose actually corresponds to the received pose
@@ -696,10 +702,21 @@ private:
 
 
     /**
-     * @brief receive anchor node pose from topic
-     * @param
+     * @brief receive anchor node pose from odometry topic
      */
-    void init_pose_callback( const nav_msgs::msg::Odometry::ConstSharedPtr msg ) { init_pose_msg = msg; }
+    void init_odom_callback( nav_msgs::msg::Odometry::ConstSharedPtr msg )
+    {
+        auto pose_stamped    = std::make_shared<geometry_msgs::msg::PoseStamped>();
+        pose_stamped->header = msg->header;
+        pose_stamped->pose   = msg->pose.pose;
+        init_pose_msg        = pose_stamped;
+    }
+
+    /**
+     * @brief receive anchor node pose from pose topic
+     */
+    void init_pose_callback( geometry_msgs::msg::PoseStamped::ConstSharedPtr msg ) { init_pose_msg = msg; }
+
 
     /**
      * @brief update the cloud_msg with the latest map
@@ -1473,9 +1490,11 @@ private:
     mrg_slam_msgs::msg::GraphEstimate::SharedPtr graph_estimate_msg;
 
     // getting init pose from topic
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr init_pose_sub;
-    std::string                                              init_pose_topic;
-    nav_msgs::msg::Odometry::ConstSharedPtr                  init_pose_msg;  // should be accessed with keyframe_queue_mutex locked
+    std::string                                                      init_odom_topic;
+    std::string                                                      init_pose_topic;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr         init_odom_sub;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr init_pose_sub;
+    geometry_msgs::msg::PoseStamped::ConstSharedPtr                  init_pose_msg;  // should be accessed with keyframe_queue_mutex locked
 
     // for map cloud generation and graph publishing
     std::string                        base_frame_id;

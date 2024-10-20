@@ -31,6 +31,7 @@ PARAM_MAPPING = {
     'roll': float,
     'pitch': float,
     'yaw': float,
+    'init_odom_topic': str,
     'init_pose_topic': str,
     'result_dir': str,
 }
