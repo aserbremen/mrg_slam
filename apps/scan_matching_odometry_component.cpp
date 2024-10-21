@@ -105,6 +105,7 @@ private:
         // Declare and set ROS2 parameters
         points_topic        = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
         odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        base_frame_id       = this->declare_parameter<std::string>( "base_frame_id", "" );
         robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
         keyframe_delta_trans = this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
@@ -168,7 +169,10 @@ private:
                                                                                   / cloud_sizes.size() );
         }
 
-        publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
+        auto odom_child_frame_id = base_frame_id.empty() ? cloud_msg->header.frame_id : base_frame_id;
+        RCLCPP_INFO_STREAM_THROTTLE( this->get_logger(), *( this->get_clock() ), 5000,
+                                     "Publishing scan_matching_odometry from " << odom_frame_id << " to " << odom_child_frame_id );
+        publish_odometry( cloud_msg->header.stamp, odom_child_frame_id, pose );
 
         // In offline estimation, point clouds until the published time will be supplied
         std_msgs::msg::Header read_until;
@@ -456,6 +460,7 @@ private:
     // Algorithm, ROS2 parameters
     std::string points_topic;
     std::string odom_frame_id;
+    std::string base_frame_id;
     std::string robot_odom_frame_id;
 
     // keyframe parameters

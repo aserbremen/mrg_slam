@@ -249,7 +249,7 @@ def launch_setup(context, *args, **kwargs):
     remaps = [('/imu/data', shared_params['imu_topic']),
               ('/velodyne_points', shared_params['points_topic'])]
     if model_namespace != '':
-        prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
+        prefiltering_params['base_link_frame'] = model_namespace  # + '/' + prefiltering_params['base_link_frame']
         remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
                   ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
                   ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
@@ -281,6 +281,8 @@ def launch_setup(context, *args, **kwargs):
     # set the correct frame ids according to the model namespace
     scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
     scan_matching_odometry_params['robot_odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
+    if scan_matching_odometry_params['base_frame_id'] != '':
+        scan_matching_odometry_params['base_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['base_frame_id']
     if scan_matching_odometry_params['enable_scan_matching_odometry']:
         scan_matching_odometry_node = ComposableNode(
             package='mrg_slam',

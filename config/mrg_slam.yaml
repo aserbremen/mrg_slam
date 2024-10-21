@@ -9,7 +9,7 @@
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
-    enable_lidar2base_publisher: true
+    enable_lidar2base_publisher: false
     lidar2base_x: 0.0012
     lidar2base_y: 0.0
     lidar2base_z: 0.716
@@ -84,10 +84,11 @@ prefiltering_component:
 scan_matching_odometry_component:
   ros__parameters:
     enable_scan_matching_odometry: true
-    enable_odom_to_file: true
+    enable_odom_to_file: false
 
     points_topic: "/velodyne_points"
     odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    base_frame_id: "base_link" # default "", is prepended by model_namespace
     robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
@@ -172,7 +173,7 @@ mrg_slam_component:
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
-    keyframe_delta_angle: 1.0 # rad
+    keyframe_delta_angle: 0.5236 # rad
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
