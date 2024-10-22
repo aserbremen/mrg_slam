@@ -170,8 +170,8 @@ private:
         }
 
         auto odom_child_frame_id = base_frame_id.empty() ? cloud_msg->header.frame_id : base_frame_id;
-        RCLCPP_INFO_STREAM_THROTTLE( this->get_logger(), *( this->get_clock() ), 5000,
-                                     "Publishing scan_matching_odometry from " << odom_frame_id << " to " << odom_child_frame_id );
+        RCLCPP_INFO_STREAM_ONCE( this->get_logger(),
+                                 "Publishing scan_matching_odometry from " << odom_frame_id << " to " << odom_child_frame_id );
         publish_odometry( cloud_msg->header.stamp, odom_child_frame_id, pose );
 
         // In offline estimation, point clouds until the published time will be supplied
