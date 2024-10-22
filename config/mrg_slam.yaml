@@ -9,15 +9,15 @@
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
-    enable_lidar2base_publisher: false
-    lidar2base_x: 0.0012
+    enable_lidar2base_publisher: true
+    lidar2base_x: 0.0
     lidar2base_y: 0.0
-    lidar2base_z: 0.716
-    lidar2base_roll: 0.0
+    lidar2base_z: 1.0
+    lidar2base_roll: 1.5708
     lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
     lidar2base_yaw: 0.0
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
-    lidar_frame_id: "velodyne" # is prepended by model_namespace
+    lidar_frame_id: "base_link_x_forward" # is prepended by model_namespace
 
 map2robotmap_publisher:
   ros__parameters:
@@ -183,7 +183,7 @@ mrg_slam_component:
     accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
     min_edge_interval: 5.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
-    fitness_score_thresh: 2.5
+    fitness_score_thresh: 1.25
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
