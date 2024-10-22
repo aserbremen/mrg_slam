@@ -1420,7 +1420,10 @@ private:
             return;
         }
 
+        auto stamp_temp         = cloud_msg->header.stamp;
+        cloud_msg->header.stamp = this->now().operator builtin_interfaces::msg::Time();
         nav_map_points_pub->publish( *cloud_msg );
+        cloud_msg->header.stamp = stamp_temp;
         res->success = true;
         res->message = "Published map";
     }
