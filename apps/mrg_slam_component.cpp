@@ -67,6 +67,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
 
 
@@ -161,6 +162,7 @@ public:
         // publishers
         odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/mrg_slam/odom2map", 16 );
         map_points_pub          = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/map_points", rclcpp::QoS( 1 ) );
+        nav_map_points_pub      = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/nav_map_points", rclcpp::QoS( 1 ) );
         read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "/mrg_slam/read_until", rclcpp::QoS( 16 ) );
         odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
         slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast",
@@ -254,6 +256,11 @@ public:
                                                          std::placeholders::_2 );
         get_graph_gids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphGids>( "/mrg_slam/get_graph_gids",
                                                                                                       get_graph_gids_service_callback );
+        publish_map_service_server          = this->create_service<std_srvs::srv::Trigger>( "/mrg_slam/publish_map",
+                                                                                            std::bind( &MrgSlamComponent::publish_map_service, this,
+                                                                                                       std::placeholders::_1,
+                                                                                                       std::placeholders::_2 ) );
+
 
         // Initialize all processors
         gps_processor.onInit( node_ros );
@@ -1403,6 +1410,22 @@ private:
         }
     }
 
+    void publish_map_service( std_srvs::srv::Trigger::Request::ConstSharedPtr req, std_srvs::srv::Trigger::Response::SharedPtr res )
+    {
+        update_cloud_msg();
+
+        if( !cloud_msg ) {
+            res->success = false;
+            res->message = "No map to publish";
+            return;
+        }
+
+        nav_map_points_pub->publish( *cloud_msg );
+        res->success = true;
+        res->message = "Published map";
+    }
+
+
 private:
     enum GraphExchangeMode {
         CURRENT_PROXIMITY,
@@ -1460,6 +1483,7 @@ private:
 
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr nav_map_points_pub;
 
     // Services
     rclcpp::Service<mrg_slam_msgs::srv::AddStaticMap>::SharedPtr     add_static_map_service_server;
@@ -1471,6 +1495,7 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr               publish_map_service_server;
 
     // Processors
     ImuProcessor         imu_processor;

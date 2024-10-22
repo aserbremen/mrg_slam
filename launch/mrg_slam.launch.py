@@ -352,6 +352,7 @@ def launch_setup(context, *args, **kwargs):
                       ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
                       ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
                       ('/mrg_slam/map_points', '/' + model_namespace + '/mrg_slam/map_points'),
+                      ('/mrg_slam/nav_map_points', '/' + model_namespace + '/mrg_slam/nav_map_points'),
                       ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
                       ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
                       ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
@@ -367,6 +368,7 @@ def launch_setup(context, *args, **kwargs):
                       ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
                       ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
                       ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
+                      ('/mrg_slam/publish_map', '/' + model_namespace + '/mrg_slam/publish_map'),
                       ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
         print_remappings(remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(

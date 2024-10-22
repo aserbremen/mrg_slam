@@ -67,6 +67,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(geographic_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(ndt_omp REQUIRED)
 find_package(fast_gicp REQUIRED)
@@ -252,6 +253,7 @@ ament_target_dependencies(mrg_slam_component
   geographic_msgs
   visualization_msgs
   mrg_slam_msgs
+  std_srvs
   fast_gicp
   ndt_omp
 )

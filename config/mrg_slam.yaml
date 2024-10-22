@@ -238,8 +238,8 @@ mrg_slam_component:
     graph_exchange_mode: "PATH_PROXIMITY"
     # update params
     graph_update_interval: 3.0
-    map_cloud_update_interval: 2.0
-    map_cloud_resolution: 0.1
+    map_cloud_update_interval: 20.0
+    map_cloud_resolution: -1.0
     save_graph: false
     result_dir: ""
     # remappings are handled in the python respective launch file
