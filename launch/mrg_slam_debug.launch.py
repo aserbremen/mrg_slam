@@ -70,6 +70,7 @@ PARAM_MAPPING = {
     'roll': float,
     'pitch': float,
     'yaw': float,
+    'init_odom_topic': str,
     'init_pose_topic': str,
     'result_dir': str,
 }
@@ -120,7 +121,7 @@ def launch_setup(context, *args, **kwargs):
         # # Print all parameters from the yaml file for convenience when launching the nodes
         # print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params['/**']['ros__parameters']
-        static_transform_params = config_params['lidar2base_publisher']['ros__parameters']
+        lidar2base_publisher_params = config_params['lidar2base_publisher']['ros__parameters']
         map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
         clock_publisher_ros2_params = config_params['clock_publisher_ros2']['ros__parameters']
         velodyne_params = config_params['velodyne']['ros__parameters']
@@ -131,7 +132,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Overwrite the parameters from the yaml file with the ones from the cli
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
-    static_transform_params = overwrite_yaml_params_from_cli(static_transform_params, context.launch_configurations)
+    lidar2base_publisher_params = overwrite_yaml_params_from_cli(lidar2base_publisher_params, context.launch_configurations)
     map2robotmap_publisher_params = overwrite_yaml_params_from_cli(map2robotmap_publisher_params, context.launch_configurations)
     velodyne_params = overwrite_yaml_params_from_cli(velodyne_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
@@ -142,7 +143,7 @@ def launch_setup(context, *args, **kwargs):
     model_namespace = shared_params['model_namespace']
 
     print_yaml_params(shared_params, 'shared_params')
-    print_yaml_params(static_transform_params, 'static_transform_params')
+    print_yaml_params(lidar2base_publisher_params, 'lidar2base_publisher_params')
     print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
     print_yaml_params(clock_publisher_ros2_params, 'clock_publisher_ros2_params')
     print_yaml_params(velodyne_params, 'velodyne_params')
@@ -152,28 +153,29 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(mrg_slam_params, 'mrg_slam_params')
 
     # Create the static transform publisher node between the base and the lidar frame
-    frame_id = static_transform_params['base_frame_id']
-    child_frame_id = static_transform_params['lidar_frame_id']
-    if model_namespace != '':
-        frame_id = model_namespace + '/' + frame_id
-        child_frame_id = model_namespace + '/' + child_frame_id
-    static_transform_publisher = Node(
-        name='lidar2base_publisher',
-        namespace=model_namespace,
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        # arguments has to be a list of strings
-        arguments=[str(static_transform_params['lidar2base_x']),
-                   str(static_transform_params['lidar2base_y']),
-                   str(static_transform_params['lidar2base_z']),
-                   str(static_transform_params['lidar2base_roll']),
-                   str(static_transform_params['lidar2base_pitch']),
-                   str(static_transform_params['lidar2base_yaw']),
-                   frame_id,
-                   child_frame_id],
-        parameters=[shared_params],
-        output='both'
-    )
+    if lidar2base_publisher_params['enable_lidar2base_publisher']:
+        frame_id = lidar2base_publisher_params['base_frame_id']
+        child_frame_id = lidar2base_publisher_params['lidar_frame_id']
+        if model_namespace != '':
+            frame_id = model_namespace + '/' + frame_id
+            child_frame_id = model_namespace + '/' + child_frame_id
+        static_transform_publisher = Node(
+            name='lidar2base_publisher',
+            namespace=model_namespace,
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            # arguments has to be a list of strings
+            arguments=[str(lidar2base_publisher_params['lidar2base_x']),
+                       str(lidar2base_publisher_params['lidar2base_y']),
+                       str(lidar2base_publisher_params['lidar2base_z']),
+                       str(lidar2base_publisher_params['lidar2base_roll']),
+                       str(lidar2base_publisher_params['lidar2base_pitch']),
+                       str(lidar2base_publisher_params['lidar2base_yaw']),
+                       frame_id,
+                       child_frame_id],
+            parameters=[shared_params],
+            output='both'
+        )
 
     # Create the map2robotmap publisher node, if it is enabled and a model_namespace is set
     if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
@@ -274,11 +276,12 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
+
     # prefiltering component
     remaps = [('/imu/data', shared_params['imu_topic']),
               ('/velodyne_points', shared_params['points_topic'])]
     if model_namespace != '':
-        prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
+        prefiltering_params['base_link_frame'] = model_namespace  # + '/' + prefiltering_params['base_link_frame']
         remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
                   ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
                   ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
@@ -310,6 +313,8 @@ def launch_setup(context, *args, **kwargs):
     # set the correct frame ids according to the model namespace
     scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
     scan_matching_odometry_params['robot_odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
+    if scan_matching_odometry_params['base_frame_id'] != '':
+        scan_matching_odometry_params['base_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['base_frame_id']
     if scan_matching_odometry_params['enable_scan_matching_odometry']:
         scan_matching_odometry_node = ComposableNode(
             package='mrg_slam',
@@ -379,6 +384,7 @@ def launch_setup(context, *args, **kwargs):
                       ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
                       ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
                       ('/mrg_slam/map_points', '/' + model_namespace + '/mrg_slam/map_points'),
+                      ('/mrg_slam/nav_map_points', '/' + model_namespace + '/mrg_slam/nav_map_points'),
                       ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
                       ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
                       ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
@@ -394,6 +400,7 @@ def launch_setup(context, *args, **kwargs):
                       ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
                       ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
                       ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
+                      ('/mrg_slam/publish_map', '/' + model_namespace + '/mrg_slam/publish_map'),
                       ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
         print_remappings(remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(

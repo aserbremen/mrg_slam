@@ -183,7 +183,7 @@ mrg_slam_component:
     accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
     min_edge_interval: 5.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
     fitness_score_max_range: .inf
-    fitness_score_thresh: 1.25
+    fitness_score_thresh: 0.5
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
