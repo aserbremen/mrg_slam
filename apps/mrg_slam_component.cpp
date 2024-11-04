@@ -49,6 +49,7 @@
 #include <mrg_slam_msgs/srv/get_map.hpp>
 #include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
+#include <mrg_slam_msgs/srv/publish_map.hpp>
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
 #include <mrg_slam_msgs/srv/save_graph.hpp>
 #include <mrg_slam_msgs/srv/save_map.hpp>
@@ -68,7 +69,6 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <tf2_eigen/tf2_eigen.hpp>
-
 
 namespace mrg_slam {
 class MrgSlamComponent : public rclcpp::Node {
@@ -160,7 +160,8 @@ public:
 
         // publishers
         odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/mrg_slam/odom2map", 16 );
-        map_points_pub          = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/map_points", rclcpp::QoS( 1 ) );
+        map_points_timer_pub    = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/map_points", rclcpp::QoS( 1 ) );
+        map_points_service_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
         read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "/mrg_slam/read_until", rclcpp::QoS( 16 ) );
         odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
         slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast",
@@ -222,6 +223,13 @@ public:
                             std::shared_ptr<mrg_slam_msgs::srv::GetMap::Response>      res )>
             get_map_service_callback = std::bind( &MrgSlamComponent::get_map_service, this, std::placeholders::_1, std::placeholders::_2 );
         get_map_service_server       = this->create_service<mrg_slam_msgs::srv::GetMap>( "/mrg_slam/get_map", get_map_service_callback );
+        // Publish map service
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Response>      res )>
+            publish_map_service_callback = std::bind( &MrgSlamComponent::publish_map_service, this, std::placeholders::_1,
+                                                      std::placeholders::_2 );
+        publish_map_service_server       = this->create_service<mrg_slam_msgs::srv::PublishMap>( "/mrg_slam/publish_map",
+                                                                                                 publish_map_service_callback );
         // Get graph estimate service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Response>      res )>
@@ -760,7 +768,7 @@ private:
      */
     void map_points_publish_timer_callback()
     {
-        if( !map_points_pub->get_subscription_count() ) {
+        if( !map_points_timer_pub->get_subscription_count() ) {
             return;
         }
 
@@ -774,7 +782,7 @@ private:
             return;
         }
 
-        map_points_pub->publish( *cloud_msg );
+        map_points_timer_pub->publish( *cloud_msg );
     }
 
     /**
@@ -783,7 +791,6 @@ private:
      * @param res
      * @return
      */
-    // TODO test this service
     void get_map_service( mrg_slam_msgs::srv::GetMap::Request::ConstSharedPtr req, mrg_slam_msgs::srv::GetMap::Response::SharedPtr res )
     {
         std::lock_guard<std::mutex> lock( cloud_msg_mutex );
@@ -802,6 +809,43 @@ private:
             res->updated = false;
         }
     }
+
+    /**
+     * @brief Publish the map points triggered by a service call and not by a timer. On a different topic than the timer
+     */
+    void publish_map_service( mrg_slam_msgs::srv::PublishMap::Request::ConstSharedPtr req,
+                              mrg_slam_msgs::srv::PublishMap::Response::SharedPtr     res )
+    {
+        if( !cloud_msg ) {
+            res->success = false;
+            return;
+        }
+
+        std::vector<KeyFrameSnapshot::Ptr> snapshot;
+        {
+            std::lock_guard<std::mutex> lock( snapshots_mutex );
+            snapshot = keyframes_snapshot;
+        }
+
+        double      resolution      = req->resolution == 0 ? map_cloud_resolution : req->resolution;
+        int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
+        std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
+
+        auto cloud             = map_cloud_generator->generate( snapshot, resolution, count_threshold );
+        cloud->header.frame_id = frame_id;
+        cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
+
+        if( !cloud ) {
+            res->success = false;
+            return;
+        }
+        auto cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
+        pcl::toROSMsg( *cloud, *cloud_msg );
+
+        map_points_service_pub->publish( *cloud_msg );
+        res->success = true;
+    }
+
 
     /**
      * @brief get the curren graph estimate
@@ -1459,7 +1503,8 @@ private:
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
 
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_timer_pub;    // timer based map cloud publisher
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_service_pub;  // service based map cloud publisher
 
     // Services
     rclcpp::Service<mrg_slam_msgs::srv::AddStaticKeyFrames>::SharedPtr add_static_keyframes_service_server;
@@ -1467,6 +1512,7 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr             get_map_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::PublishMap>::SharedPtr         publish_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr   get_graph_estimate_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;

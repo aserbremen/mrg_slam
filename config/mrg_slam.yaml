@@ -239,6 +239,7 @@ mrg_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0
     map_cloud_resolution: 0.1
+    map_cloud_count_threshold: 2
     save_graph: false
     result_dir: ""
     # remappings are handled in the python respective launch file
