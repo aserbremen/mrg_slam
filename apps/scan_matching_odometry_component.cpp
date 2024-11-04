@@ -355,6 +355,8 @@ private:
         trans_pub->publish( odom_trans );
 
         // broadcast the transform over tf
+        RCLCPP_INFO_STREAM_ONCE( this->get_logger(),
+                                 "broadcasting transform from " << odom_trans.header.frame_id << " to " << odom_trans.child_frame_id );
         odom_broadcaster->sendTransform( odom_trans );
 
         // publish the transform

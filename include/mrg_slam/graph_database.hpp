@@ -51,7 +51,7 @@ public:
      * @brief Adds static keyframes to the queue
      * @param keyframes vector of keyframes from the static map provider
      */
-    void add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes );
+    void add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes );
 
     /**
      * @brief Process keyframes in the static keyframe queue and add them to the graph

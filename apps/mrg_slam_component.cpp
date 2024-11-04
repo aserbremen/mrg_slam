@@ -43,7 +43,7 @@
 #include <mrg_slam_msgs/msg/pose_with_name.hpp>
 #include <mrg_slam_msgs/msg/pose_with_name_array.hpp>
 #include <mrg_slam_msgs/msg/slam_status.hpp>
-#include <mrg_slam_msgs/srv/add_static_map.hpp>
+#include <mrg_slam_msgs/srv/add_static_key_frames.hpp>
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_gids.hpp>
 #include <mrg_slam_msgs/srv/get_map.hpp>
@@ -191,12 +191,12 @@ public:
         // work during runtime, try using lambda functions as in
         // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Add static map service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::AddStaticMap::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::AddStaticMap::Response>      res )>
-            add_static_map_service_callback = std::bind( &MrgSlamComponent::add_static_map_service, this, std::placeholders::_1,
-                                                         std::placeholders::_2 );
-        add_static_map_service_server       = this->create_service<mrg_slam_msgs::srv::AddStaticMap>( "/mrg_slam/add_static_map",
-                                                                                                      add_static_map_service_callback );
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::AddStaticKeyFrames::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::AddStaticKeyFrames::Response>      res )>
+            add_static_keyframes_service_callback = std::bind( &MrgSlamComponent::add_static_keyframes_service, this, std::placeholders::_1,
+                                                               std::placeholders::_2 );
+        add_static_keyframes_service_server       = this->create_service<mrg_slam_msgs::srv::AddStaticKeyFrames>(
+            "/mrg_slam/add_static_keyframes", add_static_keyframes_service_callback );
         // Save graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Response>      res )>
@@ -1008,10 +1008,10 @@ private:
     }
 
 
-    void add_static_map_service( mrg_slam_msgs::srv::AddStaticMap::Request::ConstSharedPtr req,
-                                 mrg_slam_msgs::srv::AddStaticMap::Response::SharedPtr     res )
+    void add_static_keyframes_service( mrg_slam_msgs::srv::AddStaticKeyFrames::Request::ConstSharedPtr req,
+                                       mrg_slam_msgs::srv::AddStaticKeyFrames::Response::SharedPtr     res )
     {
-        graph_database->add_static_map( req->keyframes );
+        graph_database->add_static_keyframes( req->keyframes );
         res->success = true;
     }
 
@@ -1462,15 +1462,15 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_pub;
 
     // Services
-    rclcpp::Service<mrg_slam_msgs::srv::AddStaticMap>::SharedPtr     add_static_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr        save_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr        load_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr          save_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr           get_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr get_graph_estimate_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr     publish_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr    request_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr     get_graph_gids_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::AddStaticKeyFrames>::SharedPtr add_static_keyframes_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr          save_graph_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr             get_map_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr   get_graph_estimate_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr       get_graph_gids_service_server;
 
     // Processors
     ImuProcessor         imu_processor;

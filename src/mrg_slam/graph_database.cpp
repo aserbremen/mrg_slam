@@ -158,12 +158,12 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
 }
 
 void
-GraphDatabase::add_static_map( const std::vector<mrg_slam_msgs::msg::KeyFrameRos> &keyframes )
+GraphDatabase::add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFrameRos> &keyframes )
 {
     std::lock_guard<std::mutex> lock_static( static_keyframe_queue_mutex );
 
 
-    auto logger = rclcpp::get_logger( "add_static_map" );
+    auto logger = rclcpp::get_logger( "add_static_keyframes" );
 
     for( const auto &keyframe_ros : keyframes ) {
         auto uuid = uuid_from_string_generator( keyframe_ros.uuid_str );
