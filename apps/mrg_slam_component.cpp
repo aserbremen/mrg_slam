@@ -831,14 +831,14 @@ private:
         int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
         std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud             = map_cloud_generator->generate( snapshot, resolution, count_threshold );
-        cloud->header.frame_id = frame_id;
-        cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
-
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold );
         if( !cloud ) {
             res->success = false;
             return;
         }
+        cloud->header.frame_id = frame_id;
+        cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
+
         auto cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
         pcl::toROSMsg( *cloud, *cloud_msg );
 
