@@ -34,8 +34,8 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     node( nullptr )
 {
     readable_id = robot_name.empty() ? empty_robot_name_str : robot_name;
-    readable_id += odom_keyframe_counter >= 0 ? "." + std::to_string( odom_keyframe_counter )
-                                              : "." + uuid_str.substr( 0, 4 );  // use the first 8 characters of the uuid
+    // use the first 8 characters of the uuid if keyframe is given by the static keyframe provider
+    readable_id += odom_keyframe_counter >= 0 ? "." + std::to_string( odom_keyframe_counter ) : "." + uuid_str.substr( 0, 4 );
 }
 
 KeyFrame::KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,

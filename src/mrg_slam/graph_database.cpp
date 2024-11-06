@@ -432,7 +432,6 @@ GraphDatabase::load_graph( const std::string &directory )
     };
 
     // load all the keyframes, point clouds and edges, which will be added to the pose graph in the next optimization
-    // TODO check if mutex is necessary for loaded keyframes and edges
     std::lock_guard<std::mutex> lock( loaded_graph_mutex );
     for( size_t i = 0; i < keyframe_files.size(); i++ ) {
         std::string keyframe_file   = keyframe_files[i].string();
@@ -491,7 +490,7 @@ GraphDatabase::flush_loaded_graph()
             new_keyframes.push_back( keyframe );  // new_keyframes will be tested later for loop closure don't add it to keyframe_hash,
                                                   // which is only used for floor_coeffs keyframe_hash[keyframe->stamp] = keyframe;
         }
-        RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id << " to new keyframes" );
+        RCLCPP_INFO_STREAM( logger, "Adding keyframe: " << keyframe->readable_id );
     }
 
     for( const auto &edge : loaded_edges ) {

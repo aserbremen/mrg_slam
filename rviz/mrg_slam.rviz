@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /TF1
         - /static_keyframe_provider1/keyframes1/Topic1
       Splitter Ratio: 0.7719298005104065
     Tree Height: 1147
@@ -57,11 +58,21 @@ Visualization Manager:
           Value: true
         atlas/velodyne:
           Value: true
+        bestla/base_link:
+          Value: true
+        bestla/keyframe:
+          Value: true
+        bestla/map:
+          Value: true
+        bestla/odom:
+          Value: true
+        bestla/velodyne:
+          Value: true
         map:
           Value: true
         odom:
           Value: true
-      Marker Scale: 10
+      Marker Scale: 5
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -74,6 +85,13 @@ Visualization Manager:
           atlas/map:
             atlas/odom:
               atlas/keyframe:
+                {}
+          bestla/map:
+            bestla/odom:
+              bestla/base_link:
+                bestla/velodyne:
+                  {}
+              bestla/keyframe:
                 {}
           odom:
             {}
@@ -690,9 +708,9 @@ Visualization Manager:
           Enabled: true
           Invert Rainbow: false
           Max Color: 255; 255; 255
-          Max Intensity: 2.6296305656433105
+          Max Intensity: 1.9777988195419312
           Min Color: 0; 0; 0
-          Min Intensity: 0.7040621042251587
+          Min Intensity: 0.5173101425170898
           Name: atlas/mrg_slam/map_points
           Position Transformer: XYZ
           Selectable: true
@@ -1321,25 +1339,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 52.911441802978516
+      Distance: 84.01719665527344
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 3.791012763977051
-        Y: 0.5578497648239136
-        Z: -7.960007667541504
+        X: 4.056352138519287
+        Y: 0.9567029476165771
+        Z: -6.447484016418457
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9947977662086487
+      Pitch: 0.6297981142997742
       Target Frame: map
       Value: Orbit (rviz)
-      Yaw: 3.1585543155670166
+      Yaw: 3.2635538578033447
     Saved: ~
 Window Geometry:
   Displays:
