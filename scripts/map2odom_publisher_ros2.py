@@ -15,7 +15,7 @@ class Map2OdomPublisher(Node):
     def __init__(self):
         super().__init__('map2odom_publisher')
         self.tf_broadcaster = TransformBroadcaster(self)
-        self.subscription = self.create_subscription(TransformStamped, '/mrg_slam/odom2map', self.odom_callback, 10)
+        self.subscription = self.create_subscription(TransformStamped, 'mrg_slam/odom2map', self.odom_callback, 10)
         self.subscription  # prevent unused variable warning
         # create a timer for simplicity instead of creating a ROS2 spin inside its own thread, see
         # https://answers.ros.org/question/358343/rate-and-sleep-function-in-rclpy-library-for-ros2/

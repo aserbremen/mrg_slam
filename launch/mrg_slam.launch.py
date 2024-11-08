@@ -70,11 +70,7 @@ def launch_setup(context, *args, **kwargs):
     config_file = 'mrg_slam.yaml'
     if 'config' in context.launch_configurations:
         config_file = context.launch_configurations['config']
-    config_file_path = os.path.join(
-        get_package_share_directory('mrg_slam'),
-        'config',
-        config_file
-    )
+    config_file_path = os.path.join(get_package_share_directory('mrg_slam'), 'config', config_file)
 
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
@@ -170,10 +166,6 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # Create the map2odom publisher node
-    remaps = []
-    if model_namespace != '':
-        remaps = [('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map')]
-    print_remappings(remaps, 'map2odom_publisher_ros2')
     map2odom_publisher_ros2 = Node(
         package='mrg_slam',
         executable='map2odom_publisher_ros2.py',
@@ -246,8 +238,7 @@ def launch_setup(context, *args, **kwargs):
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
-    remaps = [('/imu/data', shared_params['imu_topic']),
-              ('/velodyne_points', shared_params['points_topic'])]
+    remaps = []
     if model_namespace != '':
         prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
         remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
