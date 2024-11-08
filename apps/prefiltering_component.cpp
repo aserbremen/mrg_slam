@@ -69,16 +69,16 @@ public:
         }
 
         if( use_deskewing ) {
-            imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1 ),
+            imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
                                                                         std::bind( &PrefilteringComponent::imu_callback, this,
                                                                                    std::placeholders::_1 ) );
         }
 
-        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/velodyne_points", rclcpp::QoS( 64 ),
+        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
                                                                                 std::bind( &PrefilteringComponent::cloud_callback, this,
                                                                                            std::placeholders::_1 ) );
-        points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/filtered_points", rclcpp::QoS( 32 ) );
-        colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/prefiltering/colored_points", rclcpp::QoS( 32 ) );
+        points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
+        colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
         // setup transform listener
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );

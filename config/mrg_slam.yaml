@@ -3,8 +3,8 @@
   ros__parameters:
     model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
-    points_topic: "/velodyne_points"
-    imu_topic: "/imu/data"
+    points_topic: "velodyne_points"
+    imu_topic: "imu/data"
 
 # Transform between lidar and base_link
 lidar2base_publisher:
@@ -229,7 +229,7 @@ mrg_slam_component:
     max_stddev_q: 0.2
     # graph exchange params
     # on which basis to trigger graph exchange between robots options [CURRENT_PROMIXITY, PATH_PROXIMITY]
-    # CURRENT_PROMIXITY: based on current distance between robots ()
+    # CURRENT_PROMIXITY: based on current distance between robots
     # PATH_PROXIMITY: based on already traversed path
     graph_request_min_accum_dist: 2.0
     graph_request_max_robot_dist: 50.0

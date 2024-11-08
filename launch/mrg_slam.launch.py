@@ -172,8 +172,7 @@ def launch_setup(context, *args, **kwargs):
         name='map2odom_publisher_ros2',
         namespace=model_namespace,
         output='both',
-        parameters=[mrg_slam_params, shared_params],
-        remappings=remaps
+        parameters=[mrg_slam_params, shared_params]
     )
 
     # Create the container node
@@ -238,13 +237,8 @@ def launch_setup(context, *args, **kwargs):
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
-    remaps = []
-    if model_namespace != '':
-        prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
-        remaps = [('/imu/data', '/' + model_namespace + shared_params['imu_topic']),
-                  ('/velodyne_points', '/' + model_namespace + shared_params['points_topic']),
-                  ('/prefiltering/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                  ('/prefiltering/colored_points', '/' + model_namespace + '/prefiltering/colored_points')]
+    remaps = [('imu/data', shared_params['imu_topic']),
+              ('velodyne_points', shared_params['points_topic'])]
     print_remappings(remaps, 'prefiltering_component')
     if prefiltering_params['enable_prefiltering']:
         prefiltering_node = ComposableNode(
