@@ -26,12 +26,12 @@ GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 
     // if( private_nh->param<bool>( "enable_gps", true ) ) {
     if( enable_gps ) {
-        nmea_sub   = _node->create_subscription<nmea_msgs::msg::Sentence>( "/gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
-                                                                         std::bind( &GpsProcessor::nmea_callback, this, _1 ) );
-        navsat_sub = _node->create_subscription<sensor_msgs::msg::NavSatFix>( "/gps/navsat", rclcpp::QoS( 1024 ),
+        nmea_sub   = _node->create_subscription<nmea_msgs::msg::Sentence>( "gpsimu_driver/nmea_sentence", rclcpp::QoS( 1024 ),
+                                                                           std::bind( &GpsProcessor::nmea_callback, this, _1 ) );
+        navsat_sub = _node->create_subscription<sensor_msgs::msg::NavSatFix>( "gps/navsat", rclcpp::QoS( 1024 ),
                                                                               std::bind( &GpsProcessor::navsat_callback, this, _1 ) );
-        gps_sub    = _node->create_subscription<geographic_msgs::msg::GeoPointStamped>( "/gps/geopoint", rclcpp::QoS( 1024 ),
-                                                                                     std::bind( &GpsProcessor::gps_callback, this, _1 ) );
+        gps_sub    = _node->create_subscription<geographic_msgs::msg::GeoPointStamped>( "gps/geopoint", rclcpp::QoS( 1024 ),
+                                                                                        std::bind( &GpsProcessor::gps_callback, this, _1 ) );
     }
 
     gps_edge_robust_kernel      = _node->get_parameter( "gps_edge_robust_kernel" ).as_string();

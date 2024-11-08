@@ -305,31 +305,7 @@ def launch_setup(context, *args, **kwargs):
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
             mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        remaps = [('/imu/data', shared_params['imu_topic'])]
-        if model_namespace != '':
-            remaps = [('/imu/data', shared_params['imu_topic']),
-                      ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                      ('/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-                      ('/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-                      ('/mrg_slam/map_points', '/' + model_namespace + '/mrg_slam/map_points'),
-                      ('/mrg_slam/map_points_service', '/' + model_namespace + '/mrg_slam/map_points_service'),
-                      ('/mrg_slam/markers', '/' + model_namespace + '/mrg_slam/markers'),
-                      ('/mrg_slam/markers_node_names', '/' + model_namespace + '/mrg_slam/markers_node_names'),
-                      ('/mrg_slam/markers_covariance', '/' + model_namespace + '/mrg_slam/markers_covariance'),
-                      ('/mrg_slam/odom2map', '/' + model_namespace + '/mrg_slam/odom2map'),
-                      ('/mrg_slam/read_until', '/' + model_namespace + '/mrg_slam/read_until'),
-                      ('/mrg_slam/others_poses', '/' + model_namespace + '/mrg_slam/others_poses'),
-                      ('/mrg_slam/slam_status', '/' + model_namespace + '/mrg_slam/slam_status'),
-                      ('/mrg_slam/add_static_keyframes', '/' + model_namespace + '/mrg_slam/add_static_keyframes'),
-                      ('/mrg_slam/save_graph', '/' + model_namespace + '/mrg_slam/save_graph'),
-                      ('/mrg_slam/load_graph', '/' + model_namespace + '/mrg_slam/load_graph'),
-                      ('/mrg_slam/save_map', '/' + model_namespace + '/mrg_slam/save_map'),
-                      ('/mrg_slam/get_map', '/' + model_namespace + '/mrg_slam/get_map'),
-                      ('/mrg_slam/publish_map', '/' + model_namespace + '/mrg_slam/publish_map'),
-                      ('/mrg_slam/get_graph_estimate', '/' + model_namespace + '/mrg_slam/get_graph_estimate'),
-                      ('/mrg_slam/request_graph', '/' + model_namespace + '/mrg_slam/request_graph'),
-                      ('/mrg_slam/get_graph_gids', '/' + model_namespace + '/mrg_slam/get_graph_gids'),
-                      ('/mrg_slam/other_robots_removed_points', '/' + model_namespace + '/mrg_slam/other_robots_removed_points'),]
+        remaps = [('imu/data', shared_params['imu_topic'])]
         print_remappings(remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',

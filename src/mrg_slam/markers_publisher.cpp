@@ -17,7 +17,7 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 {
     node = _node;
 
-    markers_pub            = node->create_publisher<visualization_msgs::msg::MarkerArray>( "/mrg_slam/markers", rclcpp::QoS( 16 ) );
+    markers_pub            = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
     markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers/node_names",
                                                                                            rclcpp::QoS( 16 ) );
     markers_marginals_pub  = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",

@@ -34,8 +34,10 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
     imu_orientation_edge_robust_kernel_size  = node->get_parameter( "imu_orientation_edge_robust_kernel_size" ).as_double();
     imu_acceleration_edge_robust_kernel_size = node->get_parameter( "imu_acceleration_edge_robust_kernel_size" ).as_double();
 
-    imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "/imu/data", rclcpp::QoS( 1024 ),
-                                                                std::bind( &ImuProcessor::imu_callback, this, std::placeholders::_1 ) );
+    if( enable_imu_orientation || enable_imu_acceleration ) {
+        imu_sub = node->create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1024 ),
+                                                                    std::bind( &ImuProcessor::imu_callback, this, std::placeholders::_1 ) );
+    }
 }
 
 

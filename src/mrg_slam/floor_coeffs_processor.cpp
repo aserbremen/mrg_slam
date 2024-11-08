@@ -15,7 +15,7 @@ FloorCoeffsProcessor::onInit( rclcpp::Node::SharedPtr _node )
     floor_edge_robust_kernel      = _node->get_parameter( "floor_edge_robust_kernel" ).as_string();
     floor_edge_robust_kernel_size = _node->get_parameter( "floor_edge_robust_kernel_size" ).as_double();
 
-    floor_sub = _node->create_subscription<mrg_slam_msgs::msg::FloorCoeffs>( "/floor_coeffs", rclcpp::QoS( 1024 ),
+    floor_sub = _node->create_subscription<mrg_slam_msgs::msg::FloorCoeffs>( "floor_coeffs", rclcpp::QoS( 1024 ),
                                                                              std::bind( &FloorCoeffsProcessor::floor_coeffs_callback, this,
                                                                                         std::placeholders::_1 ) );
 }
