@@ -61,24 +61,24 @@ public:
             // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, false );
-            msf_pose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "/msf_core/pose", rclcpp::QoS( 1 ),
+            msf_pose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose", rclcpp::QoS( 1 ),
                                                                                                      fcn_false );
 
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_true =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, true );
             msf_pose_after_update_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-                "/msf_core/pose_after_update", rclcpp::QoS( 1 ), fcn_true );
+                "msf_core/pose_after_update", rclcpp::QoS( 1 ), fcn_true );
         }
 
-        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
+        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
                                                                                std::bind( &ScanMatchingOdometryComponent::cloud_callback,
                                                                                           this, std::placeholders::_1 ) );
 
-        read_until_pub = this->create_publisher<std_msgs::msg::Header>( "/scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
-        odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "/scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
-        trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "/scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
-        status_pub = this->create_publisher<mrg_slam_msgs::msg::ScanMatchingStatus>( "/scan_matching_odometry/status", rclcpp::QoS( 8 ) );
-        aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/scan_matching_odometry/aligned_points",
+        read_until_pub = this->create_publisher<std_msgs::msg::Header>( "scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
+        odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
+        trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
+        status_pub = this->create_publisher<mrg_slam_msgs::msg::ScanMatchingStatus>( "scan_matching_odometry/status", rclcpp::QoS( 8 ) );
+        aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "scan_matching_odometry/aligned_points",
                                                                                     rclcpp::QoS( 32 ) );
 
         // Initialize the transform broadcaster
@@ -103,7 +103,7 @@ private:
     void initialize_params()
     {
         // Declare and set ROS2 parameters
-        points_topic        = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        points_topic        = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
         odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
         robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 

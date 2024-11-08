@@ -5,8 +5,7 @@ from ament_index_python import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import OpaqueFunction, DeclareLaunchArgument
-from launch_ros.actions import Node
-from launch_ros.actions import LoadComposableNodes
+from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
 # Parameter type mapping to infer the correct data type from the cli argument string. This is necessary since all cli arguments are strings.
@@ -252,16 +251,9 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # scan_matching_odometry component
-    remaps = [('/points_topic', shared_params['points_topic']),
-              ('/filtered_points', '/prefiltering/filtered_points'),]
+    remaps = [('prefiltering/filtered_points',  shared_params['points_topic'])]
     if model_namespace != '':
-        remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                  ('/scan_matching_odometry/transform', '/' + model_namespace + '/scan_matching_odometry/transform'),
-                  ('/scan_matching_odometry/read_until', '/' + model_namespace + '/scan_matching_odometry/read_until'),
-                  ('/scan_matching_odometry/status', '/' + model_namespace + '/scan_matching_odometry/status'),
-                  ('/scan_matching_odometry/odom', '/' + model_namespace + '/scan_matching_odometry/odom'),
-                  ('/scan_matching_odometry/aligned_points', '/' + model_namespace + '/scan_matching_odometry/aligned_points'),]
+        remaps = [('prefiltering/filtered_points', os.path.join('/', model_namespace, shared_params['points_topic'].lstrip('/'))),]
     print_remappings(remaps, 'scan_matching_odometry_component')
     # set the correct frame ids according to the model namespace
     scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
