@@ -30,16 +30,16 @@ public:
 
         initialize_params();
 
-        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/filtered_points", rclcpp::QoS( 256 ),
+        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
                                                                                std::bind( &FloorDetectionComponent::cloud_callback, this,
                                                                                           std::placeholders::_1 ) );
 
-        floor_pub = this->create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "/floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub = this->create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
-        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "/floor_detection/read_until", rclcpp::QoS( 32 ) );
-        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_filtered_points",
+        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "floor_detection/read_until", rclcpp::QoS( 32 ) );
+        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points",
                                                                                     rclcpp::QoS( 32 ) );
-        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "/floor_detection/floor_points", rclcpp::QoS( 32 ) );
+        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
 
         // Optionally print the all parameters declared in this node so far
         print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
@@ -66,7 +66,7 @@ private:
         use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
                                                                                                  // normals will be filtered before RANSAC
         normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
-        points_topic         = this->declare_parameter<std::string>( "points_topic", "/velodyne_points" );
+        points_topic         = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
     }
 
     /**

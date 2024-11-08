@@ -251,10 +251,6 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # scan_matching_odometry component
-    remaps = [('prefiltering/filtered_points',  shared_params['points_topic'])]
-    if model_namespace != '':
-        remaps = [('prefiltering/filtered_points', os.path.join('/', model_namespace, shared_params['points_topic'].lstrip('/'))),]
-    print_remappings(remaps, 'scan_matching_odometry_component')
     # set the correct frame ids according to the model namespace
     scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
     scan_matching_odometry_params['robot_odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
@@ -271,11 +267,9 @@ def launch_setup(context, *args, **kwargs):
 
     # helper node to write the odometry to a file
     if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
-        remaps = [('/odom', '/scan_matching_odometry/odom')]
-        if model_namespace != '':
-            remaps = [('/odom', '/' + model_namespace + '/scan_matching_odometry/odom')]
+        remaps = [('odom', 'scan_matching_odometry/odom')]
         odom_to_file_node = Node(
-            name='scan_matching_odom_to_file',
+            name='odom_to_file',
             package='mrg_slam',
             executable='odom_to_file.py',
             namespace=model_namespace,
@@ -286,15 +280,6 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # floor_detection component
-    remaps = [('/points_topic', shared_params['points_topic'])]
-    if model_namespace != '':
-        remaps = [('/points_topic', '/' + model_namespace + shared_params['points_topic']),
-                  ('/filtered_points', '/' + model_namespace + '/prefiltering/filtered_points'),
-                  ('/floor_detection/floor_coeffs', '/' + model_namespace + '/floor_detection/floor_coeffs'),
-                  ('/floor_detection/floor_filtered_points', '/' + model_namespace + '/floor_detection/floor_filtered_points'),
-                  ('/floor_detection/read_until', '/' + model_namespace + '/floor_detection/read_until'),
-                  ('/floor_detection/floor_points', '/' + model_namespace + '/floor_detection/floor_points')]
-    print_remappings(remaps, 'floor_detection_component')
     if floor_detection_params['enable_floor_detection']:
         floor_detection_node = ComposableNode(
             package='mrg_slam',

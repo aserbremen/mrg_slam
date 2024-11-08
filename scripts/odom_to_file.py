@@ -17,7 +17,7 @@ class OdomToFile(Node):
             os.makedirs(dir_name)
         with open(self.result_file, 'w') as f:
             print(f'Writing to odom {self.result_file}')
-        self.subscription = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.subscription = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         self.subscription  # prevent unused variable warning
 
         self.counter = 0
