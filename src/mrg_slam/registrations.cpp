@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+// pcl
 #include <pcl/registration/gicp.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/ndt.h>
@@ -7,16 +8,20 @@
 #include <iostream>
 #include <mrg_slam/registrations.hpp>
 
-// ndt and fast_gicp includes
+// ndt
 #include <pclomp/gicp_omp.h>
 #include <pclomp/ndt_omp.h>
 
+// fast_gicp
 #include <fast_gicp/gicp/fast_gicp.hpp>
 #include <fast_gicp/gicp/fast_vgicp.hpp>
 
 #ifdef USE_VGICP_CUDA
 #    include <fast_gicp/gicp/fast_vgicp_cuda.hpp>
 #endif
+
+// small_gicp
+#include <small_gicp/pcl/pcl_registration.hpp>
 
 namespace mrg_slam {
 
@@ -38,7 +43,16 @@ select_registration_method( rclcpp::Node* node_raw_ptr )
     std::string reg_nn_search_method            = node_raw_ptr->get_parameter( "reg_nn_search_method" ).as_string();  // "DIRECT7"
 
     // select a registration method (ICP, GICP, NDT)
-    if( registration_method == "FAST_GICP" ) {
+    if( registration_method == "SMALL_GICP" ) {
+        std::cout << "registration: SMALL_GICP" << std::endl;
+        small_gicp::RegistrationPCL<PointT, PointT>::Ptr small_gicp( new small_gicp::RegistrationPCL<PointT, PointT>() );
+        small_gicp->setNumThreads( reg_num_threads );
+        small_gicp->setTransformationEpsilon( reg_transformation_epsilon );
+        small_gicp->setMaximumIterations( reg_maximum_iterations );
+        small_gicp->setMaxCorrespondenceDistance( reg_max_correspondence_distance );
+        small_gicp->setCorrespondenceRandomness( reg_correspondence_randomness );
+        return small_gicp;
+    } else if( registration_method == "FAST_GICP" ) {
         std::cout << "registration: FAST_GICP" << std::endl;
         fast_gicp::FastGICP<PointT, PointT>::Ptr gicp( new fast_gicp::FastGICP<PointT, PointT>() );
         gicp->setNumThreads( reg_num_threads );

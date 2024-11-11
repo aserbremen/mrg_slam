@@ -74,6 +74,9 @@ find_package(fast_gicp REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 find_package(rclpy REQUIRED)
 
+# small_gicp
+find_package(small_gicp REQUIRED)
+
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
 endif ()
@@ -99,6 +102,7 @@ add_library(floor_detection_component SHARED
 # Link non ament packages
 target_link_libraries(floor_detection_component
   ${PCL_LIBRARIES}
+  small_gicp::small_gicp
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(floor_detection_component
@@ -136,6 +140,7 @@ add_library(scan_matching_odometry_component SHARED
 # Link non ament packages
 target_link_libraries(scan_matching_odometry_component
   ${PCL_LIBRARIES}
+  small_gicp::small_gicp
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(scan_matching_odometry_component
@@ -231,6 +236,7 @@ target_link_libraries(mrg_slam_component
   ${G2O_SOLVER_CHOLMOD}   # be aware of that cholmod is released under GPL
   ${G2O_TYPES_SLAM3D}
   ${G2O_TYPES_SLAM3D_ADDONS}
+  small_gicp::small_gicp
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(mrg_slam_component
