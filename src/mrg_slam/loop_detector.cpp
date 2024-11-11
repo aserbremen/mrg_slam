@@ -20,8 +20,6 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     use_loop_closure_consistency_check       = node_ros->get_parameter( "use_loop_closure_consistency_check" ).as_bool();
     loop_closure_consistency_max_delta_trans = node_ros->get_parameter( "loop_closure_consistency_max_delta_trans" ).as_double();
     loop_closure_consistency_max_delta_angle = node_ros->get_parameter( "loop_closure_consistency_max_delta_angle" ).as_double();
-    // Convert to rad
-    loop_closure_consistency_max_delta_angle = loop_closure_consistency_max_delta_angle * M_PI / 180.0;
 
     use_planar_registration_guess = node_ros->get_parameter( "use_planar_registration_guess" ).as_bool();
 
