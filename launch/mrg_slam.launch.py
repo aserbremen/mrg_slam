@@ -236,9 +236,11 @@ def launch_setup(context, *args, **kwargs):
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
-    remaps = [('imu/data', shared_params['imu_topic']),
-              ('velodyne_points', shared_params['points_topic'])]
-    print_remappings(remaps, 'prefiltering_component')
+    prefiltering_remaps = [('imu/data', shared_params['imu_topic']),
+                           ('velodyne_points', shared_params['points_topic'])]
+    print_remappings(prefiltering_remaps, 'prefiltering_component')
+    if model_namespace != '':
+        prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
     if prefiltering_params['enable_prefiltering']:
         prefiltering_node = ComposableNode(
             package='mrg_slam',
@@ -246,7 +248,7 @@ def launch_setup(context, *args, **kwargs):
             name='prefiltering_component',
             namespace=model_namespace,
             parameters=[prefiltering_params, shared_params],
-            remappings=remaps,
+            remappings=prefiltering_remaps,
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
@@ -261,19 +263,18 @@ def launch_setup(context, *args, **kwargs):
             name='scan_matching_odometry_component',
             namespace=model_namespace,
             parameters=[scan_matching_odometry_params, shared_params],
-            remappings=remaps,
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
     # helper node to write the odometry to a file
     if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
-        remaps = [('odom', 'scan_matching_odometry/odom')]
+        scan_matching_odometry_remaps = [('odom', 'scan_matching_odometry/odom')]
         odom_to_file_node = Node(
             name='odom_to_file',
             package='mrg_slam',
             executable='odom_to_file.py',
             namespace=model_namespace,
-            remappings=remaps,
+            remappings=scan_matching_odometry_remaps,
             output='screen',
             parameters=[{'result_file': '/tmp/' + model_namespace + '_scan_matching_odom.txt',
                          'every_n': 1}],
@@ -287,7 +288,6 @@ def launch_setup(context, *args, **kwargs):
             name='floor_detection_component',
             namespace=model_namespace,
             parameters=[floor_detection_params, shared_params],
-            remappings=remaps,
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
@@ -305,15 +305,15 @@ def launch_setup(context, *args, **kwargs):
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
             mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        remaps = [('imu/data', shared_params['imu_topic'])]
-        print_remappings(remaps, 'mrg_slam_component')
+        mrg_slam_remaps = [('imu/data', shared_params['imu_topic'])]
+        print_remappings(mrg_slam_remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
             plugin='mrg_slam::MrgSlamComponent',
             name='mrg_slam_component',
             namespace=model_namespace,
             parameters=[mrg_slam_params, shared_params],
-            remappings=remaps,
+            remappings=mrg_slam_remaps,
             extra_arguments=[{'use_intra_process_comms': True}]
         )
 
