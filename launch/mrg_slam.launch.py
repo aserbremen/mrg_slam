@@ -9,7 +9,7 @@ from launch_ros.actions import Node, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
 # Parameter type mapping to infer the correct data type from the cli argument string. This is necessary since all cli arguments are strings.
-# The parameters defined in the PARAM_MAPPING can be provided as cli arguments to overwrite the default values from the yaml file.
+# The parameters defined in the PARAM_MAPPING can be provided as cli arguments to overwrite the values from the yaml file.
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,

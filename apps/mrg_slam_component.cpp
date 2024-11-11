@@ -140,12 +140,14 @@ public:
         // publish graph service clients for all other robots participating in the multi-robot SLAM
         for( const auto &robot_name : multi_robot_names ) {
             if( robot_name != own_name ) {
-                std::string service_topic = "mrg_slam/publish_graph";
+                std::string service_topic = "/mrg_slam/publish_graph";
                 if( !robot_name.empty() ) {
-                    service_topic = "/" + robot_name + "/" + service_topic;
+                    service_topic = "/" + robot_name + service_topic;
                 }
                 request_graph_service_clients[robot_name] = this->create_client<mrg_slam_msgs::srv::PublishGraph>(
                     service_topic, rmw_qos_profile_services_default, reentrant_callback_group );
+                RCLCPP_INFO_STREAM( this->get_logger(),
+                                    "Creating publish graph service client for " << robot_name << " with topic " << service_topic );
                 others_last_accum_dist[robot_name]          = -1.0;
                 others_last_graph_exchange_time[robot_name] = -1.0;
             }
@@ -295,8 +297,8 @@ private:
         points_topic      = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
         own_name          = this->declare_parameter<std::string>( "own_name", "atlas" );
         multi_robot_names = this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        odom_sub_topic    = this->declare_parameter<std::string>( "odom_sub_topic", "scan_matching_odometry/odom" );
-        cloud_sub_topic   = this->declare_parameter<std::string>( "cloud_sub_topic", "prefiltering/filtered_points" );
+        odom_sub_topic    = this->declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
+        cloud_sub_topic   = this->declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
         map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
