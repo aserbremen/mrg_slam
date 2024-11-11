@@ -5,7 +5,7 @@
 #include <pcl/filters/extract_indices.h>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/sample_consensus/sac_model_plane.h>
-#include <pcl_conversions/pcl_conversions.h>  //
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <boost/optional.hpp>
 #include <iostream>
@@ -24,7 +24,7 @@ public:
     typedef pcl::PointXYZI PointT;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options )
+    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options ), clock( get_clock() )
     {
         RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
 
@@ -79,6 +79,7 @@ private:
         pcl::fromROSMsg( *cloud_msg, *cloud );
 
         if( cloud->empty() ) {
+            RCLCPP_WARN_STREAM_THROTTLE( rclcpp::get_logger( "FloorDetection::cloud_callback" ), *clock, 1000, "Empty point cloud" );
             return;
         }
 
@@ -123,6 +124,12 @@ private:
         pcl::transformPointCloud( *cloud, *filtered, tilt_matrix );
         filtered = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height + height_clip_range ), false );
         filtered = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height - height_clip_range ), true );
+
+        if( filtered->empty() ) {
+            RCLCPP_WARN_STREAM_THROTTLE( rclcpp::get_logger( "FloorDetection::detect" ), *clock, 1000,
+                                         "No points after height clipping. Check sensor_height and height_clip_range params" );
+            return boost::none;
+        }
 
         if( use_normal_filtering ) {
             filtered = normal_filtering( filtered );
@@ -253,7 +260,8 @@ private:
     }
 
 private:
-    // ROS topics
+    rclcpp::Clock::SharedPtr clock;
+
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
 
     rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
