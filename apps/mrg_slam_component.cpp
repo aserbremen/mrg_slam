@@ -155,10 +155,13 @@ public:
             init_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_odom_topic, rclcpp::QoS( 32 ),
                                                                                 std::bind( &MrgSlamComponent::init_odom_callback, this,
                                                                                            std::placeholders::_1 ) );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Subscribing to init_odom (nav_msgs::msg::Odometry) topic " << init_odom_topic );
         } else if( init_pose_topic != "NONE" ) {
             init_pose_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>( init_pose_topic, rclcpp::QoS( 32 ),
                                                                                         std::bind( &MrgSlamComponent::init_pose_callback,
                                                                                                    this, std::placeholders::_1 ) );
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Subscribing to init_pose (geometry_msgs::msg::PoseStamped) topic " << init_pose_topic );
         }
 
         // publishers
