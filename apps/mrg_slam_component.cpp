@@ -123,8 +123,9 @@ public:
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         sync->registerCallback( std::bind( &MrgSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
+        // broadcast subscriptions, note that the topic is absolute and not potentially prefixed with the robot name/namespace
         odom_broadcast_sub = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
-            "mrg_slam/odom_broadcast", rclcpp::QoS( 100 ),
+            "/mrg_slam/odom_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
 
         // Use a reentrant callbackgroup for odom_broadcast_sub to avoid deadlock, enabling the publish graph service to be called from the
@@ -133,8 +134,10 @@ public:
         rclcpp::CallbackGroup::SharedPtr reentrant_callback_group = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
         sub_options.callback_group                                = reentrant_callback_group;
         slam_pose_broadcast_sub                                   = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
-            "mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
+            "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
+
+        // publish graph service clients for all other robots participating in the multi-robot SLAM
         for( const auto &robot_name : multi_robot_names ) {
             if( robot_name != own_name ) {
                 std::string service_topic = "mrg_slam/publish_graph";
@@ -159,16 +162,19 @@ public:
         }
 
         // publishers
-        odom2map_pub            = this->create_publisher<geometry_msgs::msg::TransformStamped>( "mrg_slam/odom2map", 16 );
-        map_points_timer_pub    = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points", rclcpp::QoS( 1 ) );
-        map_points_service_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
-        read_until_pub          = this->create_publisher<std_msgs::msg::Header>( "mrg_slam/read_until", rclcpp::QoS( 16 ) );
-        odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
-        slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "mrg_slam/slam_pose_broadcast",
+        // broadcast topics, note that the topic is absolute and not potentially prefixed with the robot name/namespace
+        odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
+        slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast",
                                                                                             rclcpp::QoS( 16 ) );
+        // robot specific topics
+        odom2map_pub           = this->create_publisher<geometry_msgs::msg::TransformStamped>( "mrg_slam/odom2map", 16 );
+        map_points_timer_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points", rclcpp::QoS( 1 ) );
+        map_points_service_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
+        read_until_pub         = this->create_publisher<std_msgs::msg::Header>( "mrg_slam/read_until", rclcpp::QoS( 16 ) );
         others_poses_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithNameArray>( "mrg_slam/others_poses", rclcpp::QoS( 16 ) );
         other_robots_removed_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/other_robots_removed_points",
                                                                                                  rclcpp::QoS( 1 ) );
+
         // Create another reentrant callback group for the slam_status_publisher and all callbacks it publishes from
         rclcpp::PublisherOptions         pub_options;
         rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
