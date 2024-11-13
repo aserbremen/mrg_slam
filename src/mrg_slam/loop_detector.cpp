@@ -25,29 +25,37 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
 
     registration = select_registration_method( node_ros.get() );
 
-    auto robot_names = node_ros->get_parameter( "multi_robot_names" ).as_string_array();
-    for( const auto& robot_name : robot_names ) {
-        last_loop_edge_accum_distance_map[robot_name] = 0.0;
-    }
-    // In case of single robot without namespace, we need to initialize the last loop edge accum distance for empty string
-    std::string own_name = node_ros->get_parameter( "own_name" ).as_string();
-    auto        it       = last_loop_edge_accum_distance_map.find( own_name );
-    if( it == last_loop_edge_accum_distance_map.end() ) {
-        last_loop_edge_accum_distance_map[own_name] = 0.0;
-    }
+    // Insert new entries to last_loop_edge_accum_distance_map whenever a new loop is added at the corresponding loop detection
+
+    // auto robot_names = node_ros->get_parameter( "multi_robot_names" ).as_string_array();
+    // for( const auto& robot_name : robot_names ) {
+    //     last_loop_edge_accum_distance_map[robot_name] = 0.0;
+    // }
+    // // In case of single robot without namespace, we need to initialize the last loop edge accum distance for empty string
+    // std::string own_name = node_ros->get_parameter( "own_name" ).as_string();
+    // auto        it       = last_loop_edge_accum_distance_map.find( own_name );
+    // if( it == last_loop_edge_accum_distance_map.end() ) {
+    //     last_loop_edge_accum_distance_map[own_name] = 0.0;
+    // }
 }
 
 
 std::vector<Loop::Ptr>
 LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
 {
-    const auto&            keyframes     = graph_db->get_keyframes();
-    const auto&            new_keyframes = graph_db->get_new_keyframes();
+    const auto&            keyframes          = graph_db->get_keyframes();
+    const auto&            new_keyframes      = graph_db->get_new_keyframes();
+    const auto&            slam_instance_uuid = graph_db->get_slam_instance_uuid();
     std::vector<Loop::Ptr> detected_loops;
     for( const auto& new_keyframe : new_keyframes ) {
         auto start = std::chrono::high_resolution_clock::now();
 
-        auto candidates = find_candidates( keyframes, new_keyframe );
+        // Initialize the last loop edge accum distance for the new keyframe's robot if it does not exist
+        if( last_loop_edge_accum_distance_map.find( new_keyframe->slam_instance_uuid ) == last_loop_edge_accum_distance_map.end() ) {
+            last_loop_edge_accum_distance_map[new_keyframe->slam_instance_uuid] = 0.0;
+        }
+
+        auto candidates = find_candidates( new_keyframe, keyframes, slam_instance_uuid );
         auto loop       = matching( candidates, new_keyframe );
         if( loop ) {
             detected_loops.push_back( loop );
@@ -72,11 +80,13 @@ LoopDetector::get_distance_thresh() const
 
 
 std::vector<KeyFrame::Ptr>
-LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const
+LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes,
+                               const boost::uuids::uuid& slam_instance_id ) const
 {
-    // too close to the last registered loop edge of the same robot
-    if( new_keyframe->accum_distance > 0
-        && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->robot_name )
+    // too close to the last registered loop edge of the same slam instance
+    if( new_keyframe->slam_instance_uuid == slam_instance_id && new_keyframe->accum_distance > 0
+        && last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid ) > 0
+        && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid )
                < distance_from_last_loop_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();
     }
@@ -86,11 +96,14 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
     candidates.reserve( 32 );
 
     for( const auto& k : keyframes ) {
-        // traveled distance between keyframes is too small of the same robot
-        if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0 && new_keyframe->robot_name == k->robot_name
+        // traveled distance between keyframes is too small of the same slam instance
+        if( new_keyframe->accum_distance >= 0 && k->accum_distance >= 0 && new_keyframe->slam_instance_uuid == k->slam_instance_uuid
             && new_keyframe->accum_distance - k->accum_distance < accum_distance_thresh ) {
             continue;
         }
+
+        // traveled distance between keyframes is too small of different slam instances
+
 
         // there is already an edge
         if( new_keyframe->edge_exists( *k, node_ros->get_logger() ) ) {
@@ -100,7 +113,7 @@ LoopDetector::find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, cons
         const auto& pos1 = k->node->estimate().translation();
         const auto& pos2 = new_keyframe->node->estimate().translation();
 
-        // estimated distance between keyframes is too big for loop closure
+        // estimated distance between keyframes is too big for given distance threshold
         double dist_squared = ( pos1.head<2>() - pos2.head<2>() ).squaredNorm();
         if( dist_squared > distance_thresh_squared ) {
             continue;
@@ -130,8 +143,9 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     std::cout << "new keyframe " << new_keyframe->readable_id << " has " << candidate_keyframes.size() << " candidates, matching..."
               << std::endl;
     for( const auto& cand : candidate_keyframes ) {
-        std::cout << cand->readable_id << std::endl;
+        std::cout << cand->readable_id << " ";
     }
+    std::cout << std::endl;
     auto t1 = std::chrono::system_clock::now();
 
     pcl::PointCloud<PointT>::Ptr aligned( new pcl::PointCloud<PointT>() );
@@ -184,9 +198,9 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
     if( new_keyframe->accum_distance > 0 ) {
-        std::cout << "updating last loop edge accum distance for robot " << new_keyframe->robot_name << " to "
-                  << new_keyframe->accum_distance << std::endl;
-        last_loop_edge_accum_distance_map[new_keyframe->robot_name] = new_keyframe->accum_distance;
+        std::cout << "updating last loop edge accum distance for robot " << new_keyframe->robot_name << " with slam_instance_uuid "
+                  << new_keyframe->slam_instance_uuid_str << " to " << new_keyframe->accum_distance << std::endl;
+        last_loop_edge_accum_distance_map[new_keyframe->slam_instance_uuid] = new_keyframe->accum_distance;
     }
 
     return std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );

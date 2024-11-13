@@ -3,12 +3,17 @@
 #ifndef LOOP_DETECTOR_HPP
 #define LOOP_DETECTOR_HPP
 
+#include <unordered_map>
+// g2o
 #include <g2o/types/slam3d/vertex_se3.h>
-
+// mrg_slam
+#include <mrg_slam/graph_database.hpp>
 #include <mrg_slam/graph_slam.hpp>
 #include <mrg_slam/keyframe.hpp>
 #include <mrg_slam/registrations.hpp>
-#include <unordered_map>
+// boost
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_hash.hpp>
 
 namespace mrg_slam {
 
@@ -32,7 +37,7 @@ public:
 };
 
 /**
- * @brief this class finds loops by scam matching and adds them to the pose graph
+ * @brief this class finds loops by scan matching and adds them to the pose graph
  */
 class LoopDetector {
 public:
@@ -40,7 +45,7 @@ public:
 
     /**
      * @brief Construct a new Loop Detector object
-     * @param _node Shared pointer to the main node
+     * @param _node Shared pointer to the main slam node
      */
     LoopDetector( rclcpp::Node::SharedPtr _node );
 
@@ -58,7 +63,8 @@ private:
      * @param new_keyframe   loop end keyframe
      * @return loop candidates
      */
-    std::vector<KeyFrame::Ptr> find_candidates( const std::vector<KeyFrame::Ptr>& keyframes, const KeyFrame::Ptr& new_keyframe ) const;
+    std::vector<KeyFrame::Ptr> find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes,
+                                                const boost::uuids::uuid& slam_instance_id ) const;
 
     /**
      * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched
@@ -136,7 +142,8 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    std::unordered_map<std::string, double> last_loop_edge_accum_distance_map;
+    // map of the slam instance uuid to the accumulated distance of the last loop edge
+    std::unordered_map<boost::uuids::uuid, double> last_loop_edge_accum_distance_map;
 
     pcl::Registration<PointT, PointT>::Ptr registration;
 

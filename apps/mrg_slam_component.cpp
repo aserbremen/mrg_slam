@@ -1222,7 +1222,8 @@ private:
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution );
+        RCLCPP_INFO_STREAM( this->get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution
+                                                                         << " and count_threshold " << req->count_threshold );
 
         snapshots_mutex.lock();
         snapshot = keyframes_snapshot;
@@ -1265,7 +1266,7 @@ private:
 
 
     /**
-     * @brief publish graph on corresponding topic
+     * @brief publish graph data to other robots, skipping keyframes and edges that have already been processed
      * @param req
      * @param res
      * @return
@@ -1309,15 +1310,16 @@ private:
                 }
 
                 mrg_slam_msgs::msg::KeyFrameRos dst;
-                dst.robot_name      = src->robot_name;
-                dst.uuid_str        = src->uuid_str;
-                dst.stamp           = src->stamp;
-                dst.odom_counter    = src->odom_keyframe_counter;
-                dst.first_keyframe  = src->first_keyframe;
-                dst.static_keyframe = src->static_keyframe;
-                dst.accum_distance  = src->accum_distance;
-                dst.estimate        = tf2::toMsg( src->estimate() );
-                dst.cloud           = *src->cloud_msg;
+                dst.robot_name             = src->robot_name;
+                dst.uuid_str               = src->uuid_str;
+                dst.slam_instance_uuid_str = src->slam_instance_uuid_str;
+                dst.stamp                  = src->stamp;
+                dst.odom_counter           = src->odom_keyframe_counter;
+                dst.first_keyframe         = src->first_keyframe;
+                dst.static_keyframe        = src->static_keyframe;
+                dst.accum_distance         = src->accum_distance;
+                dst.estimate               = tf2::toMsg( src->estimate() );
+                dst.cloud                  = *src->cloud_msg;
                 res->graph.keyframes.push_back( std::move( dst ) );
                 added_keyframes++;
             }

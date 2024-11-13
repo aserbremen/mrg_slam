@@ -12,7 +12,7 @@ MapCloudGenerator::MapCloudGenerator() {}
 MapCloudGenerator::~MapCloudGenerator() {}
 
 pcl::PointCloud<MapCloudGenerator::PointT>::Ptr
-MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution, int count_threshold ) const
+MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold ) const
 {
     if( keyframes.empty() ) {
         std::cerr << "warning: keyframes empty!!" << std::endl;
@@ -70,7 +70,8 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
     voxelGridFilter.filter( *filtered );
 
-    std::cout << "Generating map with resolution " << resolution << " and size " << filtered->size() << std::endl;
+    std::cout << "Generating map with resolution " << resolution << ", count_threshold " << count_threshold << " and size "
+              << filtered->size() << std::endl;
 
     return filtered;
 }

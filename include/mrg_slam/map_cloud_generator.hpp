@@ -27,7 +27,7 @@ public:
      * @param resolution  resolution of generated map
      * @return generated map point cloud
      */
-    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, double resolution,
+    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution,
                                            int count_threshold ) const;
 };
 

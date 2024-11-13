@@ -87,9 +87,6 @@ endif ()
 
 # Include local mrg_slam headers
 include_directories(include)
-include_directories(
-  ${PCL_INCLUDE_DIRS}
-)
 
 ###############################
 ## Floor Detection Component ##

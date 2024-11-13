@@ -38,6 +38,10 @@ GraphDatabase::GraphDatabase( rclcpp::Node::SharedPtr _node, std::shared_ptr<Gra
     anchor_edge_ptr = nullptr;
 
     prev_robot_keyframe = nullptr;
+
+    // Generate a unique id for the graph of the current run
+    slam_instance_uuid     = uuid_generator();
+    slam_instance_uuid_str = boost::uuids::to_string( slam_instance_uuid );
 }
 
 void
@@ -47,8 +51,8 @@ GraphDatabase::add_odom_keyframe( const builtin_interfaces::msg::Time &stamp, co
     auto        uuid     = uuid_generator();
     std::string uuid_str = boost::uuids::to_string( uuid );
 
-    KeyFrame::Ptr kf = std::make_shared<KeyFrame>( own_name, stamp, odom, odom_keyframe_counter, accum_distance, uuid, uuid_str, cloud,
-                                                   cloud_msg );
+    KeyFrame::Ptr kf = std::make_shared<KeyFrame>( own_name, stamp, odom, odom_keyframe_counter, accum_distance, uuid, uuid_str,
+                                                   slam_instance_uuid, slam_instance_uuid_str, cloud, cloud_msg );
     odom_keyframe_counter++;
 
     std::lock_guard<std::mutex> lock( keyframe_queue_mutex );
@@ -100,7 +104,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
                 std::string uuid_anchor_kf_str = boost::uuids::to_string( uuid_anchor_kf );
 
                 anchor_kf = std::make_shared<KeyFrame>( own_name, rclcpp::Time(), Eigen::Isometry3d::Identity(), 0, -1, uuid_anchor_kf,
-                                                        uuid_anchor_kf_str, nullptr );
+                                                        uuid_anchor_kf_str, slam_instance_uuid, slam_instance_uuid_str, nullptr );
                 if( fix_first_node_adaptive ) {
                     // TODO if the anchor node is adaptive, handling needs to be implemented
                 }
@@ -182,7 +186,8 @@ GraphDatabase::add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFr
 
         KeyFrame::Ptr keyframe    = std::make_shared<KeyFrame>( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
                                                                 keyframe_ros.odom_counter, keyframe_ros.accum_distance, uuid,
-                                                                keyframe_ros.uuid_str, std::move( cloud ), std::move( cloud_ros ) );
+                                                                keyframe_ros.uuid_str, slam_instance_uuid, slam_instance_uuid_str,
+                                                                std::move( cloud ), std::move( cloud_ros ) );
         keyframe->static_keyframe = true;
         keyframe->estimate_transform = pose2isometry( keyframe_ros.estimate );
 
@@ -285,10 +290,12 @@ GraphDatabase::flush_graph_queue(
         pcl::fromROSMsg( keyframe_ros->cloud, *cloud );
         sensor_msgs::msg::PointCloud2::SharedPtr cloud_ros = std::make_shared<sensor_msgs::msg::PointCloud2>( keyframe_ros->cloud );
 
-        auto          uuid     = uuid_from_string_generator( keyframe_ros->uuid_str );
+        auto          uuid          = uuid_from_string_generator( keyframe_ros->uuid_str );
+        auto          instance_uuid = uuid_from_string_generator( keyframe_ros->slam_instance_uuid_str );
         KeyFrame::Ptr keyframe = std::make_shared<KeyFrame>( keyframe_ros->robot_name, keyframe_ros->stamp, Eigen::Isometry3d::Identity(),
                                                              keyframe_ros->odom_counter, keyframe_ros->accum_distance, uuid,
-                                                             keyframe_ros->uuid_str, std::move( cloud ), std::move( cloud_ros ) );
+                                                             keyframe_ros->uuid_str, instance_uuid, keyframe_ros->slam_instance_uuid_str,
+                                                             std::move( cloud ), std::move( cloud_ros ) );
 
         Eigen::Isometry3d pose;
         tf2::fromMsg( keyframe_ros->estimate, pose );

@@ -19,6 +19,7 @@ namespace mrg_slam {
 
 KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
                     int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
+                    const boost::uuids::uuid& _slam_instance_uuid, const std::string& _slam_instance_uuid_str,
                     const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg ) :
     robot_name( robot_name ),
     stamp( stamp ),
@@ -26,6 +27,8 @@ KeyFrame::KeyFrame( const std::string& robot_name, const builtin_interfaces::msg
     odom_keyframe_counter( odom_keyframe_counter ),
     uuid( uuid ),
     uuid_str( uuid_str ),
+    slam_instance_uuid( _slam_instance_uuid ),
+    slam_instance_uuid_str( _slam_instance_uuid_str ),
     accum_distance( accum_distance ),
     first_keyframe( false ),
     static_keyframe( false ),
@@ -100,6 +103,8 @@ KeyFrame::save( const std::string& result_path )
 
     ofs << "uuid_str " << uuid_str << "\n";
 
+    ofs << "slam_instance_uuid_str " << slam_instance_uuid_str << "\n";
+
     // Save the point cloud
     pcl::io::savePCDFileBinary( result_path + ".pcd", *cloud );
 }
@@ -122,7 +127,7 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
     RCLCPP_INFO_STREAM( logger, "Loading keyframe from " << keyframe_path );
 
     // when loading from file, accum_distance is negative so that loaded keyframes are considered when determining loop closure candidates
-    accum_distance = -1.0;
+    // accum_distance = -1.0;
 
     std::string line;
     while( std::getline( ifs, line ) ) {
@@ -160,6 +165,10 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
                     matrixStream >> odom_mat( i, j );
                 }
             }
+        } else if( key == "accum_dist" ) {
+            iss >> accum_distance;
+        } else if( key == "slam_instance_uuid_str" ) {
+            iss >> slam_instance_uuid_str;
         } else if( key == "first_keyframe" ) {
             iss >> first_keyframe;
         } else if( key == "static_keyframe" ) {

@@ -107,7 +107,8 @@ public:
     KeyFrame::ConstPtr get_prev_robot_keyframe() const { return prev_robot_keyframe; }
     const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>& get_keyframe_hash() const { return keyframe_hash; }
     const g2o::VertexSE3*                                                                get_anchor_node() const { return anchor_node; }
-    const g2o::EdgeSE3* get_anchor_edge_g2o() const { return anchor_edge_g2o; }
+    const g2o::EdgeSE3*       get_anchor_edge_g2o() const { return anchor_edge_g2o; }
+    const boost::uuids::uuid& get_slam_instance_uuid() const { return slam_instance_uuid; }
 
 private:
     std::shared_ptr<GraphSLAM>                   graph_slam;
@@ -118,7 +119,7 @@ private:
     std::mutex                keyframe_queue_mutex;  // keyframes to be added to the graph
     std::deque<KeyFrame::Ptr> keyframe_queue;
 
-    std::mutex                static_keyframe_queue_mutex;  // keyframes from the static map provider
+    std::mutex                static_keyframe_queue_mutex;  // keyframes from the static keyframe provider
     std::deque<KeyFrame::Ptr> static_keyframe_queue;
 
     std::deque<KeyFrame::Ptr> new_keyframes;  // keyframes to be checked for loop closure
@@ -147,10 +148,13 @@ private:
     KeyFrame::Ptr   anchor_kf;
     Edge::Ptr       anchor_edge_ptr;
 
-
     // unique id generators
     boost::uuids::random_generator_pure uuid_generator;
     boost::uuids::string_generator      uuid_from_string_generator;
+
+    // unique id the current instance of the slam graph. unique for each robot run
+    boost::uuids::uuid slam_instance_uuid;
+    std::string        slam_instance_uuid_str;
 
     // ROS2 parameters
     std::string         own_name;
