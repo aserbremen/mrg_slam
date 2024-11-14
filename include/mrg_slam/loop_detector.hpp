@@ -142,8 +142,13 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    // map of the slam instance uuid to the accumulated distance of the last loop edge
-    std::unordered_map<boost::uuids::uuid, double> last_loop_edge_accum_distance_map;
+    // map of a slam instance uuid to a pair of another slam instance uuid and its distance to the last loop edge
+    struct uuid_distance_pair {
+        uuid_distance_pair( const boost::uuids::uuid& _uuid, double _accum_distance ) : uuid( _uuid ), accum_distance( _accum_distance ) {}
+        boost::uuids::uuid uuid;
+        double             accum_distance;
+    };
+    std::unordered_map<boost::uuids::uuid, uuid_distance_pair> last_loop_edge_accum_distance_map;
 
     pcl::Registration<PointT, PointT>::Ptr registration;
 

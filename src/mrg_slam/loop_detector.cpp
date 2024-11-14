@@ -50,11 +50,6 @@ LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
     for( const auto& new_keyframe : new_keyframes ) {
         auto start = std::chrono::high_resolution_clock::now();
 
-        // Initialize the last loop edge accum distance for the new keyframe's robot if it does not exist
-        if( last_loop_edge_accum_distance_map.find( new_keyframe->slam_instance_uuid ) == last_loop_edge_accum_distance_map.end() ) {
-            last_loop_edge_accum_distance_map[new_keyframe->slam_instance_uuid] = 0.0;
-        }
-
         auto candidates = find_candidates( new_keyframe, keyframes, slam_instance_uuid );
         auto loop       = matching( candidates, new_keyframe );
         if( loop ) {
@@ -65,6 +60,16 @@ LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
             loop_candidates_sizes.push_back( candidates.size() );
             auto end = std::chrono::high_resolution_clock::now();
             loop_detection_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
+        }
+
+        // insert the missing boost::uuids::uuid to last_loop_edge_accum_distance_map values
+        for( const auto& cand : candidates ) {
+            if( last_loop_edge_accum_distance_map.find( new_keyframe->slam_instance_uuid ) == last_loop_edge_accum_distance_map.end() ) {
+                last_loop_edge_accum_distance_map[new_keyframe->slam_instance_uuid] = uuid_distance_pair( new_keyframe->slam_instance_uuid,
+                                                                                                          0.0 );
+                RCLCPP_INFO_STREAM( node_ros->get_logger(), "inserted new keyframe uuid " << new_keyframe->slam_instance_uuid_str
+                                                                                          << " to last_loop_edge_accum_distance_map" );
+            }
         }
     }
 
@@ -84,9 +89,16 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
                                const boost::uuids::uuid& slam_instance_id ) const
 {
     // too close to the last registered loop edge of the same slam instance
-    if( new_keyframe->slam_instance_uuid == slam_instance_id && new_keyframe->accum_distance > 0
-        && last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid ) > 0
-        && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid )
+    // if( new_keyframe->slam_instance_uuid == slam_instance_id && new_keyframe->accum_distance > 0
+    //     && last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid ) > 0
+    //     && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid )
+    //            < distance_from_last_loop_edge_thresh ) {
+    //     return std::vector<KeyFrame::Ptr>();
+    // }
+
+    // too close to the last registered loop edge of the same slam instance
+    if( last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid ).accum_distance > 0
+        && new_keyframe->accum_distance - last_loop_edge_accum_distance_map.at( new_keyframe->slam_instance_uuid ).accum_distance
                < distance_from_last_loop_edge_thresh ) {
         return std::vector<KeyFrame::Ptr>();
     }
