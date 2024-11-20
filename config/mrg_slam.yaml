@@ -90,7 +90,7 @@ prefiltering_component:
 scan_matching_odometry_component:
   ros__parameters:
     enable_scan_matching_odometry: true
-    enable_odom_to_file: true
+    enable_odom_to_file: false
 
     # used for read_until
     points_topic: "/velodyne_points"
@@ -187,8 +187,9 @@ mrg_slam_component:
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
     # loop closure params
     distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
-    accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same slam instance for considering them as loop closure candidates
-    min_edge_interval: 15.0 # minimum distance since last successful loop closure of a slam instance to consider the new keyframe for loop closures at all
+    accum_distance_thresh: 15.0 # minimum distance to accumulate between keyframes of the same slam instance for considering them as loop closure candidates
+    accum_distance_thresh_other_slam_instance: 10.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
+    min_edge_interval: 5.0 # minimum distance since last successful loop closure of a slam instance to consider the new keyframe of that slam instance for loop closures at all
     fitness_score_max_range: .inf
     fitness_score_thresh: 1.25
     use_planar_registration_guess: false

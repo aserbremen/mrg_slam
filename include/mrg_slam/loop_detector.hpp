@@ -58,13 +58,19 @@ public:
 
 private:
     /**
-     * @brief find loop candidates. A detected loop begins at one of #keyframes and ends at #new_keyframe
-     * @param keyframes      candidate keyframes of loop start
-     * @param new_keyframe   loop end keyframe
-     * @return loop candidates
+     * @brief find loop preliminary loop closure candidates in the vicinity of the new keyframe
+     * @param keyframes keyframes to search for candidates
+     * @param new_keyframe  new keyframe testing for loop closure against existing keyframes of the graph
      */
-    std::vector<KeyFrame::Ptr> find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes,
-                                                const boost::uuids::uuid& slam_instance_id ) const;
+    std::vector<KeyFrame::Ptr> find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes ) const;
+
+    /**
+     * @brief Filter the candidates by distance thresholds and accumulated distance differences
+     *
+     * @param candidates candidate keyframes
+     * @return std::vector<KeyFrame::Ptr> filtered candidates
+     */
+    std::vector<KeyFrame::Ptr> filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, const KeyFrame::Ptr& new_keyframe );
 
     /**
      * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched
@@ -129,9 +135,11 @@ private:
     double distance_thresh,
         distance_thresh_squared;   // estimated distance between new keyframe and candidate be less than this distance, for the candidate to
                                    // be considered
-    double accum_distance_thresh;  // accumulated distance difference between new keyframe and candidandate keyframe must be larger than
-                                   // this, otherwise candidate is ignored
-    double distance_from_last_loop_edge_thresh;  // a new loop edge must far from the last one at least this distance
+    double accum_distance_thresh;  // accumulated distance difference between new keyframe and candidandate keyframe of the same slam
+                                   // instance  must be larger than  this, otherwise candidate is ignored
+    double accum_distance_thresh_other_slam_instance;  // accumulated distance difference between new keyframe and candidandate keyframe of
+                                                       // another slam instance must be larger than this, otherwise candidate is ignored
+    double distance_from_last_loop_edge_thresh;        // a new loop edge must far from the last one at least this distance
 
     double fitness_score_max_range;  // maximum allowable distance between corresponding points
     double fitness_score_thresh;     // threshold for scan matching
@@ -142,13 +150,18 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    // map of a slam instance uuid to a pair of another slam instance uuid and its distance to the last loop edge
-    struct uuid_distance_pair {
-        uuid_distance_pair( const boost::uuids::uuid& _uuid, double _accum_distance ) : uuid( _uuid ), accum_distance( _accum_distance ) {}
-        boost::uuids::uuid uuid;
-        double             accum_distance;
+    // map of a new keyframe slam instance uuid to candidate instance uuid and their accumulated distances
+    struct LoopClosureInfo {
+        LoopClosureInfo() : new_keyframe( nullptr ), candidate( nullptr ) {}
+        LoopClosureInfo( KeyFrame::ConstPtr _new_keyframe, KeyFrame::ConstPtr _candidate ) :
+            new_keyframe( _new_keyframe ), candidate( _candidate )
+        {
+        }
+        KeyFrame::ConstPtr new_keyframe;
+        KeyFrame::ConstPtr candidate;
     };
-    std::unordered_map<boost::uuids::uuid, uuid_distance_pair> last_loop_edge_accum_distance_map;
+    // map of a new keyframe slam instance uuid to the last loop edge information
+    std::unordered_map<boost::uuids::uuid, LoopClosureInfo> last_loop_info_map;
 
     pcl::Registration<PointT, PointT>::Ptr registration;
 

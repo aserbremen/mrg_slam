@@ -368,6 +368,8 @@ GraphDatabase::flush_graph_queue(
         } else if( edge->type == Edge::TYPE_LOOP ) {
             graph_slam->add_robust_kernel( g2o_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
+
+        // TODO if the edge is a loop closure edge, update the mapping of loop closures in the loop_detector
     }
 
     for( const auto &latest_keyframe : latest_robot_keyframes ) {
@@ -544,6 +546,7 @@ GraphDatabase::flush_loaded_graph()
             graph_slam->add_robust_kernel( edge_g2o, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         } else if( edge->type == Edge::TYPE_LOOP ) {
             graph_slam->add_robust_kernel( edge_g2o, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
+            // TODO if the edge is a loop closure edge, update the mapping of loop closures in the loop_detector
         }
     }
 
