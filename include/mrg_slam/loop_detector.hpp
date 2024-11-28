@@ -36,6 +36,56 @@ public:
     Eigen::Matrix4f relative_pose;  // relative pose from key1 to key2
 };
 
+class LoopManager {
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    using Ptr = std::shared_ptr<LoopManager>;
+
+    Loop::Ptr get_loop( const boost::uuids::uuid& new_keyframe_slam_uuid, const boost::uuids::uuid& candidate_slam_uuid ) const
+    {
+        auto new_keyframe_it = loop_map.find( new_keyframe_slam_uuid );
+        if( new_keyframe_it != loop_map.end() ) {
+            auto candidate_it = new_keyframe_it->second.find( candidate_slam_uuid );
+            if( candidate_it != new_keyframe_it->second.end() ) {
+                return candidate_it->second;
+            }
+        }
+        return nullptr;
+    }
+
+    std::unordered_map<boost::uuids::uuid, Loop::Ptr> get_loops( const boost::uuids::uuid& new_keyframe_slam_uuid ) const
+    {
+        auto new_keyframe_it = loop_map.find( new_keyframe_slam_uuid );
+        if( new_keyframe_it != loop_map.end() ) {
+            return new_keyframe_it->second;
+        }
+        return {};
+    }
+
+    void add_loop( const Loop::Ptr& loop ) { loop_map[loop->key1->slam_uuid][loop->key2->slam_uuid] = loop; }
+
+    void add_loop_accum_distance_check( const Loop::Ptr& loop, double accum_distance_thresh )
+    {
+        auto available_loop = get_loop( loop->key1->slam_uuid, loop->key2->slam_uuid );
+        if( !available_loop ) {
+            std::cout << "Adding " << loop->key1->readable_id << " to LoopManager" << std::endl;
+            add_loop( loop );
+            return;
+        }
+        // overwrite if the loop to be added is more recent than the previously registered loop
+        if( loop->key1->accum_distance > available_loop->key1->accum_distance ) {
+            std::cout << "Overwriting " << available_loop->key1->readable_id << " with " << loop->key1->readable_id
+                      << " due to higher accum distance" << std::endl;
+            add_loop( loop );
+        }
+    }
+
+
+private:
+    // new_keyframe_slam_uuid -> <candidate_slam_uuid, Loop::Ptr>
+    std::unordered_map<boost::uuids::uuid, std::unordered_map<boost::uuids::uuid, Loop::Ptr>> loop_map;
+};
+
 /**
  * @brief this class finds loops by scan matching and adds them to the pose graph
  */
@@ -55,6 +105,12 @@ public:
     std::vector<Loop::Ptr> detect( std::shared_ptr<GraphDatabase> graph_db );
 
     double get_distance_thresh() const;
+
+    // const std::unordered_map<boost::uuids::uuid, Loop::Ptr> get_last_loop_map() const { return last_loop_map; }
+
+    // Statistics
+    std::vector<int64_t> loop_detection_times;
+    std::vector<int>     loop_candidates_sizes;
 
 private:
     /**
@@ -150,25 +206,22 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    // map of a new keyframe slam instance uuid to candidate instance uuid and their accumulated distances
-    struct LoopClosureInfo {
-        LoopClosureInfo() : new_keyframe( nullptr ), candidate( nullptr ) {}
-        LoopClosureInfo( KeyFrame::ConstPtr _new_keyframe, KeyFrame::ConstPtr _candidate ) :
-            new_keyframe( _new_keyframe ), candidate( _candidate )
-        {
-        }
-        KeyFrame::ConstPtr new_keyframe;
-        KeyFrame::ConstPtr candidate;
-    };
+    // // map of a new keyframe slam instance uuid to candidate instance uuid and their accumulated distances
+    // struct LoopClosureInfo {
+    //     LoopClosureInfo() : new_keyframe( nullptr ), candidate( nullptr ) {}
+    //     LoopClosureInfo( KeyFrame::ConstPtr _new_keyframe, KeyFrame::ConstPtr _candidate ) :
+    //         new_keyframe( _new_keyframe ), candidate( _candidate )
+    //     {
+    //     }
+    //     KeyFrame::ConstPtr new_keyframe;
+    //     KeyFrame::ConstPtr candidate;
+    // };
     // map of a new keyframe slam instance uuid to the last loop edge information
-    std::unordered_map<boost::uuids::uuid, LoopClosureInfo> last_loop_info_map;
+    // std::unordered_map<boost::uuids::uuid, Loop::Ptr> last_loop_map;
+    LoopManager::Ptr loop_manager;
+
 
     pcl::Registration<PointT, PointT>::Ptr registration;
-
-public:
-    // Statistics
-    std::vector<int64_t> loop_detection_times;
-    std::vector<int>     loop_candidates_sizes;
 };
 
 }  // namespace mrg_slam
