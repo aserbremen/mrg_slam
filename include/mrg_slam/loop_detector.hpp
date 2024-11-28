@@ -31,9 +31,9 @@ public:
     }
 
 public:
-    KeyFrame::Ptr   key1;
-    KeyFrame::Ptr   key2;
-    Eigen::Matrix4f relative_pose;
+    KeyFrame::Ptr   key1;           // new keyframe testing for loop closure
+    KeyFrame::Ptr   key2;           // best matched candidate keyframe
+    Eigen::Matrix4f relative_pose;  // relative pose from key1 to key2
 };
 
 /**

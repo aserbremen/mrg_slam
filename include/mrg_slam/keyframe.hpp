@@ -37,8 +37,8 @@ public:
 
     KeyFrame( const std::string& robot_name, const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom,
               int odom_keyframe_counter, double accum_distance, const boost::uuids::uuid& uuid, const std::string& uuid_str,
-              const boost::uuids::uuid& _slam_instance_uuid, const std::string& _slam_instance_uuid_str,
-              const pcl::PointCloud<PointT>::ConstPtr& cloud, const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
+              const boost::uuids::uuid& _slam_uuid, const std::string& _slam_uuid_str, const pcl::PointCloud<PointT>::ConstPtr& cloud,
+              const sensor_msgs::msg::PointCloud2::ConstSharedPtr& cloud_msg = nullptr );
     KeyFrame( const std::string& keyframe_path, const std::string& pcd_path, const boost::uuids::uuid& _uuid,
               const std::string& _uuid_str );
     virtual ~KeyFrame();
@@ -68,15 +68,15 @@ public:
     bool edge_exists( const KeyFrame& other, const rclcpp::Logger& logger ) const;
 
 public:
-    std::string                   robot_name;              // robot name
-    builtin_interfaces::msg::Time stamp;                   // timestamp
-    Eigen::Isometry3d             odom;                    // odometry (estimated by scan_matching_odometry)
-    int                           odom_keyframe_counter;   // odometry keyframe counter for each robot
-    boost::uuids::uuid            uuid;                    // unique id
-    std::string                   uuid_str;                // unique id string
-    boost::uuids::uuid            slam_instance_uuid;      // unique id of the graph
-    std::string                   slam_instance_uuid_str;  // unique id string of the graph
-    double                        accum_distance;          // accumulated distance from the first node (by scan_matching_odometry)
+    std::string                   robot_name;             // robot name
+    builtin_interfaces::msg::Time stamp;                  // timestamp
+    Eigen::Isometry3d             odom;                   // odometry (estimated by scan_matching_odometry)
+    int                           odom_keyframe_counter;  // odometry keyframe counter for each robot
+    boost::uuids::uuid            uuid;                   // unique id
+    std::string                   uuid_str;               // unique id string
+    boost::uuids::uuid            slam_uuid;              // unique id of the graph
+    std::string                   slam_uuid_str;          // unique id string of the graph
+    double                        accum_distance;         // accumulated distance from the first node (by scan_matching_odometry)
     bool                          first_keyframe;   // first keyframe of slam, the corresponding point cloud should be excluded from the map
     bool                          static_keyframe;  // keyframes that are part of the static map
     pcl::PointCloud<PointT>::ConstPtr             cloud;         // point cloud

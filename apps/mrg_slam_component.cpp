@@ -1311,16 +1311,16 @@ private:
                 }
 
                 mrg_slam_msgs::msg::KeyFrameRos dst;
-                dst.robot_name             = src->robot_name;
-                dst.uuid_str               = src->uuid_str;
-                dst.slam_instance_uuid_str = src->slam_instance_uuid_str;
-                dst.stamp                  = src->stamp;
-                dst.odom_counter           = src->odom_keyframe_counter;
-                dst.first_keyframe         = src->first_keyframe;
-                dst.static_keyframe        = src->static_keyframe;
-                dst.accum_distance         = src->accum_distance;
-                dst.estimate               = tf2::toMsg( src->estimate() );
-                dst.cloud                  = *src->cloud_msg;
+                dst.robot_name      = src->robot_name;
+                dst.uuid_str        = src->uuid_str;
+                dst.slam_uuid_str   = src->slam_uuid_str;
+                dst.stamp           = src->stamp;
+                dst.odom_counter    = src->odom_keyframe_counter;
+                dst.first_keyframe  = src->first_keyframe;
+                dst.static_keyframe = src->static_keyframe;
+                dst.accum_distance  = src->accum_distance;
+                dst.estimate        = tf2::toMsg( src->estimate() );
+                dst.cloud           = *src->cloud_msg;
                 res->graph.keyframes.push_back( std::move( dst ) );
                 added_keyframes++;
             }

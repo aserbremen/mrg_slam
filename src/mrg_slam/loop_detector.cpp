@@ -33,9 +33,8 @@ LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
 {
     std::cout << std::endl << "--- loop detection ---" << std::endl;
 
-    const auto&            keyframes          = graph_db->get_keyframes();
-    const auto&            new_keyframes      = graph_db->get_new_keyframes();
-    const auto&            slam_instance_uuid = graph_db->get_slam_instance_uuid();
+    const auto&            keyframes     = graph_db->get_keyframes();
+    const auto&            new_keyframes = graph_db->get_new_keyframes();
     std::vector<Loop::Ptr> detected_loops;
     for( const auto& new_keyframe : new_keyframes ) {
         auto start = std::chrono::high_resolution_clock::now();
@@ -104,17 +103,17 @@ LoopDetector::filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, c
 {
     auto logger = rclcpp::get_logger( "LoopDetector::filter_candidates" );
 
-    RCLCPP_INFO_STREAM( logger, "Filtering " << candidates.size() << " candidates" );
+    RCLCPP_INFO_STREAM( logger, "Filtering " << candidates.size() << " candidates for " << new_keyframe->readable_id );
     std::vector<KeyFrame::Ptr> filtered_candidates;
 
     // Check the last loop closure that new_keyframe was part of and reject all candidates if the new_keyframe->accum_distance is below the
     // distance_from_last_loop_edge_thresh
-    for( const auto& [slam_instance_uuid, loop_info] : last_loop_info_map ) {
+    for( const auto& [_, last_loop] : last_loop_info_map ) {
         KeyFrame::ConstPtr last_loop_kf;
-        if( new_keyframe->slam_instance_uuid == slam_instance_uuid ) {
-            last_loop_kf = loop_info.new_keyframe;
-        } else if( new_keyframe->slam_instance_uuid == loop_info.candidate->slam_instance_uuid ) {
-            last_loop_kf = loop_info.candidate;
+        if( new_keyframe->slam_uuid == last_loop.new_keyframe->slam_uuid ) {
+            last_loop_kf = last_loop.new_keyframe;
+        } else if( new_keyframe->slam_uuid == last_loop.candidate->slam_uuid ) {
+            last_loop_kf = last_loop.candidate;
         }
 
         if( last_loop_kf != nullptr ) {
@@ -132,30 +131,29 @@ LoopDetector::filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, c
     for( const auto& cand : candidates ) {
         bool keep_candidate = true;
 
-        // Check if the candidate is too close in distance for the same SLAM instance
-        if( new_keyframe->slam_instance_uuid == cand->slam_instance_uuid
-            && new_keyframe->accum_distance - cand->accum_distance < accum_distance_thresh ) {
-            RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id << " from filtered_candidates with delta distance "
+        // Check if the candidate is too close in distance for the same SLAM instance to avoid loops very close to each other
+        if( new_keyframe->slam_uuid == cand->slam_uuid && new_keyframe->accum_distance - cand->accum_distance < accum_distance_thresh ) {
+            RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id << " from filtered_candidates with delta accum distance "
                                                               << new_keyframe->accum_distance - cand->accum_distance
-                                                              << " accum_distance_thresh = " << accum_distance_thresh );
+                                                              << " < accum_distance_thresh = " << accum_distance_thresh );
             keep_candidate = false;
         }
 
         if( keep_candidate ) {
-            // Check if the candidate is too far in distance for different SLAM instances
+            // Check if the candidate is too close in distance for different SLAM instances
             // TODO check if the accum_distance_thresh_other_slam_instance should be used for the new keyframe or the candidate
-            for( const auto& [slam_instance_uuid, loop_info] : last_loop_info_map ) {
-                if( new_keyframe->slam_instance_uuid == slam_instance_uuid
-                    && new_keyframe->accum_distance - loop_info.new_keyframe->accum_distance < accum_distance_thresh_other_slam_instance ) {
-                    RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id
-                                                                      << " from filtered_candidates with delta distance "
-                                                                      << new_keyframe->accum_distance - cand->accum_distance
-                                                                      << " for same slam instance with accum_distance_thresh = "
-                                                                      << accum_distance_thresh_other_slam_instance );
+            for( const auto& [_, last_loop] : last_loop_info_map ) {
+                if( new_keyframe->slam_uuid == last_loop.new_keyframe->slam_uuid
+                    && new_keyframe->accum_distance - last_loop.new_keyframe->accum_distance < accum_distance_thresh ) {
+                    RCLCPP_INFO_STREAM( logger, "Removing candidate "
+                                                    << cand->readable_id
+                                                    << " from filtered_candidates for same slam instance with delta accum distance "
+                                                    << new_keyframe->accum_distance - cand->accum_distance
+                                                    << " < accum_distance_thresh = " << accum_distance_thresh );
                     keep_candidate = false;
                     break;
-                } else if( new_keyframe->slam_instance_uuid == loop_info.candidate->slam_instance_uuid
-                           && new_keyframe->accum_distance - loop_info.candidate->accum_distance
+                } else if( new_keyframe->slam_uuid == last_loop.candidate->slam_uuid
+                           && new_keyframe->accum_distance - last_loop.candidate->accum_distance
                                   < accum_distance_thresh_other_slam_instance ) {
                     RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id
                                                                       << " from filtered_candidates with delta distance "
@@ -174,7 +172,7 @@ LoopDetector::filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, c
         }
     }
 
-    RCLCPP_INFO_STREAM( logger, "Returning " << filtered_candidates.size() << " candidates" );
+    RCLCPP_INFO_STREAM( logger, "Returning " << filtered_candidates.size() << " candidates for " << new_keyframe->readable_id );
 
     return filtered_candidates;
 }
@@ -253,7 +251,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
     std::cout << "updating last loop edge accum distance for " << new_keyframe->readable_id << " to " << new_keyframe->accum_distance
               << std::endl;
-    last_loop_info_map[new_keyframe->slam_instance_uuid] = LoopClosureInfo( new_keyframe, best_matched );
+    last_loop_info_map[new_keyframe->slam_uuid] = LoopClosureInfo( new_keyframe, best_matched );
 
     return std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );
 }

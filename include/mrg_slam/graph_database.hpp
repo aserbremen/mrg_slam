@@ -108,7 +108,7 @@ public:
     const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>& get_keyframe_hash() const { return keyframe_hash; }
     const g2o::VertexSE3*                                                                get_anchor_node() const { return anchor_node; }
     const g2o::EdgeSE3*       get_anchor_edge_g2o() const { return anchor_edge_g2o; }
-    const boost::uuids::uuid& get_slam_instance_uuid() const { return slam_instance_uuid; }
+    const boost::uuids::uuid& get_slam_uuid() const { return slam_uuid; }
 
 private:
     std::shared_ptr<GraphSLAM>                   graph_slam;
@@ -153,8 +153,8 @@ private:
     boost::uuids::string_generator      uuid_from_string_generator;
 
     // unique id the current instance of the slam graph. unique for each robot run
-    boost::uuids::uuid slam_instance_uuid;
-    std::string        slam_instance_uuid_str;
+    boost::uuids::uuid slam_uuid;
+    std::string        slam_uuid_str;
 
     // ROS2 parameters
     std::string         own_name;
