@@ -68,11 +68,12 @@ public:
 
     /**
      * @brief Flushes the graph queue and adds the keyframes and edges to the graph
-     * @param others_prev_robot_keyframes
+     * @param others_prev_robot_keyframes map of the last keyframes of other robots
+     * @param last_loop_map map of the last loop closures which might be updated due to loops already present in the graph
      * @return true if at least one unique keyframe or edge was added to the graph
      */
-    bool flush_graph_queue(
-        std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>>& others_prev_robot_keyframes );
+    bool flush_graph_queue( std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>>& others_prev_robot_keyframes,
+                            LoopManager::Ptr                                                                   loop_manager );
 
     /**
      * @brief Loads the graph from a directory, which has previously been saved with save_graph service
@@ -85,7 +86,7 @@ public:
      * @brief Flushes the loaded graph and adds the unique keyframes and edges to the graph
      * @return true if at least one unique keyframe or edge was added to the graph
      */
-    bool flush_loaded_graph();
+    bool flush_loaded_graph( LoopManager::Ptr loop_manager );
 
     /**
      * @brief Adds SE3 edges between two keyframes for which a loop was detected. Adds the new_keyframes checked for loop closures to

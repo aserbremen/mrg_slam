@@ -958,7 +958,8 @@ private:
         }
 
         if( !keyframe_updated & !graph_database->flush_static_keyframe_queue()
-            & !graph_database->flush_graph_queue( others_prev_robot_keyframes ) & !graph_database->flush_loaded_graph()
+            & !graph_database->flush_graph_queue( others_prev_robot_keyframes, loop_detector->get_loop_manager() )
+            & !graph_database->flush_loaded_graph( loop_detector->get_loop_manager() )
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )
             & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id ) ) {

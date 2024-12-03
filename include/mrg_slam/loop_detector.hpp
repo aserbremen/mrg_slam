@@ -39,7 +39,10 @@ public:
 class LoopManager {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    using Ptr = std::shared_ptr<LoopManager>;
+    using Ptr      = std::shared_ptr<LoopManager>;
+    using ConstPtr = std::shared_ptr<const LoopManager>;
+
+    LoopManager() = default;
 
     Loop::Ptr get_loop( const boost::uuids::uuid& new_keyframe_slam_uuid, const boost::uuids::uuid& candidate_slam_uuid ) const
     {
@@ -50,6 +53,7 @@ public:
                 return candidate_it->second;
             }
         }
+        // There is no registered loop closure for the given combination of slam uuids
         return nullptr;
     }
 
@@ -64,7 +68,7 @@ public:
 
     void add_loop( const Loop::Ptr& loop ) { loop_map[loop->key1->slam_uuid][loop->key2->slam_uuid] = loop; }
 
-    void add_loop_accum_distance_check( const Loop::Ptr& loop, double accum_distance_thresh )
+    void add_loop_accum_distance_check( const Loop::Ptr& loop )
     {
         auto available_loop = get_loop( loop->key1->slam_uuid, loop->key2->slam_uuid );
         if( !available_loop ) {
@@ -80,8 +84,8 @@ public:
         }
     }
 
-
 private:
+    // The nested unordered_map keeps track of the most recent loop registered wrt to the new keyframe being tested for loop closures
     // new_keyframe_slam_uuid -> <candidate_slam_uuid, Loop::Ptr>
     std::unordered_map<boost::uuids::uuid, std::unordered_map<boost::uuids::uuid, Loop::Ptr>> loop_map;
 };
@@ -106,7 +110,7 @@ public:
 
     double get_distance_thresh() const;
 
-    // const std::unordered_map<boost::uuids::uuid, Loop::Ptr> get_last_loop_map() const { return last_loop_map; }
+    LoopManager::Ptr get_loop_manager() { return loop_manager; }
 
     // Statistics
     std::vector<int64_t> loop_detection_times;
@@ -206,20 +210,7 @@ private:
 
     bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
 
-    // // map of a new keyframe slam instance uuid to candidate instance uuid and their accumulated distances
-    // struct LoopClosureInfo {
-    //     LoopClosureInfo() : new_keyframe( nullptr ), candidate( nullptr ) {}
-    //     LoopClosureInfo( KeyFrame::ConstPtr _new_keyframe, KeyFrame::ConstPtr _candidate ) :
-    //         new_keyframe( _new_keyframe ), candidate( _candidate )
-    //     {
-    //     }
-    //     KeyFrame::ConstPtr new_keyframe;
-    //     KeyFrame::ConstPtr candidate;
-    // };
-    // map of a new keyframe slam instance uuid to the last loop edge information
-    // std::unordered_map<boost::uuids::uuid, Loop::Ptr> last_loop_map;
     LoopManager::Ptr loop_manager;
-
 
     pcl::Registration<PointT, PointT>::Ptr registration;
 };

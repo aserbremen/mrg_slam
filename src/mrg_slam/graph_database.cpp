@@ -236,7 +236,8 @@ GraphDatabase::add_graph_ros( const mrg_slam_msgs::msg::GraphRos &graph_ros )
 
 bool
 GraphDatabase::flush_graph_queue(
-    std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>> &others_prev_robot_keyframes )
+    std::unordered_map<std::string, std::pair<KeyFrame::ConstPtr, Eigen::Isometry3d>> &others_prev_robot_keyframes,
+    LoopManager::Ptr                                                                   loop_manager )
 {
     //     std::lock_guard<std::mutex> lock( graph_queue_mutex );
 
@@ -366,10 +367,11 @@ GraphDatabase::flush_graph_queue(
         if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
             graph_slam->add_robust_kernel( g2o_edge, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         } else if( edge->type == Edge::TYPE_LOOP ) {
+            Eigen::Matrix4f relative_pose_matrix = edge->relative_pose().matrix().cast<float>();
+            Loop::Ptr       loop                 = std::make_shared<Loop>( from_keyframe, to_keyframe, relative_pose_matrix );
+            loop_manager->add_loop_accum_distance_check( loop );
             graph_slam->add_robust_kernel( g2o_edge, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
         }
-
-        // TODO if the edge is a loop closure edge, update the mapping of loop closures in the loop_detector
     }
 
     for( const auto &latest_keyframe : latest_robot_keyframes ) {
@@ -477,7 +479,7 @@ GraphDatabase::load_graph( const std::string &directory )
 }
 
 bool
-GraphDatabase::flush_loaded_graph()
+GraphDatabase::flush_loaded_graph( LoopManager::Ptr loop_manager )
 {
     std::lock_guard<std::mutex> lock( loaded_graph_mutex );
 
@@ -545,8 +547,10 @@ GraphDatabase::flush_loaded_graph()
         if( edge->type == Edge::TYPE_ODOM || edge->type == Edge::TYPE_ANCHOR ) {
             graph_slam->add_robust_kernel( edge_g2o, odometry_edge_robust_kernel, odometry_edge_robust_kernel_size );
         } else if( edge->type == Edge::TYPE_LOOP ) {
+            Eigen::Matrix4f relative_pose_matrix = edge->relative_pose().matrix().cast<float>();
+            Loop::Ptr       loop                 = std::make_shared<Loop>( from_keyframe, to_keyframe, relative_pose_matrix );
+            loop_manager->add_loop_accum_distance_check( loop );
             graph_slam->add_robust_kernel( edge_g2o, loop_closure_edge_robust_kernel, loop_closure_edge_robust_kernel_size );
-            // TODO if the edge is a loop closure edge, update the mapping of loop closures in the loop_detector
         }
     }
 
