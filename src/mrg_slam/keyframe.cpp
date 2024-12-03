@@ -165,7 +165,7 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
                     matrixStream >> odom_mat( i, j );
                 }
             }
-        } else if( key == "accum_dist" ) {
+        } else if( key == "accum_distance" ) {
             iss >> accum_distance;
         } else if( key == "slam_uuid_str" ) {
             iss >> slam_uuid_str;
