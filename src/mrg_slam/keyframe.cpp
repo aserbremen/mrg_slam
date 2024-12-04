@@ -115,6 +115,8 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
 {
     auto logger = rclcpp::get_logger( "KeyFrame::load" );
 
+    boost::uuids::string_generator uuid_from_string_generator;
+
     uuid     = _uuid;
     uuid_str = _uuid_str;
 
@@ -125,9 +127,6 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
     }
 
     RCLCPP_INFO_STREAM( logger, "Loading keyframe from " << keyframe_path );
-
-    // when loading from file, accum_distance is negative so that loaded keyframes are considered when determining loop closure candidates
-    // accum_distance = -1.0;
 
     std::string line;
     while( std::getline( ifs, line ) ) {
@@ -169,6 +168,7 @@ KeyFrame::load( const std::string& keyframe_path, const std::string& pcd_path, c
             iss >> accum_distance;
         } else if( key == "slam_uuid_str" ) {
             iss >> slam_uuid_str;
+            slam_uuid = uuid_from_string_generator( slam_uuid_str );
         } else if( key == "first_keyframe" ) {
             iss >> first_keyframe;
         } else if( key == "static_keyframe" ) {
