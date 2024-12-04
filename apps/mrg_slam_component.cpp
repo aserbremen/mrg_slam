@@ -1053,10 +1053,10 @@ private:
         }
 
         if( markers_pub.getNumSubscribers() ) {
-            markers_pub.publish( graph_slam, keyframes, edges, prev_robot_keyframe, others_last_kf, loop_detector->get_distance_thresh() );
+            markers_pub.publish( graph_slam, graph_database->get_slam_uuid(), keyframes, edges, prev_robot_keyframe, others_last_kf );
         }
         if( markers_pub.getNumMarginalsSubscribers() ) {
-            markers_pub.publishMarginals( keyframes, marginals );
+            markers_pub.publishMarginals( graph_database->get_slam_uuid(), keyframes, marginals );
         }
 
         slam_status_msg.in_optimization = false;

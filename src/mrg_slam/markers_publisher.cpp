@@ -27,6 +27,8 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
     map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
     own_name     = node->get_parameter( "own_name" ).as_string();
 
+    loop_closure_distance_thresh = node->get_parameter( "distance_thresh" ).as_double();
+
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
     color_blue.r = 31.0 / 255.0;
     color_blue.g = 119.0 / 255.0;
@@ -96,9 +98,9 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 
 
 void
-MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<KeyFrame::Ptr>& keyframes,
-                           const std::vector<Edge::Ptr>& edges, const KeyFrame::ConstPtr& last_keyframe,
-                           const std::vector<KeyFrame::ConstPtr>& others_last_kf, double loop_detector_distance_thresh )
+MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::uuids::uuid& own_slam_uuid,
+                           const std::vector<KeyFrame::Ptr>& keyframes, const std::vector<Edge::Ptr>& edges,
+                           const KeyFrame::ConstPtr& last_keyframe, const std::vector<KeyFrame::ConstPtr>& others_last_kf )
 {
     enum {
         MARKER_NODES,
@@ -151,7 +153,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         traj_marker.colors[i].a = 1.0;
         */
 
-        if( keyframes[i]->robot_name == own_name ) {
+        if( keyframes[i]->slam_uuid == own_slam_uuid ) {
             traj_marker.colors[i] = color_blue;
         } else {
             traj_marker.colors[i] = color_cyan;
@@ -236,20 +238,24 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
             main_edge_marker.points[i * 2 + 1].y = pt2.y();
             main_edge_marker.points[i * 2 + 1].z = pt2.z();
 
-            if( edge->from_keyframe->robot_name == own_name && edge->to_keyframe->robot_name == own_name ) {
+            // same SLAM UUID
+            if( edge->from_keyframe->slam_uuid == own_slam_uuid && edge->to_keyframe->slam_uuid == own_slam_uuid ) {
                 if( edge->type == Edge::TYPE_ANCHOR ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_dark_gray;
                 } else if( edge->type == Edge::TYPE_ODOM ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red;
-                } else if( edge->type == Edge::TYPE_LOOP ) {
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple;
                 }
-            } else {
+            } else {  // different SLAM UUID
                 if( edge->type == Edge::TYPE_ANCHOR ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_light_gray;
                 } else if( edge->type == Edge::TYPE_ODOM ) {
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_orange;
-                } else if( edge->type == Edge::TYPE_LOOP ) {
+                }
+            }
+            if( edge->type == Edge::TYPE_LOOP ) {
+                if( edge->from_keyframe->slam_uuid == edge->to_keyframe->slam_uuid ) {  // intra-robot loop
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple;
+                } else if( edge->from_keyframe->slam_uuid != edge->to_keyframe->slam_uuid ) {  // inter-robot loop
                     main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_pink;
                 }
             }
@@ -395,7 +401,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
     circle_marker.color.a                          = 0.3;
 
     if( !keyframes.empty() ) {
-        double                 radius     = loop_detector_distance_thresh;
+        double                 radius     = loop_closure_distance_thresh;
         const Eigen::Vector3d& p_center   = last_keyframe->node->estimate().translation();
         int                    num_points = 50;
         for( int i = 0; i <= num_points; i++ ) {
@@ -420,14 +426,14 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
         marker.header.stamp       = stamp;
         marker.ns                 = "node_names";
         marker.type               = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-        marker.scale.z            = 0.4;  // text height
+        marker.scale.z            = 0.25;  // text height
         marker.action             = visualization_msgs::msg::Marker::ADD;
         marker.pose.position.x    = keyframes[i]->estimate().translation().x();
         marker.pose.position.y    = keyframes[i]->estimate().translation().y();
         marker.pose.position.z    = keyframes[i]->estimate().translation().z() + 0.5;
         marker.pose.orientation.w = 1.0;
         marker.id                 = i;
-        if( keyframes[i]->robot_name == own_name ) {
+        if( keyframes[i]->slam_uuid == own_slam_uuid ) {
             marker.text  = keyframes[i]->readable_id;
             marker.color = color_blue;
         } else {
@@ -441,14 +447,12 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const std::ve
 
 
 void
-MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes, const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals )
+MarkersPublisher::publishMarginals( const boost::uuids::uuid& own_slam_uuid, const std::vector<KeyFrame::Ptr>& keyframes,
+                                    const std::shared_ptr<g2o::SparseBlockMatrixX>& marginals )
 {
     // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
 
-    // auto                            stamp   = ros::Time::now();
-    // Directly declare builtin_interfaces::msg::Time
-    builtin_interfaces::msg::Time stamp = node->now().operator builtin_interfaces::msg::Time();
-    // RobotId                              own_rid = gid_gen.get_robot_id( own_name );
+    builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
 
     markers.markers.resize( keyframes.size() );
@@ -465,7 +469,7 @@ MarkersPublisher::publishMarginals( const std::vector<KeyFrame::Ptr>& keyframes,
         marker.type            = visualization_msgs::msg::Marker::SPHERE;
 
         // color
-        if( keyframes[i]->robot_name == own_name ) {
+        if( keyframes[i]->slam_uuid == own_slam_uuid ) {
             marker.color = color_blue;
         } else {
             marker.color = color_cyan;
