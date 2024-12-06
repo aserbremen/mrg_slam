@@ -115,41 +115,40 @@ LoopDetector::filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, c
     RCLCPP_INFO_STREAM( logger, "Filtering " << candidates.size() << " candidates for " << new_keyframe->readable_id );
     std::vector<KeyFrame::Ptr> filtered_candidates;
 
-    // Filter candidates
+    // Add final candidates if they are fit for loop closure matching
     for( const auto& cand : candidates ) {
-        bool keep_candidate = true;
+        if( new_keyframe->slam_uuid == cand->slam_uuid && new_keyframe->accum_distance - cand->accum_distance < accum_distance_thresh ) {
+            RCLCPP_INFO_STREAM( logger, "Not enough distance accumulated between new and candidate keyframe << "
+                                            << new_keyframe->accum_distance - cand->accum_distance );
+            continue;
+        }
+
 
         auto last_loop = loop_manager->get_loop( new_keyframe->slam_uuid, cand->slam_uuid );
-
-        if( !last_loop && new_keyframe->slam_uuid == cand->slam_uuid && new_keyframe->accum_distance < accum_distance_thresh ) {
-            RCLCPP_INFO_STREAM( logger, "No last loop for " << new_keyframe->readable_id << " not enough distance accumulated "
-                                                            << new_keyframe->accum_distance << " rejecting " << cand->readable_id );
-            keep_candidate = false;
-        }
 
         // Check if the candidate is too close in distance for the same SLAM instance to avoid loops very close to each other
         if( last_loop && new_keyframe->slam_uuid == cand->slam_uuid
             && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh ) {
-            RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id
-                                                              << " since not enough distance accumulated from last loop at "
-                                                              << last_loop->key1->readable_id << " with delta dist "
-                                                              << new_keyframe->accum_distance - last_loop->key1->accum_distance );
-            keep_candidate = false;
+            RCLCPP_INFO_STREAM( logger, "Removing candidate "
+                                            << cand->readable_id
+                                            << " since not enough distance accumulated from last loop with same slam uuid at "
+                                            << last_loop->key1->readable_id << " with delta dist "
+                                            << new_keyframe->accum_distance - last_loop->key1->accum_distance );
+            continue;
         }
 
         if( last_loop && new_keyframe->slam_uuid != cand->slam_uuid
             && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh_other_slam_instance ) {
-            RCLCPP_INFO_STREAM( logger, "Removing candidate " << cand->readable_id
-                                                              << " since not enough distance accumulated from last loop at "
-                                                              << last_loop->key1->readable_id << " with delta dist "
-                                                              << new_keyframe->accum_distance - last_loop->key1->accum_distance );
-            keep_candidate = false;
+            RCLCPP_INFO_STREAM( logger, "Removing candidate "
+                                            << cand->readable_id
+                                            << " since not enough distance accumulated from last loop at other slam uuid at "
+                                            << last_loop->key1->readable_id << " with delta dist "
+                                            << new_keyframe->accum_distance - last_loop->key1->accum_distance );
+            continue;
         }
 
         // Add candidate to filtered_candidates if it should be kept
-        if( keep_candidate ) {
-            filtered_candidates.push_back( cand );
-        }
+        filtered_candidates.push_back( cand );
     }
 
     RCLCPP_INFO_STREAM( logger, "Returning " << filtered_candidates.size() << " candidates for " << new_keyframe->readable_id );
