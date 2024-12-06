@@ -17,11 +17,11 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
 {
     node = _node;
 
-    markers_pub            = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
-    markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers/node_names",
-                                                                                           rclcpp::QoS( 16 ) );
-    markers_marginals_pub  = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
-                                                                                           rclcpp::QoS( 16 ) );
+    markers_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
+    // markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers/node_names",
+    //                                                                                        rclcpp::QoS( 16 ) );
+    markers_marginals_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
+                                                                                          rclcpp::QoS( 16 ) );
 
     // Declare only once across all nodes
     map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
@@ -107,13 +107,16 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         MARKER_LAST_NODES,
         // MARKER_IMU,
         MARKER_MAIN_EDGES,
-        MARKER_CIRCLE,
+        MARKER_LOOP_DIST_CIRCLE,
         MARKER_MISC_EDGES,
         __NUM_MARKERS__,
     };
     builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
-    markers.markers.resize( __NUM_MARKERS__ );
+
+    // The size is determined by the number of enum members above + the number of keyframes, as we have to add a single marker for every
+    // text marker of the node names
+    markers.markers.resize( __NUM_MARKERS__ + keyframes.size() );
 
     // node markers
     visualization_msgs::msg::Marker& traj_marker = markers.markers[MARKER_NODES];
@@ -122,9 +125,10 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     traj_marker.ns                               = "nodes";
     traj_marker.id                               = MARKER_NODES;
     traj_marker.type                             = visualization_msgs::msg::Marker::SPHERE_LIST;
-
-    traj_marker.pose.orientation.w = 1.0;
+    traj_marker.pose.orientation.w               = 1.0;
     traj_marker.scale.x = traj_marker.scale.y = traj_marker.scale.z = 0.3;
+    traj_marker.points.resize( keyframes.size() );
+    traj_marker.colors.resize( keyframes.size() );
 
     /*
     visualization_msgs::Marker& imu_marker = markers.markers[MARKER_IMU];
@@ -137,26 +141,23 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     imu_marker.scale.x = imu_marker.scale.y = imu_marker.scale.z = 0.3;
     */
 
-    traj_marker.points.resize( keyframes.size() );
-    traj_marker.colors.resize( keyframes.size() );
     for( int i = 0; i < (int)keyframes.size(); i++ ) {
         Eigen::Vector3d pos     = keyframes[i]->node->estimate().translation();
         traj_marker.points[i].x = pos.x();
         traj_marker.points[i].y = pos.y();
         traj_marker.points[i].z = pos.z();
 
-        /*
-        double p                = static_cast<double>( i ) / keyframes.size();
-        traj_marker.colors[i].r = 1.0 - p;
-        traj_marker.colors[i].g = p;
-        traj_marker.colors[i].b = 0.0;
-        traj_marker.colors[i].a = 1.0;
-        */
-
+        // same slam uuid
         if( keyframes[i]->slam_uuid == own_slam_uuid ) {
             traj_marker.colors[i] = color_blue;
-        } else {
+
+            // node_names_marker.text  = keyframes[i]->readable_id;
+            // node_names_marker.color = color_blue;
+        } else {  // other slam uuid
             traj_marker.colors[i] = color_cyan;
+
+            // node_names_marker.text  = "+" + keyframes[i]->readable_id;
+            // node_names_marker.color = color_cyan;
         }
 
         /*
@@ -388,11 +389,11 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     }
 
     // Publish a flat cylinder to represent the loop closure radius
-    visualization_msgs::msg::Marker& circle_marker = markers.markers[MARKER_CIRCLE];
+    visualization_msgs::msg::Marker& circle_marker = markers.markers[MARKER_LOOP_DIST_CIRCLE];
     circle_marker.header.frame_id                  = map_frame_id;
     circle_marker.header.stamp                     = stamp;
     circle_marker.ns                               = "loop_close_radius";
-    circle_marker.id                               = MARKER_CIRCLE;
+    circle_marker.id                               = MARKER_LOOP_DIST_CIRCLE;
     circle_marker.type                             = visualization_msgs::msg::Marker::LINE_STRIP;
     circle_marker.action                           = visualization_msgs::msg::Marker::ADD;
     circle_marker.pose.orientation.w               = 1.0;
@@ -414,35 +415,37 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         }
     }
 
-    markers_pub->publish( markers );
 
-    // Publish node names
-    visualization_msgs::msg::MarkerArray node_names;
-    node_names.markers.resize( keyframes.size() );
-    for( size_t i = 0; i < keyframes.size(); i++ ) {
-        auto& marker = node_names.markers[i];
+    // node names
 
-        marker.header.frame_id    = map_frame_id;
-        marker.header.stamp       = stamp;
-        marker.ns                 = "node_names";
-        marker.type               = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-        marker.scale.z            = 0.25;  // text height
-        marker.action             = visualization_msgs::msg::Marker::ADD;
-        marker.pose.position.x    = keyframes[i]->estimate().translation().x();
-        marker.pose.position.y    = keyframes[i]->estimate().translation().y();
-        marker.pose.position.z    = keyframes[i]->estimate().translation().z() + 0.5;
-        marker.pose.orientation.w = 1.0;
-        marker.id                 = i;
+    for( int i = 0; i < (int)keyframes.size(); i++ ) {
+        Eigen::Vector3d pos = keyframes[i]->node->estimate().translation();
+        // visualization_msgs::msg::Marker& node_names_marker = markers.markers[__NUM_MARKERS__ + i];
+        visualization_msgs::msg::Marker node_names_marker;
+        node_names_marker.header.frame_id    = map_frame_id;
+        node_names_marker.header.stamp       = stamp;
+        node_names_marker.ns                 = "node_names";
+        node_names_marker.id                 = __NUM_MARKERS__ + i;
+        node_names_marker.type               = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        node_names_marker.scale.z            = 0.25;  // text height
+        node_names_marker.action             = visualization_msgs::msg::Marker::ADD;
+        node_names_marker.pose.position.x    = pos.x();
+        node_names_marker.pose.position.y    = pos.y();
+        node_names_marker.pose.position.z    = pos.z() + 0.5;
+        node_names_marker.pose.orientation.w = 1.0;
+
         if( keyframes[i]->slam_uuid == own_slam_uuid ) {
-            marker.text  = keyframes[i]->readable_id;
-            marker.color = color_blue;
+            node_names_marker.text  = keyframes[i]->readable_id;
+            node_names_marker.color = color_blue;
         } else {
-            marker.color = color_cyan;
-            marker.text  = "+" + keyframes[i]->readable_id;
+            node_names_marker.text  = "+" + keyframes[i]->readable_id;
+            node_names_marker.color = color_cyan;
         }
+
+        markers.markers.push_back( node_names_marker );
     }
 
-    markers_node_names_pub->publish( node_names );
+    markers_pub->publish( markers );
 }
 
 

@@ -29,7 +29,7 @@ public:
 
 private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_node_names_pub;
+    // rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_node_names_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_marginals_pub;
 
     rclcpp::Node::SharedPtr node;
