@@ -44,6 +44,13 @@ public:
 
     LoopManager() = default;
 
+    /**
+     * @brief Get the loop object for a given new keyframe and candidate keyframe uuid
+     *
+     * @param new_keyframe_slam_uuid new keyframe uuid
+     * @param candidate_slam_uuid candidate keyframe uuid
+     * @return Loop::Ptr most recent loop object if found, nullptr otherwise
+     */
     Loop::Ptr get_loop( const boost::uuids::uuid& new_keyframe_slam_uuid, const boost::uuids::uuid& candidate_slam_uuid ) const
     {
         auto new_keyframe_it = loop_map.find( new_keyframe_slam_uuid );
@@ -57,6 +64,13 @@ public:
         return nullptr;
     }
 
+    /**
+     * @brief Get all most recent loops for a given new keyframe uuid
+     *
+     * @param new_keyframe_slam_uuid new keyframe uuid
+     * @return std::unordered_map<boost::uuids::uuid, Loop::Ptr> most recent loops for the given new keyframe uuid. The loops are given in a
+     * map. If no loops are found, an empty map is returned
+     */
     std::unordered_map<boost::uuids::uuid, Loop::Ptr> get_loops( const boost::uuids::uuid& new_keyframe_slam_uuid ) const
     {
         auto new_keyframe_it = loop_map.find( new_keyframe_slam_uuid );
@@ -66,8 +80,19 @@ public:
         return {};
     }
 
+    /**
+     * @brief Adds a loop to the loop manager
+     *
+     * @param loop loop to be added
+     */
     void add_loop( const Loop::Ptr& loop ) { loop_map[loop->key1->slam_uuid][loop->key2->slam_uuid] = loop; }
 
+    /**
+     * @brief Adds a loop to the loop manager. If a loop with the same new keyframe uuid and candidate keyframe uuid already exists, the
+     * loop with the higher accum distance is kept
+     *
+     * @param loop loop to be added
+     */
     void add_loop_accum_distance_check( const Loop::Ptr& loop )
     {
         auto available_loop = get_loop( loop->key1->slam_uuid, loop->key2->slam_uuid );
@@ -123,14 +148,6 @@ private:
      * @param new_keyframe  new keyframe testing for loop closure against existing keyframes of the graph
      */
     std::vector<KeyFrame::Ptr> find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes ) const;
-
-    /**
-     * @brief Filter the candidates by distance thresholds and accumulated distance differences
-     *
-     * @param candidates candidate keyframes
-     * @return std::vector<KeyFrame::Ptr> filtered candidates
-     */
-    std::vector<KeyFrame::Ptr> filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, const KeyFrame::Ptr& new_keyframe );
 
     /**
      * @brief To validate a loop candidate this function applies a scan matching between keyframes consisting the loop. If they are matched

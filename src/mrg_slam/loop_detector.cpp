@@ -33,8 +33,6 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
 std::vector<Loop::Ptr>
 LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
 {
-    std::cout << std::endl << "--- loop detection ---" << std::endl;
-
     const auto&            keyframes     = graph_db->get_keyframes();
     const auto&            new_keyframes = graph_db->get_new_keyframes();
     std::vector<Loop::Ptr> detected_loops;
@@ -42,7 +40,6 @@ LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
         auto start = std::chrono::high_resolution_clock::now();
 
         auto candidates = find_candidates( new_keyframe, keyframes );
-        candidates      = filter_candidates( candidates, new_keyframe );
         auto loop       = matching( candidates, new_keyframe );
         if( loop ) {
             detected_loops.push_back( loop );
@@ -72,19 +69,20 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
     std::vector<KeyFrame::Ptr> candidates = std::vector<KeyFrame::Ptr>();
     // TODO reserve size with random number?
     candidates.reserve( 32 );
+    auto logger = rclcpp::get_logger( "LoopDetector::find_candidates" );
 
-    for( const auto& k : keyframes ) {
+    for( const auto& candidate : keyframes ) {
         // there is already an edge
-        if( new_keyframe->edge_exists( *k, rclcpp::get_logger( "find_candidates" ) ) ) {
+        if( new_keyframe->edge_exists( *candidate, logger ) ) {
             continue;
         }
 
         // dont consider first keyframes since they don't filter out points that hit other rovers
-        if( k->first_keyframe ) {
+        if( candidate->first_keyframe ) {
             continue;
         }
 
-        const auto& pos1 = k->node->estimate().translation();
+        const auto& pos1 = candidate->node->estimate().translation();
         const auto& pos2 = new_keyframe->node->estimate().translation();
 
         // estimated distance between keyframes is too big for given distance threshold
@@ -93,67 +91,32 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
             continue;
         }
 
-        candidates.push_back( k );
-    }
-
-    // TODO? add candidates from the new_keyframes vector itself? This is necessary if a lot of new keyframes are added at once
-
-    return candidates;
-}
-
-
-std::vector<KeyFrame::Ptr>
-LoopDetector::filter_candidates( const std::vector<KeyFrame::Ptr>& candidates, const KeyFrame::Ptr& new_keyframe )
-{
-    auto logger = rclcpp::get_logger( "LoopDetector::filter_candidates" );
-
-    if( candidates.empty() ) {
-        RCLCPP_INFO_STREAM( logger, "No candidates for " << new_keyframe->readable_id );
-        return {};
-    }
-
-    RCLCPP_INFO_STREAM( logger, "Filtering " << candidates.size() << " candidates for " << new_keyframe->readable_id );
-    std::vector<KeyFrame::Ptr> filtered_candidates;
-
-    // Add final candidates if they are fit for loop closure matching
-    for( const auto& cand : candidates ) {
-        if( new_keyframe->slam_uuid == cand->slam_uuid && new_keyframe->accum_distance - cand->accum_distance < accum_distance_thresh ) {
-            RCLCPP_INFO_STREAM( logger, "Not enough distance accumulated between new and candidate keyframe << "
-                                            << new_keyframe->accum_distance - cand->accum_distance );
+        // dont consider recent keyframes of the same SLAM run
+        if( new_keyframe->slam_uuid == candidate->slam_uuid
+            && new_keyframe->accum_distance - candidate->accum_distance < accum_distance_thresh ) {
             continue;
         }
 
-
-        auto last_loop = loop_manager->get_loop( new_keyframe->slam_uuid, cand->slam_uuid );
+        // dont consider keyframes if there was a recent loop closure
+        auto last_loop = loop_manager->get_loop( new_keyframe->slam_uuid, candidate->slam_uuid );
 
         // Check if the candidate is too close in distance for the same SLAM instance to avoid loops very close to each other
-        if( last_loop && new_keyframe->slam_uuid == cand->slam_uuid
+        if( last_loop && new_keyframe->slam_uuid == candidate->slam_uuid
             && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh ) {
-            RCLCPP_INFO_STREAM( logger, "Removing candidate "
-                                            << cand->readable_id
-                                            << " since not enough distance accumulated from last loop with same slam uuid at "
-                                            << last_loop->key1->readable_id << " with delta dist "
-                                            << new_keyframe->accum_distance - last_loop->key1->accum_distance );
             continue;
         }
 
-        if( last_loop && new_keyframe->slam_uuid != cand->slam_uuid
+        if( last_loop && new_keyframe->slam_uuid != candidate->slam_uuid
             && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh_other_slam_instance ) {
-            RCLCPP_INFO_STREAM( logger, "Removing candidate "
-                                            << cand->readable_id
-                                            << " since not enough distance accumulated from last loop at other slam uuid at "
-                                            << last_loop->key1->readable_id << " with delta dist "
-                                            << new_keyframe->accum_distance - last_loop->key1->accum_distance );
             continue;
         }
 
-        // Add candidate to filtered_candidates if it should be kept
-        filtered_candidates.push_back( cand );
+
+        candidates.push_back( candidate );
     }
 
-    RCLCPP_INFO_STREAM( logger, "Returning " << filtered_candidates.size() << " candidates for " << new_keyframe->readable_id );
 
-    return filtered_candidates;
+    return candidates;
 }
 
 
@@ -170,7 +133,7 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     KeyFrame::Ptr   best_matched = nullptr;
     Eigen::Matrix4f rel_pose_new_to_best_matched;
 
-    // std::cout << std::endl << "--- loop detection ---" << std::endl;
+    std::cout << std::endl << "--- loop detection/candidate matching ---" << std::endl;
     std::cout << "new keyframe " << new_keyframe->readable_id << " has " << candidate_keyframes.size() << " candidates, matching..."
               << std::endl;
     for( const auto& cand : candidate_keyframes ) {
