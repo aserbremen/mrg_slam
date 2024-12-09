@@ -217,7 +217,6 @@ private:
                                    // instance  must be larger than  this, otherwise candidate is ignored
     double accum_distance_thresh_other_slam_instance;  // accumulated distance difference between new keyframe and candidandate keyframe of
                                                        // another slam instance must be larger than this, otherwise candidate is ignored
-    double distance_from_last_loop_edge_thresh;        // a new loop edge must far from the last one at least this distance
 
     double fitness_score_max_range;  // maximum allowable distance between corresponding points
     double fitness_score_thresh;     // threshold for scan matching

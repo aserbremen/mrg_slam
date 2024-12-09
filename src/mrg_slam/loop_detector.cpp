@@ -13,7 +13,6 @@ LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
     distance_thresh_squared                   = distance_thresh * distance_thresh;
     accum_distance_thresh                     = node_ros->get_parameter( "accum_distance_thresh" ).as_double();
     accum_distance_thresh_other_slam_instance = node_ros->get_parameter( "accum_distance_thresh_other_slam_instance" ).as_double();
-    distance_from_last_loop_edge_thresh       = node_ros->get_parameter( "min_edge_interval" ).as_double();
 
     fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
     fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
