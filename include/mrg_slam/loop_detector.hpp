@@ -65,7 +65,7 @@ public:
     }
 
     /**
-     * @brief Get all most recent loops for a given new keyframe uuid
+     * @brief Get the most recent loops for a given new keyframe uuid
      *
      * @param new_keyframe_slam_uuid new keyframe uuid
      * @return std::unordered_map<boost::uuids::uuid, Loop::Ptr> most recent loops for the given new keyframe uuid. The loops are given in a
@@ -110,7 +110,8 @@ public:
     }
 
 private:
-    // The nested unordered_map keeps track of the most recent loop registered wrt to the new keyframe being tested for loop closures
+    // The nested unordered_map keeps track of loops registered to the new keyframe being tested for loop closures. Only the loop with the
+    // highest accumulated distance is kept
     // new_keyframe_slam_uuid -> <candidate_slam_uuid, Loop::Ptr>
     std::unordered_map<boost::uuids::uuid, std::unordered_map<boost::uuids::uuid, Loop::Ptr>> loop_map;
 };

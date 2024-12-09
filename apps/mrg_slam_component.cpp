@@ -45,7 +45,7 @@
 #include <mrg_slam_msgs/msg/slam_status.hpp>
 #include <mrg_slam_msgs/srv/add_static_key_frames.hpp>
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
-#include <mrg_slam_msgs/srv/get_graph_gids.hpp>
+#include <mrg_slam_msgs/srv/get_graph_uuids.hpp>
 #include <mrg_slam_msgs/srv/get_map.hpp>
 #include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
@@ -267,12 +267,12 @@ public:
         request_graph_service_server       = this->create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
                                                                                                       request_graph_service_callback );
         // Get graph IDs (gids) service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphGids::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::GetGraphGids::Response>      res )>
-            get_graph_gids_service_callback = std::bind( &MrgSlamComponent::get_graph_gids_service, this, std::placeholders::_1,
-                                                         std::placeholders::_2 );
-        get_graph_gids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphGids>( "mrg_slam/get_graph_gids",
-                                                                                                      get_graph_gids_service_callback );
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Response>      res )>
+            get_graph_uuids_service_callback = std::bind( &MrgSlamComponent::get_graph_uuids_service, this, std::placeholders::_1,
+                                                          std::placeholders::_2 );
+        get_graph_uuids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
+                                                                                                        get_graph_uuids_service_callback );
 
         // Initialize all processors
         gps_processor.onInit( node_ros );
@@ -1439,8 +1439,8 @@ private:
         optimization_timer_callback();
     }
 
-    void get_graph_gids_service( mrg_slam_msgs::srv::GetGraphGids::Request::ConstSharedPtr req,
-                                 mrg_slam_msgs::srv::GetGraphGids::Response::SharedPtr     res )
+    void get_graph_uuids_service( mrg_slam_msgs::srv::GetGraphUuids::Request::ConstSharedPtr req,
+                                  mrg_slam_msgs::srv::GetGraphUuids::Response::SharedPtr     res )
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
 
@@ -1531,7 +1531,7 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr   get_graph_estimate_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetGraphGids>::SharedPtr       get_graph_gids_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::GetGraphUuids>::SharedPtr      get_graph_uuids_service_server;
 
     // Processors
     ImuProcessor         imu_processor;

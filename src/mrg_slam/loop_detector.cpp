@@ -111,10 +111,8 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
             continue;
         }
 
-
         candidates.push_back( candidate );
     }
-
 
     return candidates;
 }
