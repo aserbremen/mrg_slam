@@ -186,8 +186,9 @@ GraphDatabase::add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFr
 
         KeyFrame::Ptr keyframe    = std::make_shared<KeyFrame>( keyframe_ros.robot_name, keyframe_ros.stamp, Eigen::Isometry3d::Identity(),
                                                                 keyframe_ros.odom_counter, keyframe_ros.accum_distance, uuid,
-                                                                keyframe_ros.uuid_str, slam_uuid, slam_uuid_str, std::move( cloud ),
-                                                                std::move( cloud_ros ) );
+                                                                keyframe_ros.uuid_str,
+                                                                uuid_from_string_generator( keyframe_ros.slam_uuid_str ),
+                                                                keyframe_ros.slam_uuid_str, std::move( cloud ), std::move( cloud_ros ) );
         keyframe->static_keyframe = true;
         keyframe->estimate_transform = pose2isometry( keyframe_ros.estimate );
 
