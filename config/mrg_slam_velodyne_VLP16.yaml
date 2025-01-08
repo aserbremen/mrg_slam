@@ -3,21 +3,28 @@
   ros__parameters:
     model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
     use_sim_time: false # true for rosbags and for gazebo
-    points_topic: "/velodyne_points"
-    imu_topic: "/imu/data"
+    points_topic: "velodyne_points"
+    imu_topic: "imu/data"
 
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
-    lidar2base_x: 0.0
+    enable_lidar2base_publisher: true
+    lidar2base_x: 0.0012
     lidar2base_y: 0.0
-    lidar2base_z: 0.0
+    lidar2base_z: 0.716
     lidar2base_roll: 0.0
     lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
     lidar2base_yaw: 0.0
     base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
     lidar_frame_id: "velodyne" # is prepended by model_namespace
 
+# A transform between the map and namespace/map frame
+# The final tf tree should for a dual robot experiment should look like: 
+# map -> atlas/map  -> atlas/odom -> atlas/base_link -> atlas/velodyne
+#                   -> atlas/keyframe
+#     -> bestla/map -> bestla/odom -> bestla/base_link -> bestla/velodyne
+#                   -> bestla/keyframe
 map2robotmap_publisher:
   ros__parameters:
     enable_map2robotmap_publisher: true
@@ -83,14 +90,15 @@ prefiltering_component:
 scan_matching_odometry_component:
   ros__parameters:
     enable_scan_matching_odometry: true
-    enable_odom_to_file: true
+    enable_odom_to_file: false
 
+    # used for read_until
     points_topic: "/velodyne_points"
     odom_frame_id: "odom" # default "odom", is prepended by model_namespace
     robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     keyframe_delta_trans: 1.0
-    keyframe_delta_angle: 0.5236 # == 30 degrees
+    keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     keyframe_delta_time: 10000.0
 
     transform_thresholding: false
@@ -105,8 +113,8 @@ scan_matching_odometry_component:
     downsample_resolution: 0.1
 
     # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
-    registration_method: "FAST_GICP"
-    reg_num_threads: 0
+    registration_method: "SMALL_GICP"
+    reg_num_threads: 4
     reg_transformation_epsilon: 0.1
     reg_maximum_iterations: 64
     reg_max_correspondence_distance: 2.0
@@ -128,6 +136,7 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
+    # used for read_until
     points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
@@ -137,8 +146,8 @@ mrg_slam_component:
   ros__parameters:
     enable_graph_slam: true
     # The own_name is set to the model_namespace in the launch file, so don't worry about it
-    own_name: "atlas"
-    # The names of the robots that are part of the multi-robot system need to be specified here
+    own_name: "atlas" # is overwritten by the model_namespace
+    # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
     multi_robot_names: ["atlas", "bestla"]
     robot_remove_points_radius: 2.0
     # Initial pose
@@ -152,7 +161,8 @@ mrg_slam_component:
     yaw: 0.0 # rad
     # init_pose array is overwritten by above values
     init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
-    init_pose_topic: "NONE"
+    init_odom_topic: "NONE" # nav_msgs/Odometry to set initial pose, if this is set init_pose_topic is ignored
+    init_pose_topic: "NONE" # geometry_msgs/PoseStamped to set initial pose
     # Frame settings
     map_frame_id: "map"
     odom_frame_id: "odom"
@@ -170,26 +180,26 @@ mrg_slam_component:
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
-    keyframe_delta_angle: 1.0 # rad
+    keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
     fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
     # loop closure params
     distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
-    accum_distance_thresh: 20.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
-    min_edge_interval: 5.0 # minimum distance since last successful loop closure to consider the new keyframe for loop closures at all
+    accum_distance_thresh: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
+    accum_distance_thresh_other_slam_instance: 10.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
     fitness_score_max_range: .inf
-    fitness_score_thresh: 2.5
+    fitness_score_thresh: 1.25
     use_planar_registration_guess: false
     loop_closure_edge_robust_kernel: "Huber"
     loop_closure_edge_robust_kernel_size: 1.0
     use_loop_closure_consistency_check: true
     loop_closure_consistency_max_delta_trans: 0.3  # meter
-    loop_closure_consistency_max_delta_angle: 3.0  # degree
+    loop_closure_consistency_max_delta_angle: 0.0523599  # 0.0523599 rad = 3 degree
     # scan matching params
-    registration_method: "FAST_GICP"
-    reg_num_threads: 0
+    registration_method: "SMALL_GICP"
+    reg_num_threads: 4
     reg_transformation_epsilon: 0.1
     reg_maximum_iterations: 64
     reg_max_correspondence_distance: 2.0
@@ -226,8 +236,8 @@ mrg_slam_component:
     min_stddev_q: 0.05
     max_stddev_q: 0.2
     # graph exchange params
-    # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity]
-    # CURRENT_PROMIXITY: based on current distance between robots ()
+    # on which basis to trigger graph exchange between robots options [CURRENT_PROMIXITY, PATH_PROXIMITY]
+    # CURRENT_PROMIXITY: based on current distance between robots
     # PATH_PROXIMITY: based on already traversed path
     graph_request_min_accum_dist: 2.0
     graph_request_max_robot_dist: 50.0
@@ -237,7 +247,10 @@ mrg_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0
     map_cloud_resolution: 0.1
+    # minimum number of points in a voxel to consider it as occupied
+    map_cloud_count_threshold: 2 
     save_graph: false
+    # if result_dir is given, all kinds of stats will be saved in this directory
     result_dir: ""
     # remappings are handled in the python respective launch file
 
