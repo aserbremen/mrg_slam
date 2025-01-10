@@ -300,9 +300,6 @@ install(FILES
 )
 
 # Install python nodes
-ament_python_install_package(scripts)
-
-# Install python nodes
 install(PROGRAMS
   scripts/map2odom_publisher_ros2.py
   scripts/clock_publisher_ros2.py
