@@ -388,7 +388,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         }
     }
 
-    // Publish a flat cylinder to represent the loop closure radius
+    // Publish a cylinder in the x-y-plane to represent the loop closure radius
     visualization_msgs::msg::Marker& circle_marker = markers.markers[MARKER_LOOP_DIST_CIRCLE];
     circle_marker.header.frame_id                  = map_frame_id;
     circle_marker.header.stamp                     = stamp;
@@ -417,7 +417,6 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
 
 
     // node names
-
     for( int i = 0; i < (int)keyframes.size(); i++ ) {
         Eigen::Vector3d pos = keyframes[i]->node->estimate().translation();
         // visualization_msgs::msg::Marker& node_names_marker = markers.markers[__NUM_MARKERS__ + i];
@@ -443,6 +442,47 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         }
 
         markers.markers.push_back( node_names_marker );
+    }
+
+    // edge names
+    for( int i = 0; i < (int)edges.size(); i++ ) {
+        Eigen::Vector3d pos;
+        Eigen::Vector3d direction;
+        direction = edges[i]->from_keyframe->node->estimate().translation() - edges[i]->to_keyframe->node->estimate().translation();
+        pos       = edges[i]->from_keyframe->node->estimate().translation() - 0.5 * direction;
+        visualization_msgs::msg::Marker edge_names_marker;
+        edge_names_marker.header.frame_id    = map_frame_id;
+        edge_names_marker.header.stamp       = stamp;
+        edge_names_marker.ns                 = "edge_names";
+        edge_names_marker.id                 = __NUM_MARKERS__ + keyframes.size() + i;
+        edge_names_marker.type               = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        edge_names_marker.scale.z            = 0.2;  // text height
+        edge_names_marker.action             = visualization_msgs::msg::Marker::ADD;
+        edge_names_marker.pose.position.x    = pos.x();
+        edge_names_marker.pose.position.y    = pos.y();
+        edge_names_marker.pose.position.z    = pos.z() + 0.5;
+        edge_names_marker.pose.orientation.w = 1.0;
+
+        edge_names_marker.text = edges[i]->readable_id;
+        if( edges[i]->from_keyframe->slam_uuid == own_slam_uuid && edges[i]->to_keyframe->slam_uuid == own_slam_uuid ) {
+            if( edges[i]->type == Edge::TYPE_ANCHOR ) {
+                edge_names_marker.color = color_dark_gray;
+            } else if( edges[i]->type == Edge::TYPE_ODOM ) {
+                edge_names_marker.color = color_red;
+            } else if( edges[i]->type == Edge::TYPE_LOOP ) {
+                edge_names_marker.color = color_purple;
+            }
+        } else {
+            if( edges[i]->type == Edge::TYPE_ANCHOR ) {
+                edge_names_marker.color = color_light_gray;
+            } else if( edges[i]->type == Edge::TYPE_ODOM ) {
+                edge_names_marker.color = color_orange;
+            } else if( edges[i]->type == Edge::TYPE_LOOP ) {
+                edge_names_marker.color = color_pink;
+            }
+        }
+
+        markers.markers.push_back( edge_names_marker );
     }
 
     markers_pub->publish( markers );
