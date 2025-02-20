@@ -158,10 +158,11 @@ GraphSLAM::add_se3_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, const Eigen::Is
 }
 
 bool
-GraphSLAM::remove_se3_edge( const g2o::EdgeSE3* edge )
+GraphSLAM::remove_se3_edge( g2o::EdgeSE3* edge )
 {
-    // TODO remove edge from g2o graph
-    // bool success = graph->removeEdge( edge );
+    return graph->removeEdge( static_cast<g2o::HyperGraph::Edge*>( edge ) );
+    // Dont delete the raw edge pointer, simply because we keep the mrg_slam::Edge instance on a blacklist
+    // TODO consider something else? connections between vertices or something similar?
 }
 
 g2o::EdgeSE3Plane*

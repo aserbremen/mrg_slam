@@ -7,7 +7,7 @@
 
 namespace mrg_slam {
 
-Edge::Edge( const g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
+Edge::Edge( g2o::EdgeSE3* edge, Type type, const boost::uuids::uuid& uuid, const std::string& uuid_str,
             std::shared_ptr<const KeyFrame> from_keyframe, std::shared_ptr<const KeyFrame> to_keyframe ) :
     edge( edge ),
     type( type ),

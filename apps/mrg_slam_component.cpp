@@ -965,7 +965,7 @@ private:
             read_until_pub->publish( read_until );
         }
 
-        if( !keyframe_updated & !graph_database->flush_static_keyframe_queue()
+        if( !keyframe_updated & !graph_database->flush_static_keyframe_queue() & !graph_database->flush_removed_edges()
             & !graph_database->flush_graph_queue( others_prev_robot_keyframes, loop_detector->get_loop_manager() )
             & !graph_database->flush_loaded_graph( loop_detector->get_loop_manager() )
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
@@ -1471,9 +1471,7 @@ private:
     void remove_edge_service( mrg_slam_msgs::srv::RemoveEdge::Request::ConstSharedPtr req,
                               mrg_slam_msgs::srv::RemoveEdge::Response::SharedPtr     res )
     {
-        std::lock_guard<std::mutex> lock( main_thread_mutex );
-
-        graph_database->add_edge_to_remove( req->readbable_id, req->uuid_str );
+        graph_database->add_edge_to_remove( req->readable_id, req->uuid_str );
         res->success = true;
     }
 

@@ -73,7 +73,13 @@ public:
     g2o::EdgeSE3* add_se3_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, const Eigen::Isometry3d& relative_pose,
                                 const Eigen::MatrixXd& information_matrix );
 
-    bool remove_se3_edge( const g2o::EdgeSE3* edge );
+    /**
+     * @brief removes an SE3 edge from the graph. The pointer remains untouched, as the Edge::Ptr will be blacklisted
+     *
+     * @param edge g2o::EdgeSE3* edge of the corresponding Edge::Ptr
+     * @return returns false if the edge was not found if the g2o edge was not removed
+     */
+    bool remove_se3_edge( g2o::EdgeSE3* edge );
 
     /**
      * @brief add an edge between an SE3 node and a plane node

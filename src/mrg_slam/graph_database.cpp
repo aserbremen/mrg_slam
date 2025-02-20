@@ -643,25 +643,44 @@ GraphDatabase::add_edge_to_remove( const std::string &readable_id, const std::st
         }
     }
 
-    if( !readable_id.empty() ) {
-        for( const auto &edge : edges ) {
-            it = std::find_if( edges.begin(), edges.end(), [readable_id]( const Edge::Ptr &e ) { return e->readable_id == readable_id; } );
-            if( it != edges.end() ) {
-                edge_to_remove = *it;
-            }
+    if( !readable_id.empty() && edge_to_remove == nullptr ) {
+        it = std::find_if( edges.begin(), edges.end(), [readable_id]( const Edge::Ptr &e ) { return e->readable_id == readable_id; } );
+        if( it != edges.end() ) {
+            edge_to_remove = *it;
         }
     }
 
     if( edge_to_remove != nullptr ) {
-        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_edges_to_remove" ), "Identified edge " << readable_id << " to remove" );
-        graph_slam->remove_se3_edge( edge_to_remove->edge );
+        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_edge_to_remove" ), "Identified edge " << readable_id << " to remove" );
+        edges_to_remove_iters.push_back( it );
+    } else {
+        RCLCPP_WARN_STREAM( rclcpp::get_logger( "add_edge_to_remove" ), "Could not identify edge to remove" );
+    }
+}
+
+bool
+GraphDatabase::flush_removed_edges()
+{
+    if( edges_to_remove_iters.empty() ) {
+        return false;
     }
 
-    if( edge_to_remove == nullptr ) {
-        RCLCPP_WARN_STREAM( rclcpp::get_logger( "add_edges_to_remove" ), "Could not identify edge to remove" );
+    for( const auto &it : edges_to_remove_iters ) {
+        auto edge_to_remove = *it;
+        if( graph_slam->remove_se3_edge( edge_to_remove->edge ) ) {
+            RCLCPP_INFO_STREAM( rclcpp::get_logger( "flush_removed_edges" ),
+                                "Removed edge " << edge_to_remove->readable_id << " from graph" );
+        } else {
+            RCLCPP_WARN_STREAM( rclcpp::get_logger( "flush_removed_edges" ),
+                                "Could not remove edge " << edge_to_remove->readable_id << " from graph" );
+        }
+        edge_uuids.erase( edge_to_remove->uuid );
+        edges.erase( it );
+        edges_blacklist.push_back( edge_to_remove );
     }
 
-    // TODO remove edge from graph database
+    edges_to_remove_iters.clear();
+    return true;
 }
 
 }  // namespace mrg_slam

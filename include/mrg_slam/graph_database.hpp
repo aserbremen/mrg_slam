@@ -100,7 +100,20 @@ public:
      */
     void save_keyframe_poses();
 
+    /**
+     * @brief Mark edges to be removed from the graph, checking for existence of the provided readble id and uuid
+     *
+     * @param readable_id
+     * @param uuid_str
+     */
     void add_edge_to_remove( const std::string& readable_id, const std::string& uuid_str );
+
+    /**
+     * @brief Flushes edges to be removed
+     *
+     * @return true if at least one edge was removed
+     */
+    bool flush_removed_edges();
 
     const std::deque<KeyFrame::Ptr>&                                               get_keyframe_queue() const { return keyframe_queue; }
     const std::vector<KeyFrame::Ptr>&                                              get_keyframes() const { return keyframes; }
@@ -138,8 +151,8 @@ private:
     std::vector<Edge::Ptr>     edges;
 
     // removing edges
-    std::vector<Edge::Ptr> edges_to_remove;
-    std::vector<Edge::Ptr> edges_blacklist;
+    std::vector<std::vector<mrg_slam::Edge::Ptr>::iterator> edges_to_remove_iters;
+    std::vector<Edge::Ptr>                                  edges_blacklist;
 
     std::deque<mrg_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
 
