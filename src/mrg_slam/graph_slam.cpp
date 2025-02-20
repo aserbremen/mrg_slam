@@ -157,6 +157,13 @@ GraphSLAM::add_se3_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, const Eigen::Is
     return edge;
 }
 
+bool
+GraphSLAM::remove_se3_edge( const g2o::EdgeSE3* edge )
+{
+    // TODO remove edge from g2o graph
+    // bool success = graph->removeEdge( edge );
+}
+
 g2o::EdgeSE3Plane*
 GraphSLAM::add_se3_plane_edge( g2o::VertexSE3* v_se3, g2o::VertexPlane* v_plane, const Eigen::Vector4d& plane_coeffs,
                                const Eigen::MatrixXd& information_matrix )

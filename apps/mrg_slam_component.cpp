@@ -50,6 +50,7 @@
 #include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_map.hpp>
+#include <mrg_slam_msgs/srv/remove_edge.hpp>
 #include <mrg_slam_msgs/srv/request_graphs.hpp>
 #include <mrg_slam_msgs/srv/save_graph.hpp>
 #include <mrg_slam_msgs/srv/save_map.hpp>
@@ -273,6 +274,14 @@ public:
                                                           std::placeholders::_2 );
         get_graph_uuids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
                                                                                                         get_graph_uuids_service_callback );
+        // Remove edges service
+        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::RemoveEdge::Request> req,
+                            std::shared_ptr<mrg_slam_msgs::srv::RemoveEdge::Response>      res )>
+            remove_edge_service_callback = std::bind( &MrgSlamComponent::remove_edge_service, this, std::placeholders::_1,
+                                                      std::placeholders::_2 );
+        remove_edge_service_server       = this->create_service<mrg_slam_msgs::srv::RemoveEdge>( "mrg_slam/remove_edge",
+                                                                                                 remove_edge_service_callback );
+
 
         // Initialize all processors
         gps_processor.onInit( node_ros );
@@ -1265,7 +1274,6 @@ private:
         }
     }
 
-
     /**
      * @brief publish graph data to other robots, skipping keyframes and edges that have already been processed
      * @param req
@@ -1368,7 +1376,6 @@ private:
         }
     }
 
-
     void request_graph_service( mrg_slam_msgs::srv::RequestGraphs::Request::ConstSharedPtr req,
                                 mrg_slam_msgs::srv::RequestGraphs::Response::SharedPtr     res )
     {
@@ -1461,6 +1468,15 @@ private:
         }
     }
 
+    void remove_edge_service( mrg_slam_msgs::srv::RemoveEdge::Request::ConstSharedPtr req,
+                              mrg_slam_msgs::srv::RemoveEdge::Response::SharedPtr     res )
+    {
+        std::lock_guard<std::mutex> lock( main_thread_mutex );
+
+        graph_database->add_edge_to_remove( req->readbable_id, req->uuid_str );
+        res->success = true;
+    }
+
 private:
     enum GraphExchangeMode {
         CURRENT_PROXIMITY,
@@ -1531,6 +1547,7 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphUuids>::SharedPtr      get_graph_uuids_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::RemoveEdge>::SharedPtr         remove_edge_service_server;
 
     // Processors
     ImuProcessor         imu_processor;

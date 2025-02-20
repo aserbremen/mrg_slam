@@ -73,6 +73,8 @@ public:
     g2o::EdgeSE3* add_se3_edge( g2o::VertexSE3* v1, g2o::VertexSE3* v2, const Eigen::Isometry3d& relative_pose,
                                 const Eigen::MatrixXd& information_matrix );
 
+    bool remove_se3_edge( const g2o::EdgeSE3* edge );
+
     /**
      * @brief add an edge between an SE3 node and a plane node
      * @param v_se3    SE3 node

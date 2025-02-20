@@ -630,4 +630,38 @@ GraphDatabase::save_keyframe_poses()
     save_counter++;
 }
 
+void
+GraphDatabase::add_edge_to_remove( const std::string &readable_id, const std::string &uuid_str )
+{
+    Edge::Ptr                        edge_to_remove = nullptr;
+    std::vector<Edge::Ptr>::iterator it;
+    if( !uuid_str.empty() ) {
+        auto uuid_to_remove = uuid_from_string_generator( uuid_str );
+        it = std::find_if( edges.begin(), edges.end(), [uuid_to_remove]( const Edge::Ptr &e ) { return e->uuid == uuid_to_remove; } );
+        if( it != edges.end() ) {
+            edge_to_remove = *it;
+        }
+    }
+
+    if( !readable_id.empty() ) {
+        for( const auto &edge : edges ) {
+            it = std::find_if( edges.begin(), edges.end(), [readable_id]( const Edge::Ptr &e ) { return e->readable_id == readable_id; } );
+            if( it != edges.end() ) {
+                edge_to_remove = *it;
+            }
+        }
+    }
+
+    if( edge_to_remove != nullptr ) {
+        RCLCPP_INFO_STREAM( rclcpp::get_logger( "add_edges_to_remove" ), "Identified edge " << readable_id << " to remove" );
+        graph_slam->remove_se3_edge( edge_to_remove->edge );
+    }
+
+    if( edge_to_remove == nullptr ) {
+        RCLCPP_WARN_STREAM( rclcpp::get_logger( "add_edges_to_remove" ), "Could not identify edge to remove" );
+    }
+
+    // TODO remove edge from graph database
+}
+
 }  // namespace mrg_slam

@@ -100,6 +100,8 @@ public:
      */
     void save_keyframe_poses();
 
+    void add_edge_to_remove( const std::string& readable_id, const std::string& uuid_str );
+
     const std::deque<KeyFrame::Ptr>&                                               get_keyframe_queue() const { return keyframe_queue; }
     const std::vector<KeyFrame::Ptr>&                                              get_keyframes() const { return keyframes; }
     const std::deque<KeyFrame::Ptr>&                                               get_new_keyframes() const { return new_keyframes; }
@@ -134,6 +136,10 @@ private:
     // keyframes and edges in the graph in order of addition
     std::vector<KeyFrame::Ptr> keyframes;
     std::vector<Edge::Ptr>     edges;
+
+    // removing edges
+    std::vector<Edge::Ptr> edges_to_remove;
+    std::vector<Edge::Ptr> edges_blacklist;
 
     std::deque<mrg_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
 
