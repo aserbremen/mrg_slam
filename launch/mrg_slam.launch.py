@@ -13,10 +13,13 @@ from launch_ros.descriptions import ComposableNode
 PARAM_MAPPING = {
     'model_namespace': str,
     'use_sim_time': bool,
+    'enable_prefiltering': bool,
+    'enable_scan_matching_odometry': bool,
     'enable_floor_detection': bool,
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
     'enable_imu_orientation': bool,
+    'enable_graph_slam': bool,
     'tf_link_values': str,
     'points_topic': str,
     'map_frame_id': str,
