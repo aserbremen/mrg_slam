@@ -516,30 +516,37 @@ private:
         odom_broadcast_pub->publish( pose_msg );
     }
 
-    void set_init_pose()
+    bool set_init_pose()
     {
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
-        if( init_pose_msg != nullptr ) {
+        // try to initialize pose from init_odom or init_pose topic
+        if( init_odom_topic != "NONE" || init_pose_topic != "NONE" ) {
+            RCLCPP_INFO_STREAM( this->get_logger(), "Trying to initialize pose from " << init_odom_topic << " or " << init_pose_topic );
+            if( init_pose_msg == nullptr ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "No initial pose received yet, waiting for it..." );
+                return false;
+            }
             Eigen::Isometry3d pose( Eigen::Isometry3d::Identity() );
             tf2::fromMsg( init_pose_msg->pose, pose );
-            pose = pose
-                   * graph_database->get_keyframe_queue()[0]->odom.inverse();  // "remove" odom (which will be added later again) such that
-                                                                               // the init pose actually corresponds to the received pose
+            pose = pose * graph_database->get_keyframe_queue()[0]->odom.inverse();  // "remove" odom (which will be added later again)
+                                                                                    // such that the init pose actually corresponds to
+                                                                                    // the received pose
             pose_mat = pose.matrix();
-        } else {
+        } else {  // use init_pose vector to initialize pose
+            RCLCPP_INFO_STREAM( this->get_logger(), "Initializing pose from init_pose vector" );
             Eigen::Matrix<double, 6, 1> p( init_pose_vec.data() );
             pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitZ() )
                                                * Eigen::AngleAxisd( p[4], Eigen::Vector3d::UnitY() )
                                                * Eigen::AngleAxisd( p[3], Eigen::Vector3d::UnitX() ) )
                                                  .toRotationMatrix();
             pose_mat.topRightCorner<3, 1>() = p.head<3>();
-            // don't remove odom because we assume that the provided pose corresponds to the pose of the rover when starting the
-            // system
+            // don't remove odom because we assume that the provided pose corresponds to the pose of the rover when starting the system
         }
         RCLCPP_INFO_STREAM( this->get_logger(), "initial pose:\n" << pose_mat );
         trans_odom2map_mutex.lock();
         trans_odom2map.matrix() = pose_mat;
         trans_odom2map_mutex.unlock();
+        return true;
     }
 
     void update_pose( const Eigen::Isometry3d &odom2map, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose> &odom_pose )
@@ -937,11 +944,15 @@ private:
     void optimization_timer_callback()
     {
         std::lock_guard<std::mutex> lock( main_thread_mutex );
-        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of long optimizations
+        // Cancel the timer and reset it whenever this function returns, to avoid overlapping callbacks in case of long optimizations,
+        // since we use a reentrant callback group for this timer
         optimization_timer->cancel();
 
         if( graph_database->empty() ) {
-            set_init_pose();
+            if( !set_init_pose() ) {
+                optimization_timer->reset();
+                return;
+            }
         }
 
         // add keyframes and floor coeffs in the queues to the pose graph, TODO update trans_odom2map?
