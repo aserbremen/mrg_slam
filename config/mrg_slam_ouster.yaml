@@ -1,0 +1,256 @@
+# Parameters shared across all nodes or general parameters
+/**:
+  ros__parameters:
+    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
+    use_sim_time: false # true for rosbags and for gazebo
+    points_topic: "points"
+    imu_topic: "imu"
+
+# Transform between lidar and base_link
+lidar2base_publisher:
+  ros__parameters:
+    enable_lidar2base_publisher: true
+    lidar2base_x: 0.0012
+    lidar2base_y: 0.0
+    lidar2base_z: 0.716
+    lidar2base_roll: 0.0
+    lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
+    lidar2base_yaw: 0.0
+    base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
+    lidar_frame_id: "os_lidar" # is prepended by model_namespace
+
+# A transform between the map and namespace/map frame
+# The final tf tree should for a dual robot experiment should look like: 
+# map -> atlas/map  -> atlas/odom -> atlas/base_link -> atlas/velodyne
+#                   -> atlas/keyframe
+#     -> bestla/map -> bestla/odom -> bestla/base_link -> bestla/velodyne
+#                   -> bestla/keyframe
+map2robotmap_publisher:
+  ros__parameters:
+    enable_map2robotmap_publisher: true
+    map2robotmap_x: 0.0
+    map2robotmap_y: 0.0
+    map2robotmap_z: 0.0
+    map2robotmap_roll: 0.0
+    map2robotmap_pitch: 0.0 
+    map2robotmap_yaw: 0.0
+    map2robotmap_frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
+    map2robotmap_child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
+
+# In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
+clock_publisher_ros2:
+  ros__parameters:
+    imu_topic: "/gpsimu_driver/imu_data"
+
+# Parameters for the Velodyne driver and transform
+velodyne:
+  ros__parameters:
+    enable_velodyne: false
+    velodyne_driver:
+        # This file will be loaded from the velodyne_driver package config share directory
+        driver_node_params_file: VLP16-velodyne_driver_node-params.yaml
+        frame_id: velodyne # is prepended by model_namespace
+    velodyne_transform:
+        # This file will be loaded from the velodyne_transform package config share directory
+        transform_node_params_file: VLP16-velodyne_transform_node-params.yaml
+        # This params file will be loaded from the velodyne_transform params package share directory
+        calibration: VLP16db.yaml
+        fixed_frame: "velodyne" # is prepended by model_namespace
+
+# Prefiltering component parameters
+prefiltering_component:
+  ros__parameters:
+    enable_prefiltering: true
+
+    # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
+    downsample_method: "VOXELGRID"
+    downsample_resolution: 0.1
+    
+    # Outlier removal method options [STATISTICAL, RADIUS, NONE]
+    outlier_removal_method: "RADIUS" 
+    # Further parameters when choosing STATISTICAL
+    statistical_mean_k: 30
+    statistical_stddev: 1.2
+    # Further parameters when choosing RADIUS
+    radius_radius: 0.5
+    radius_min_neighbors: 2
+
+    # Distance filter
+    use_distance_filter: true
+    distance_near_thresh: 0.1
+    distance_far_thresh: 100.0
+
+    scan_period: 0.1
+    deskewing: false
+    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
+    
+    # remappings are handled in the python respective launch file
+
+# Scan matching component parameters
+scan_matching_odometry_component:
+  ros__parameters:
+    enable_scan_matching_odometry: false
+    enable_odom_to_file: false
+
+    # used for read_until
+    points_topic: "/points"
+    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
+
+    keyframe_delta_trans: 1.0
+    keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
+    keyframe_delta_time: 10000.0
+
+    transform_thresholding: false
+    max_acceptable_trans: 1.0
+    max_acceptable_angle: 1.0 # rad
+
+    enable_robot_odometry_init_guess: false
+    enable_imu_frontend: false
+
+    # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
+    downsample_method: "NONE"
+    downsample_resolution: 0.1
+
+    # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
+    registration_method: "SMALL_GICP"
+    reg_num_threads: 8
+    reg_transformation_epsilon: 0.1
+    reg_maximum_iterations: 64
+    reg_max_correspondence_distance: 2.0
+    reg_max_optimizer_iterations: 20
+    reg_use_reciprocal_correspondences: false
+    reg_correspondence_randomness: 20
+    reg_resolution: 1.0 # NDT 0.5
+    reg_nn_search_method: "DIRECT7"
+    # remappings are handled in the python respective launch file
+
+# Floor detection component parameters
+floor_detection_component:
+  ros__parameters:
+    enable_floor_detection: false
+    tilt_deg: 0.0
+    sensor_height: 2.0
+    height_clip_range: 1.0
+    floor_pts_thresh: 512
+    floor_normal_thresh: 10.0
+    use_normal_filtering: true
+    normal_filter_thresh: 20.0
+    # used for read_until
+    points_topic: "/points" # default "/velodyne_points", is prepended by model_namespace
+  
+    # remappings are handled in the python respective launch file
+
+# HDL graph slam component parameters
+mrg_slam_component:
+  ros__parameters:
+    enable_graph_slam: true
+    # The own_name is set to the model_namespace in the launch file, so don't worry about it
+    own_name: "atlas" # is overwritten by the model_namespace
+    # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
+    multi_robot_names: ["atlas", "bestla"]
+    robot_remove_points_radius: 2.0
+    # Initial pose
+    # gravelpit tubs atlas x 10 y -13 z -2.15
+    # gravelpit tubs bestla x 8 y -20 z -2.05
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    roll: 0.0 # rad
+    pitch: 0.0 # rad
+    yaw: 0.0 # rad
+    # init_pose array is overwritten by above values
+    init_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # x, y, z, yaw, pitch, roll
+    init_odom_topic: "NONE" # nav_msgs/Odometry to set initial pose, if this is set init_pose_topic is ignored
+    init_pose_topic: "NONE" # geometry_msgs/PoseStamped to set initial pose
+    # Frame settings
+    map_frame_id: "map"
+    odom_frame_id: "odom"
+    odom_sub_topic: "/scan_matching_odometry/odom" # topic should include / at the beginning, is prepended by model_namespace
+    cloud_sub_topic: "/prefiltering/filtered_points" # topic should include / at the beginning, is prepended by model_namespace
+    # Optimization parameters
+    # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
+    g2o_solver_type: "lm_var_cholmod"
+    g2o_solver_num_iterations: 512
+    g2o_verbose: false
+    # constraint switches
+    enable_gps: false
+    enable_imu_acceleration: false
+    enable_imu_orientation: false
+    # keyframe registration params
+    max_keyframes_per_update: 10000
+    keyframe_delta_trans: 1.0
+    keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
+    # fix first node for optimization stability
+    fix_first_node: true
+    fix_first_node_adaptive: false
+    fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
+    # loop closure params
+    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    accum_distance_thresh: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
+    accum_distance_thresh_other_slam_instance: 10.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
+    fitness_score_max_range: .inf
+    fitness_score_thresh: 1.25
+    use_planar_registration_guess: false
+    loop_closure_edge_robust_kernel: "Huber"
+    loop_closure_edge_robust_kernel_size: 1.0
+    use_loop_closure_consistency_check: true
+    loop_closure_consistency_max_delta_trans: 0.3  # meter
+    loop_closure_consistency_max_delta_angle: 0.0523599  # 0.0523599 rad = 3 degree
+    # scan matching params
+    registration_method: "SMALL_GICP"
+    reg_num_threads: 8
+    reg_transformation_epsilon: 0.1
+    reg_maximum_iterations: 64
+    reg_max_correspondence_distance: 2.0
+    reg_max_optimizer_iterations: 20
+    reg_use_reciprocal_correspondences: false
+    reg_correspondence_randomness: 20
+    reg_resolution: 1.0
+    reg_nn_search_method: "DIRECT7"
+    #  edge params
+    # GPS
+    gps_edge_robust_kernel: "NONE"
+    gps_edge_robust_kernel_size: 1.0
+    gps_edge_stddev_xy: 20.0
+    gps_edge_stddev_z: 5.0
+    # IMU orientation
+    imu_orientation_edge_robust_kernel: "NONE"
+    imu_orientation_edge_stddev: 1.0
+    # IMU acceleration (gravity vector)
+    imu_acceleration_edge_robust_kernel: "NONE"
+    imu_acceleration_edge_stddev: 1.0
+    # ground plane
+    floor_edge_robust_kernel: "NONE"
+    floor_edge_stddev: 10.0
+    # scan matching
+    # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
+    odometry_edge_robust_kernel: "NONE"
+    odometry_edge_robust_kernel_size: 1.0
+    use_const_inf_matrix: false
+    const_stddev_x: 0.5
+    const_stddev_q: 0.1
+    var_gain_a: 20.0
+    min_stddev_x: 0.1
+    max_stddev_x: 5.0
+    min_stddev_q: 0.05
+    max_stddev_q: 0.2
+    # graph exchange params
+    # on which basis to trigger graph exchange between robots options [CURRENT_PROMIXITY, PATH_PROXIMITY]
+    # CURRENT_PROMIXITY: based on current distance between robots
+    # PATH_PROXIMITY: based on already traversed path
+    graph_request_min_accum_dist: 2.0
+    graph_request_max_robot_dist: 50.0
+    graph_request_min_time_delay: 2.0
+    graph_exchange_mode: "PATH_PROXIMITY"
+    # update params
+    graph_update_interval: 3.0
+    map_cloud_update_interval: 2.0
+    map_cloud_resolution: 0.1
+    # minimum number of points in a voxel to consider it as occupied
+    map_cloud_count_threshold: 2 
+    save_graph: false
+    # if result_dir is given, all kinds of stats will be saved in this directory
+    result_dir: ""
+    # remappings are handled in the python respective launch file
+
