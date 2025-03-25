@@ -17,6 +17,7 @@
   <depend>tf2_eigen</depend>
   <depend>ndt_omp</depend>
   <depend>fast_gicp</depend>
+  <depend>small_gicp</depend>
   <depend>pcl_ros</depend>
   <depend>rclcpp</depend>
   <depend>geodesy</depend>
