@@ -76,7 +76,7 @@ public:
     typedef pcl::PointXYZI                                                                                          PointT;
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
-    MrgSlamComponent( const rclcpp::NodeOptions &options ) : Node( "mrg_slam_component", options )
+    MrgSlamComponent( const rclcpp::NodeOptions &options ) : Node( "mrg_slam_component", options ), cloud_msg(std::make_shared<sensor_msgs::msg::PointCloud2>())
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
@@ -771,10 +771,6 @@ private:
         cloud->header.frame_id = map_frame_id;
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
-        if( !cloud_msg ) {
-            // cloud_msg = sensor_msgs::PointCloud2Ptr( new sensor_msgs::PointCloud2() );
-            cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
-        }
         pcl::toROSMsg( *cloud, *cloud_msg );
 
         return true;
@@ -796,10 +792,6 @@ private:
             return;
         }
 
-        if( !cloud_msg ) {
-            return;
-        }
-
         map_points_timer_pub->publish( *cloud_msg );
     }
 
@@ -814,10 +806,6 @@ private:
         std::lock_guard<std::mutex> lock( cloud_msg_mutex );
 
         update_cloud_msg();
-
-        if( !cloud_msg ) {
-            return;
-        }
 
         // == and != operators are defined for builtin_interfaces::msg::Time
         if( req->last_stamp != cloud_msg->header.stamp ) {
@@ -834,11 +822,6 @@ private:
     void publish_map_service( mrg_slam_msgs::srv::PublishMap::Request::ConstSharedPtr req,
                               mrg_slam_msgs::srv::PublishMap::Response::SharedPtr     res )
     {
-        if( !cloud_msg ) {
-            res->success = false;
-            return;
-        }
-
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
         {
             std::lock_guard<std::mutex> lock( snapshots_mutex );
@@ -851,6 +834,7 @@ private:
 
         auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold );
         if( !cloud ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Failed to generate map cloud" );
             res->success = false;
             return;
         }
