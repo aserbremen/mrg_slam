@@ -58,6 +58,8 @@ PARAM_MAPPING = {
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
     'enable_imu_orientation': bool,
+    'odom_sub_topic': str,
+    'cloud_sub_topic': str,
     'enable_graph_slam': bool,
     'tf_link_values': str,
     'points_topic': str,
