@@ -521,9 +521,14 @@ private:
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         // try to initialize pose from init_odom or init_pose topic
         if( init_odom_topic != "NONE" || init_pose_topic != "NONE" ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Trying to initialize pose from " << init_odom_topic << " or " << init_pose_topic );
+            RCLCPP_INFO_STREAM( this->get_logger(), "Trying to initialize pose from odom topic: " << init_odom_topic << " or pose topic: " << init_pose_topic );
+            std::lock_guard<std::mutex> lock( init_pose_mutex );
             if( init_pose_msg == nullptr ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "No initial pose received yet, waiting for it..." );
+                return false;
+            }
+            if ( graph_database->get_keyframe_queue().empty() ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "No keyframes in the queue, waiting for them..." );
                 return false;
             }
             Eigen::Isometry3d pose( Eigen::Isometry3d::Identity() );
@@ -735,13 +740,17 @@ private:
         auto pose_stamped    = std::make_shared<geometry_msgs::msg::PoseStamped>();
         pose_stamped->header = msg->header;
         pose_stamped->pose   = msg->pose.pose;
+        std::lock_guard<std::mutex> lock( init_pose_mutex );
         init_pose_msg        = pose_stamped;
     }
 
     /**
      * @brief receive anchor node pose from pose topic
      */
-    void init_pose_callback( geometry_msgs::msg::PoseStamped::ConstSharedPtr msg ) { init_pose_msg = msg; }
+    void init_pose_callback( geometry_msgs::msg::PoseStamped::ConstSharedPtr msg ) { 
+        std::lock_guard<std::mutex> lock( init_pose_mutex );
+        init_pose_msg = msg; 
+    }
 
 
     /**
@@ -1545,6 +1554,7 @@ private:
     mrg_slam_msgs::msg::GraphEstimate::SharedPtr graph_estimate_msg;
 
     // getting init pose from topic
+    std::mutex                                                       init_pose_mutex;
     std::string                                                      init_odom_topic;
     std::string                                                      init_pose_topic;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr         init_odom_sub;
