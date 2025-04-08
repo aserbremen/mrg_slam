@@ -76,7 +76,8 @@ public:
     typedef pcl::PointXYZI                                                                                          PointT;
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::msg::Odometry, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
-    MrgSlamComponent( const rclcpp::NodeOptions &options ) : Node( "mrg_slam_component", options ), cloud_msg(std::make_shared<sensor_msgs::msg::PointCloud2>())
+    MrgSlamComponent( const rclcpp::NodeOptions &options ) :
+        Node( "mrg_slam_component", options ), cloud_msg( std::make_shared<sensor_msgs::msg::PointCloud2>() )
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
@@ -328,6 +329,10 @@ private:
         std::string graph_exchange_mode_str = this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
         graph_exchange_mode                 = graph_exchange_mode_from_string( graph_exchange_mode_str );
 
+        // Fill first cloud parameters
+        this->declare_parameter<bool>( "enable_fill_first_cloud", false );
+        this->declare_parameter<double>( "fill_first_cloud_radius", 5.0 );
+
         // GraphDatabase parameters (not directly used by this class)
         this->declare_parameter<bool>( "fix_first_node", false );
         this->declare_parameter<std::vector<double>>( "fix_first_node_stddev",
@@ -521,13 +526,14 @@ private:
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         // try to initialize pose from init_odom or init_pose topic
         if( init_odom_topic != "NONE" || init_pose_topic != "NONE" ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Trying to initialize pose from odom topic: " << init_odom_topic << " or pose topic: " << init_pose_topic );
+            RCLCPP_INFO_STREAM( this->get_logger(),
+                                "Trying to initialize pose from odom topic: " << init_odom_topic << " or pose topic: " << init_pose_topic );
             std::lock_guard<std::mutex> lock( init_pose_mutex );
             if( init_pose_msg == nullptr ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "No initial pose received yet, waiting for it..." );
                 return false;
             }
-            if ( graph_database->get_keyframe_queue().empty() ) {
+            if( graph_database->get_keyframe_queue().empty() ) {
                 RCLCPP_WARN_STREAM( this->get_logger(), "No keyframes in the queue, waiting for them..." );
                 return false;
             }
@@ -741,15 +747,16 @@ private:
         pose_stamped->header = msg->header;
         pose_stamped->pose   = msg->pose.pose;
         std::lock_guard<std::mutex> lock( init_pose_mutex );
-        init_pose_msg        = pose_stamped;
+        init_pose_msg = pose_stamped;
     }
 
     /**
      * @brief receive anchor node pose from pose topic
      */
-    void init_pose_callback( geometry_msgs::msg::PoseStamped::ConstSharedPtr msg ) { 
+    void init_pose_callback( geometry_msgs::msg::PoseStamped::ConstSharedPtr msg )
+    {
         std::lock_guard<std::mutex> lock( init_pose_mutex );
-        init_pose_msg = msg; 
+        init_pose_msg = msg;
     }
 
 
@@ -841,7 +848,7 @@ private:
         int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
         std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold );
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, req->skip_first_cloud );
         if( !cloud ) {
             RCLCPP_WARN_STREAM( this->get_logger(), "Failed to generate map cloud" );
             res->success = false;
@@ -1135,7 +1142,6 @@ private:
         ofs << "anchor_edge " << ( anchor_edge_g2o == nullptr ? -1 : anchor_edge_g2o->id() ) << std::endl;
         ofs << "floor_node " << ( floor_plane_node == nullptr ? -1 : floor_plane_node->id() ) << std::endl;
 
-
         // Saving gps data
         const auto &zero_utm = gps_processor.zero_utm();
         if( zero_utm ) {
@@ -1190,7 +1196,6 @@ private:
         timing_stats_ofs << std::endl;
         timing_stats_ofs << "total_graph_optimization_time_us "
                          << std::accumulate( graph_optimization_times.begin(), graph_optimization_times.end(), 0 ) << std::endl;
-
 
         res->success = true;
     }

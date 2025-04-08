@@ -27,8 +27,8 @@ public:
      * @param resolution  resolution of generated map
      * @return generated map point cloud
      */
-    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution,
-                                           int count_threshold ) const;
+    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold,
+                                           bool skip_first_cloud = true ) const;
 };
 
 }  // namespace mrg_slam

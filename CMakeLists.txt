@@ -221,6 +221,7 @@ add_library(mrg_slam_component SHARED
   src/mrg_slam/markers_publisher.cpp
   src/g2o/robust_kernel_io.cpp
   src/ros_utils.cpp
+  src/pcl/fill_ground_plane.cpp
 )
 # Link non ament packages
 target_link_libraries(mrg_slam_component

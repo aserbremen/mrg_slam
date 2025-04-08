@@ -12,7 +12,8 @@ MapCloudGenerator::MapCloudGenerator() {}
 MapCloudGenerator::~MapCloudGenerator() {}
 
 pcl::PointCloud<MapCloudGenerator::PointT>::Ptr
-MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold ) const
+MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold,
+                             bool skip_first_cloud ) const
 {
     if( keyframes.empty() ) {
         std::cerr << "warning: keyframes empty!!" << std::endl;
@@ -24,7 +25,7 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
 
     for( const auto& keyframe : keyframes ) {
         // Exclude points from the first keyframe, since they might include points of rovers that have not been filtered
-        if( keyframe->first_keyframe ) {
+        if( keyframe->first_keyframe && skip_first_cloud ) {
             continue;
         }
         Eigen::Matrix4f pose = keyframe->pose.matrix().cast<float>();
@@ -46,6 +47,8 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     cloud->is_dense = false;
 
     if( resolution <= 0.0 ) {
+        std::cout << "Generating map (skip first cloud: " << skip_first_cloud << ") with full resolution and size " << cloud->size()
+                  << std::endl;
         return cloud;  // To get unfiltered point cloud with intensity
     }
 
@@ -70,8 +73,8 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
     pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
     voxelGridFilter.filter( *filtered );
 
-    std::cout << "Generating map with resolution " << resolution << ", count_threshold " << count_threshold << " and size "
-              << filtered->size() << std::endl;
+    std::cout << "Generating map (skip first cloud: " << skip_first_cloud << ") with resolution " << resolution << ", count_threshold "
+              << count_threshold << " and size " << filtered->size() << std::endl;
 
     return filtered;
 }

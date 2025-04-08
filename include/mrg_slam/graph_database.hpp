@@ -21,8 +21,11 @@
 #include <mrg_slam/loop_detector.hpp>
 #include <mrg_slam/ros_time_hash.hpp>
 #include <mrg_slam_msgs/msg/graph_ros.hpp>
+// mrg_slam pcl
+#include <pcl/fill_ground_plane.hpp>
 // pcl
 #include <pcl/point_cloud.h>
+
 // ROS2
 #include <geometry_msgs/msg/pose.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -162,6 +165,9 @@ private:
     bool                fix_first_node;
     bool                fix_first_node_adaptive;
     std::vector<double> fix_first_node_stddev_vec;
+    bool                enable_fill_first_cloud;
+    double              fill_first_cloud_radius;
+    double              map_cloud_resolution;
     int                 max_keyframes_per_update;
     std::string         odometry_edge_robust_kernel;
     double              odometry_edge_robust_kernel_size;

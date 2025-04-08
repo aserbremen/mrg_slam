@@ -20,6 +20,9 @@ GraphDatabase::GraphDatabase( rclcpp::Node::SharedPtr _node, std::shared_ptr<Gra
     fix_first_node                       = _node->get_parameter( "fix_first_node" ).as_bool();
     fix_first_node_adaptive              = _node->get_parameter( "fix_first_node_adaptive" ).as_bool();
     fix_first_node_stddev_vec            = _node->get_parameter( "fix_first_node_stddev" ).as_double_array();
+    enable_fill_first_cloud              = _node->get_parameter( "enable_fill_first_cloud" ).as_bool();
+    fill_first_cloud_radius              = _node->get_parameter( "fill_first_cloud_radius" ).as_double();
+    map_cloud_resolution                 = _node->get_parameter( "map_cloud_resolution" ).as_double();
     max_keyframes_per_update             = _node->get_parameter( "max_keyframes_per_update" ).as_int();
     odometry_edge_robust_kernel          = _node->get_parameter( "odometry_edge_robust_kernel" ).as_string();
     odometry_edge_robust_kernel_size     = _node->get_parameter( "odometry_edge_robust_kernel_size" ).as_double();
@@ -74,7 +77,7 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     for( int i = 0; i < std::min<int>( keyframe_queue.size(), max_keyframes_per_update ); i++ ) {
         num_processed = i;
 
-        const auto &keyframe = keyframe_queue[i];
+        auto &keyframe = keyframe_queue[i];
         // new_keyframes will be tested later for loop closure
         new_keyframes.push_back( keyframe );
 
@@ -120,6 +123,16 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
                                                           anchor_kf, keyframe );
                 edges.emplace_back( anchor_edge_ptr );
                 edge_uuids.insert( anchor_edge_ptr->uuid );
+            }
+
+            if( enable_fill_first_cloud ) {
+                pcl::PointCloud<PointT>::Ptr cloud_filled  = std::make_shared<pcl::PointCloud<PointT>>( *keyframe->cloud );
+                size_t                       points_before = keyframe->cloud->size();
+                mrg_slam_pcl::fill_ground_plane( cloud_filled, fill_first_cloud_radius, map_cloud_resolution );
+                keyframe->cloud = cloud_filled;
+                RCLCPP_INFO_STREAM( logger, "Filled first cloud with radius "
+                                                << fill_first_cloud_radius << " and resolution " << map_cloud_resolution
+                                                << ". Points before: " << points_before << " after: " << keyframe->cloud->size() );
             }
         }
 
