@@ -27,12 +27,12 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 
 namespace mrg_slam_pcl {
 
-using PointType = mrg_slam::KeyFrame::PointT;
+using PointT = mrg_slam::KeyFrame::PointT;
 
 /**
  * @brief Fill the center of a point cloud with points on the ground plane. This is useful for initializing the SLAM algorithm for usage in
  * a navigation system.
  */
-void fill_ground_plane( pcl::PointCloud<PointType>::Ptr cloud, double radius, double map_resolution );
+void fill_ground_plane( pcl::PointCloud<PointT>::Ptr cloud, double radius, double map_resolution );
 
 }  // namespace mrg_slam_pcl

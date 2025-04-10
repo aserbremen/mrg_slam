@@ -19,10 +19,10 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 namespace mrg_slam_pcl {
 
 void
-fill_ground_plane( pcl::PointCloud<PointType>::Ptr cloud, double radius, double map_resolution )
+fill_ground_plane( pcl::PointCloud<PointT>::Ptr cloud, double radius, double map_resolution )
 {
-    pcl::SampleConsensusModelPlane<PointType>::Ptr model( new pcl::SampleConsensusModelPlane<PointType>( cloud ) );
-    pcl::RandomSampleConsensus<PointType>          ransac( model );
+    pcl::SampleConsensusModelPlane<PointT>::Ptr model( new pcl::SampleConsensusModelPlane<PointT>( cloud ) );
+    pcl::RandomSampleConsensus<PointT>          ransac( model );
     ransac.setDistanceThreshold( .01 );
     ransac.computeModel();
 
@@ -35,7 +35,7 @@ fill_ground_plane( pcl::PointCloud<PointType>::Ptr cloud, double radius, double 
         Eigen::Matrix<double, 3, 1> sample = plane.projection( Eigen::Matrix<double, 3, 1>( r, 0, 0 ) );
         for( double angle = 0; angle < 2 * M_PI; angle += angle_inc ) {
             Eigen::Matrix<double, 3, 1> rot = Eigen::AngleAxis<double>( angle, normal ).toRotationMatrix() * sample;
-            PointType                   p;
+            PointT                      p;
             p.x = rot[0];
             p.y = rot[1];
             p.z = rot[2];
