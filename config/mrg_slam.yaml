@@ -174,11 +174,13 @@ mrg_slam_component:
     g2o_solver_num_iterations: 512
     g2o_verbose: false
     # constraint switches
-    enable_fill_first_cloud: true
-    fill_first_cloud_radius: 5.0
     enable_gps: false
     enable_imu_acceleration: false
     enable_imu_orientation: false
+    # whether to fill a circular ground plane below the robot's very first keyframe at initialization
+    # this is helpful for navigation algorithms that need a map for planning
+    enable_fill_first_cloud: false
+    fill_first_cloud_radius: 5.0
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
