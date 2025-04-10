@@ -19,10 +19,22 @@ GpsProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
     nmea_parser.reset( new NmeaSentenceParser() );
 
-    enable_gps         = _node->get_parameter( "enable_gps" ).as_bool();
-    gps_time_offset    = _node->get_parameter( "gps_time_offset" ).as_double();
-    gps_edge_stddev_xy = _node->get_parameter( "gps_edge_stddev_xy" ).as_double();
-    gps_edge_stddev_z  = _node->get_parameter( "gps_edge_stddev_z" ).as_double();
+    enable_gps              = _node->get_parameter( "enable_gps" ).as_bool();
+    gps_time_offset         = _node->get_parameter( "gps_time_offset" ).as_double();
+    gps_edge_stddev_xy      = _node->get_parameter( "gps_edge_stddev_xy" ).as_double();
+    gps_edge_stddev_z       = _node->get_parameter( "gps_edge_stddev_z" ).as_double();
+    gps_use_enu             = _node->get_parameter( "gps_use_enu" ).as_bool();
+    gps_enu_origin_from_msg = _node->get_parameter( "gps_enu_origin_from_msg" ).as_bool();
+    if ( gps_use_enu && !gps_enu_origin_from_msg ) {
+        auto gps_enu_origin_vec = _node->get_parameter( "gps_enu_origin" ).as_double_array();
+        if ( gps_enu_origin_vec.size() == 3 ) {
+            gps_enu_origin = geodesy::toMsg( gps_enu_origin_vec[0], gps_enu_origin_vec[1], gps_enu_origin_vec[2] );
+            local_cartesian.Reset( gps_enu_origin->latitude, gps_enu_origin->longitude, gps_enu_origin->altitude );
+        } else {
+            std::cerr << "warning: gps_enu_origin not set to a proper value ([latitude, longitude, altitude]). "
+                << "ENU frame origin will be determined from the GPS position." << std::endl;
+        }
+    }
 
     // if( private_nh->param<bool>( "enable_gps", true ) ) {
     if( enable_gps ) {
@@ -127,16 +139,38 @@ GpsProcessor::flush( std::shared_ptr<GraphSLAM>& graph_slam, const std::vector<K
             continue;
         }
 
-        // convert (latitude, longitude, altitude) -> (easting, northing, altitude) in UTM coordinate
-        geodesy::UTMPoint utm;
-        geodesy::fromMsg( ( *closest_gps )->position, utm );
-        Eigen::Vector3d xyz( utm.easting, utm.northing, utm.altitude );
+        Eigen::Vector3d xyz;
+        if( gps_use_enu ) {
+            // ENU mode
+            auto&& nav_pos = ( *closest_gps )->position;
+            if( !gps_enu_origin ) {
+                gps_enu_origin = geodesy::toMsg(
+                    std::round( nav_pos.latitude * 1e5 ) / 1e5,
+                    std::round( nav_pos.longitude * 1e5) / 1e5,
+                    std::floor( nav_pos.altitude )
+                );
+                local_cartesian.Reset( gps_enu_origin->latitude, gps_enu_origin->longitude, gps_enu_origin->altitude );
+            }
+            double x, y, z;
+            local_cartesian.Forward( nav_pos.latitude, nav_pos.longitude, nav_pos.altitude, x, y, z );
+            xyz = { x, y, z };
+            if( !zero_enu_vec ) {
+                zero_enu_vec = xyz;
+            }
+            xyz -= ( *zero_enu_vec );
+        } else {
+            // UTM mode
+            // convert (latitude, longitude, altitude) -> (easting, northing, altitude) in UTM coordinate
+            geodesy::UTMPoint utm;
+            geodesy::fromMsg( ( *closest_gps )->position, utm );
+            xyz = { utm.easting, utm.northing, utm.altitude };
 
-        // the first gps data position will be the origin of the map
-        if( !zero_utm_vec ) {
-            zero_utm_vec = xyz;
+            // the first gps data position will be the origin of the map
+            if( !zero_utm_vec ) {
+                zero_utm_vec = xyz;
+            }
+            xyz -= ( *zero_utm_vec );
         }
-        xyz -= ( *zero_utm_vec );
 
         keyframe->utm_coord = xyz;
 
