@@ -34,19 +34,21 @@ Here are some things to consider when using the `mrg_slam` package:
 
 | Parameter Name       | Description                                                                 |
 |----------------------|-----------------------------------------------------------------------------|
-| `downsample_method`  | Specifies the method used for downsampling the point cloud data. Options are [`VOXELGRID`, `APPROX_VOXELGRID`, `NONE`].<br> `VOXELGRID`: downsamples a point cloud by dividing the space into a 3D grid of equally-sized cubes (voxels) and replacing all the points inside each voxel with a single representative point (usually the centroid).<br> `APPROX_VOXELGRID`: very similar to VoxelGrid, but it uses a faster approximation algorithm. Trades speed for accuracy. |
+| `downsample_method`  | Specifies the method used for downsampling the point cloud data. Options are [`VOXELGRID`, `APPROX_VOXELGRID`, `NONE`].<br> `VOXELGRID`: downsamples a point cloud by dividing the space into a 3D grid of equally-sized cubes (voxels) and replacing all the points inside each voxel with a single representative point (usually the centroid).<br> `APPROX_VOXELGRID`: very similar to VoxelGrid, but it uses a faster approximation algorithm. Trades speed for accuracy. <br> `NONE`: No downsampling is performed. |
 | `downsample_resolution` | Specifies the resolution for downsampling the point cloud data. Higher values reduce computational load and thin out the cloud more. |
 | `outlier_removal_method` | Specifies the method used for outlier removal. Options are [`STATISTICAL`, `RADIUS`, `NONE`]. <br>`STATISTICAL`: `pcl::StatisticalOutlierRemoval`, the distance and its standard deviation of point to `k` of its neigbors are used to remove outliers. <br> `RADIUS`: `pcl::RadiusOutlierRemoval`, a radius search is performed to find the neighbors of each point.<br> `NONE`: No outlier removal is performed. |
 | `statistical_mean_k` | `STATISTICAL`: The number of nearest neighbors to use when computing the mean distance from each point to its neighbors. Higher values lead to a more stable and smoother estimate of what constitutes a "normal" neighborhood — better for dense clouds. Lower values make the filter more sensitive to local variations — might preserve more detail but also more noise. |
 | `statistical_stddev` | `STATISTICAL`: The threshold multiplier of the standard deviation to determine whether a point is an outlier. A point is considered an outlier if its average distance to its neighbors is larger than the global mean distance + stddev_mul_thresh * standard deviation. |
-| `radius_radius` | The radius of the sphere to search for neighbors. |
-| `radius_min_neighbors` | The minimum number of neighbors required to consider a point as an inlier. |
+| `radius_radius` | `RADIUS`: The radius of the sphere to search for neighbors. |
+| `radius_min_neighbors` | `RADIUS`: The minimum number of neighbors required to consider a point as an inlier. |
 | `use_distance_filter` | If true, the distance filter is applied to the point cloud data. The distance filter removes points that are too close or too far from the robot. |
 | `distance_near_thresh` | The minimum distance from the robot to keep points. Points closer than this distance are removed. If your LIDAR hits part of the robot it is beneficial to set this value to a value larger than the radius of the robot. |
 | `distance_far_thresh` | The maximum distance from the robot to keep points. Points farther than this distance are removed. If you want a higher quality map for trading off range, you can set this value to a lower value. E.g. house walls will align better across keyframes if you set this value to 20m instead of 50m. |
 | `scan_period` | The time between two scans. This is used in the `deskewing` method to determine the time between two scans. |
-| `deskewing` | If true, the point cloud data is deskewed. Deskewing is the process of correcting the point cloud data for the motion of the robot during the scan. This is useful when the robot is moving fast or the LIDAR exhibits a large amount of motion. Haven't tested yet. |
+| `deskewing` | If true, the point cloud data is deskewed. Deskewing is the process of correcting the point cloud data for the motion of the robot during the scan. This is useful when the robot is moving fast or the LIDAR exhibits a large amount of motion. |
 | `base_link_frame` | The frame of the robot that is used to transform the point cloud data. This is usually the `base_link` frame of the robot. The `base_link_frame` is prepended with the `model_namespace` to get the full frame name. |
+
+Disclaimer :information_source:: The `deskewing` method is not tested yet. If anyone has, let me know.
 
 ## Scan Matching Odometry Component
 
