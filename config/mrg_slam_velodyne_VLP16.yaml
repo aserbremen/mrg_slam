@@ -112,7 +112,7 @@ scan_matching_odometry_component:
     downsample_method: "NONE"
     downsample_resolution: 0.1
 
-    # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
+    # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP, FAST_VGICP, SMALL_GICP (recommended)]
     registration_method: "SMALL_GICP"
     reg_num_threads: 4
     reg_transformation_epsilon: 0.1
@@ -202,6 +202,7 @@ mrg_slam_component:
     loop_closure_consistency_max_delta_trans: 0.3  # meter
     loop_closure_consistency_max_delta_angle: 0.0523599  # 0.0523599 rad = 3 degree
     # scan matching params
+    # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP, FAST_VGICP, SMALL_GICP (recommended)]    
     registration_method: "SMALL_GICP"
     reg_num_threads: 4
     reg_transformation_epsilon: 0.1
