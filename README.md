@@ -50,9 +50,7 @@ Here are some things to consider when using the `mrg_slam` package:
 | Inputs | Type | Information |
 |--------|---------|-----------|
 | `/model_namespace/velodyne_points`  | `sensor_msgs/msg/PointCloud2` | **Required**: The point cloud data from the LIDAR sensor. The `model_namespace` is the name of the robot. The `frame_id` of the point cloud message should be `model_namespace/velodyne`. |
-| `/model_namespace/imu_topic` | `sensor_msgs/msg/Imu` | **Optional**: The IMU data from the robot. The `model_namespace` is the name of the robot. Can be used fo `deskewing` the point cloud data. |
-
-
+| `/model_namespace/imu_topic` | `sensor_msgs/msg/Imu` | **Optional**: The IMU data from the robot. The `model_namespace` is the name of the robot. Can be used for the IMU frontend and  `deskewing` of the point cloud data. |
 
 
 ### Prefiltering Parameters
