@@ -1,6 +1,18 @@
 # ROS2 mrg_slam package
 
 This repository contains the source code of the `mrg_slam` package for the [Multi-Robot-Graph-SLAM](https://github.com/aserbremen/Multi-Robot-Graph-SLAM) repository. 
+## Table of Contents
+
+- [ROS2 mrg\_slam package](#ros2-mrg_slam-package)
+  - [Table of Contents](#table-of-contents)
+  - [General Information](#general-information)
+  - [Prefiltering Component](#prefiltering-component)
+    - [Prefiltering Inputs and Outputs](#prefiltering-inputs-and-outputs)
+    - [Prefiltering Parameters](#prefiltering-parameters)
+  - [Scan Matching Odometry Component](#scan-matching-odometry-component)
+  - [Multi-Robot-Graph-SLAM Component](#multi-robot-graph-slam-component)
+
+## General Information
 This package contains 4 ROS2 components, see `apps` folder:
 - [prefiltering_component](apps/prefiltering_component.cpp)
 - [scan_matching_odometry_component](apps/scan_matching_odometry_component.cpp)
@@ -27,13 +39,23 @@ Here are some things to consider when using the `mrg_slam` package:
   - Also we don't need the laser scan message which is published by the velodyne driver standard launch file. We only need the point cloud message.
 
 ## Prefiltering Component
+<!-- 
+- The `prefiltering_component` is used to filter the point cloud data before it is used for the SLAM. The component subscribes to the `/model_namespace/velodyne_points` topic and publishes the filtered point cloud data on the `/model_namespace/prefiltering/filtered_points` topic. -->
+### Prefiltering Inputs and Outputs
 
-- The `prefiltering_component` is used to filter the point cloud data before it is used for the SLAM. The component subscribes to the `/model_namespace/velodyne_points` topic and publishes the filtered point cloud data on the `/model_namespace/prefiltering/filtered_points` topic.
+| Inputs | Type | Information |
+|--------|---------|-----------|
+| `/model_namespace/velodyne_points`  | `sensor_msgs/msg/PointCloud2` | **Required**: The point cloud data from the LIDAR sensor. The `model_namespace` is the name of the robot. The `frame_id` of the point cloud message should be `model_namespace/velodyne`. |
+| `/model_namespace/imu_topic` | `sensor_msgs/msg/Imu` | **Optional**: The IMU data from the robot. The `model_namespace` is the name of the robot. Can be used fo `deskewing` the point cloud data. |
 
-### Parameters
+
+
+
+### Prefiltering Parameters
 
 | Parameter Name       | Description                                                                 |
 |----------------------|-----------------------------------------------------------------------------|
+| `enable_prefiltering` | If true, the prefiltering is enabled. The prefiltering is used to filter the point cloud data before it is used for the SLAM. |
 | `downsample_method`  | Specifies the method used for downsampling the point cloud data. Options are [`VOXELGRID`, `APPROX_VOXELGRID`, `NONE`].<br> `VOXELGRID`: downsamples a point cloud by dividing the space into a 3D grid of equally-sized cubes (voxels) and replacing all the points inside each voxel with a single representative point (usually the centroid).<br> `APPROX_VOXELGRID`: very similar to VoxelGrid, but it uses a faster approximation algorithm. Trades speed for accuracy. <br> `NONE`: No downsampling is performed. |
 | `downsample_resolution` | Specifies the resolution for downsampling the point cloud data. Higher values reduce computational load and thin out the cloud more. |
 | `outlier_removal_method` | Specifies the method used for outlier removal. Options are [`STATISTICAL`, `RADIUS`, `NONE`]. <br>`STATISTICAL`: `pcl::StatisticalOutlierRemoval`, the distance and its standard deviation of point to `k` of its neigbors are used to remove outliers. <br> `RADIUS`: `pcl::RadiusOutlierRemoval`, a radius search is performed to find the neighbors of each point.<br> `NONE`: No outlier removal is performed. |
@@ -54,6 +76,10 @@ Disclaimer :information_source:: The `deskewing` method is not tested yet. If an
 
 - The `scan_matching_odometry_component` is used to estimate the odometry of the robot using the point cloud data. The component subscribes to the `/model_namespace/prefiltering/filtered_points` topic and publishes the odometry data on the `/model_namespace/scan_matching_odometry/odom` topic.
 - Odometry through scan matching is susceptible to drift over time. The `enable_imu_frontend` parameter is not tested in the ROS2 version of the package. This could potentially be used to reduce the drift in the odometry data by using the IMU data of the robot.
+
+| Parameter Name | Description |
+|----------------|-------------|
+
 
 ## Multi-Robot-Graph-SLAM Component
 
