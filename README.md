@@ -10,6 +10,9 @@ This repository contains the source code of the `mrg_slam` package for the [Mult
     - [Prefiltering Inputs and Outputs](#prefiltering-inputs-and-outputs)
     - [Prefiltering Parameters](#prefiltering-parameters)
   - [Scan Matching Odometry Component](#scan-matching-odometry-component)
+    - [Scan Matching Odometry Parameters](#scan-matching-odometry-parameters)
+  - [Floor Detection Component](#floor-detection-component)
+    - [Floor Detection Parameters](#floor-detection-parameters)
   - [Multi-Robot-Graph-SLAM Component](#multi-robot-graph-slam-component)
 
 ## General Information
@@ -32,7 +35,7 @@ Here are some things to consider when using the `mrg_slam` package:
 - Command line arguments can be used in conjunction with the launch file to set certain parameters, such as the robot name and the initial pose of the robot.
   - The `PARAM_MAPPING` dictionary in the launch file maps the command line arguments to the parameters of the components and overwrites if they are given as command line arguments. You can remove and add parameters to the dictionary as needed.
   - All kinds of topics and services are remapped in the launch file to consider the `model_namespace` aka the robot name.
-- The only required message for the SLAM to work is the `sensor_msgs/msg/PointCloud2` message with the topic `/model_namepsace/velodyne_points`. The `model_namespace` is the name of the robot, which is used to distinguish between the different robots in the system. The `frame_id` of the point cloud message should be `model_namespace/velodyne`.
+- The only required message for the SLAM to work is the `sensor_msgs/msg/PointCloud2` message with the topic `/model_namepsace/velodyne_points`. The `model_namespace` is the name of the robot, which is used to distinguish between the different robots in the system. The `frame_id` of the point cloud message should be `model_namespace/velodyne`. 
 - All robot names participating in the multi-robot SLAM should be given in the `multi_robot_names` parameter in the used configuration file. Otherwise the different SLAM instances won't exchange keyframes and edges between them.
   - You can use the SLAM without a `model_namespace` by setting the `model_namespace` parameter to an empty string in the configuration file. This is useful when the robot uses hard-coded frames such as `odom` or `base_link`.
   - You can also insert an empty string "" into the `multi_robot_names` parameter in the configuration file to use the SLAM without a `model_namespace` in a multi-robot scenario.
@@ -43,15 +46,23 @@ Here are some things to consider when using the `mrg_slam` package:
   - Also we don't need the laser scan message which is published by the velodyne driver standard launch file. We only need the point cloud message.
 
 ## Prefiltering Component
-<!-- 
-- The `prefiltering_component` is used to filter the point cloud data before it is used for the SLAM. The component subscribes to the `/model_namespace/velodyne_points` topic and publishes the filtered point cloud data on the `/model_namespace/prefiltering/filtered_points` topic. -->
-### Prefiltering Inputs and Outputs
+
+The `prefiltering_component` is used to filter the point cloud data before it is used for the SLAM.
+
+### Prefiltering Subscriptions and Publishers
+
+- The following inputs and outputs are the default topics. 
+- `model_namespace` is left out in the topics of the following
 
 | Inputs | Type | Information |
 |--------|---------|-----------|
-| `/model_namespace/velodyne_points`  | `sensor_msgs/msg/PointCloud2` | **Required**: The point cloud data from the LIDAR sensor. The `model_namespace` is the name of the robot. The `frame_id` of the point cloud message should be `model_namespace/velodyne`. |
-| `/model_namespace/imu_topic` | `sensor_msgs/msg/Imu` | **Optional**: The IMU data from the robot. The `model_namespace` is the name of the robot. Can be used for the IMU frontend and  `deskewing` of the point cloud data. |
+| `velodyne_points`  | `sensor_msgs/msg/PointCloud2` | **Required**: The point cloud data from the LIDAR sensor. The `frame_id` of the point cloud message should be `model_namespace/velodyne`. |
+| `imu_topic` | `sensor_msgs/msg/Imu` | **Optional**: The IMU data from the robot. Can be used for the IMU frontend and  `deskewing` of the point cloud data. |
 
+| Outputs | Type | Information |
+|---------|---------|-----------|
+| `prefiltering/filtered_points` | `sensor_msgs/msg/PointCloud2` | The filtered point cloud data. The `model_namespace` is the name of the robot. |
+| `prefiltering/colored_points` | `sensor_msgs/msg/PointCloud2` | The color encodes the point number in the point cloud. |
 
 ### Prefiltering Parameters
 
@@ -76,8 +87,29 @@ Disclaimer :information_source:: The `deskewing` method is not tested yet. If an
 
 ## Scan Matching Odometry Component
 
-- The `scan_matching_odometry_component` is used to estimate the odometry of the robot using the point cloud data. The component subscribes to the `/model_namespace/prefiltering/filtered_points` topic and publishes the odometry data on the `/model_namespace/scan_matching_odometry/odom` topic.
-- Odometry through scan matching is susceptible to drift over time. The `enable_imu_frontend` parameter is not tested in the ROS2 version of the package. This could potentially be used to reduce the drift in the odometry data by using the IMU data of the robot.
+The `scan_matching_odometry_component` is used to estimate the odometry of the robot using the point cloud data. The component subscribes to the `/model_namespace/prefiltering/filtered_points` topic and publishes the odometry data on the `/model_namespace/scan_matching_odometry/odom` topic.
+Odometry through scan matching is susceptible to drift over time. 
+:information_sourece: The `enable_imu_frontend` parameter is not tested in the ROS2 version of the package. This could potentially be used to reduce the drift in the odometry data by using the IMU data of the robot.
+
+### Scan Matching Odometry Subscriptions and Publishers
+
+| Inputs | Type | Information |
+|--------|---------|-----------|
+| `prefiltering/filtered_points`  | `sensor_msgs/msg/PointCloud2` | **Required**: The filtered point cloud data from the prefiltering component. The `model_namespace` is prepended to the topic name. |
+| `msf_core/pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | **Optional**: Pose estimate used when `enable_imu_frontend` is set to true. |
+| tf listener | `tf2_ros::Buffer` | Used when `enable_robot_odometry_init_guess` is set to true. |
+
+| Outputs | Type | Information |
+|---------|---------|-----------|
+| `scan_matching_odometry/odom` | `nav_msgs/msg/Odometry` | The odometry data from the scan matching odometry component. |
+| `scan_matching_odometry/transform`| `geometry_msgs/msg/TransformStamped` | The transform data from the scan matching odometry component. |
+| `scan_matching_odometry/status` | `mrg_slam_msgs/msg/ScanMatchingStatus` | Contains additional information about the scan matching odometry. |
+| `scan_matching_odometry/aligned_points` | `sensor_msgs/msg/PointCloud2` | The aligned point cloud data from the scan matching odometry component. |
+| baselink to odom | `tf2_ros::TransformBroadcaster` | The transform between the `base_link` frame and the `odom` frame. The `model_namespace` is prepended to the frame name. |
+| baselink to keyframe | `tf2_ros::TransformBroadcaster` | The transform between the `base_link` frame and the `keyframe` frame. The keyframe is set when the `keyframe_delta_trans` or `keyframe_delta_angle` parameters are exceeded. |
+
+
+### Scan Matching Odometry Parameters
 
 | Parameter Name | Description |
 |----------------|-------------|
@@ -106,6 +138,25 @@ Disclaimer :information_source:: The `deskewing` method is not tested yet. If an
 | `reg_correspondence_randomness` | The number of random correspondences for covariance estimation. |
 | `reg_resolution` | The resolution of the voxel grid for the registration method, relevant for `FAST_VGICP_CUDA`, `VGICP_CUDA` and `NDT`. | 
 | `reg_nn_search_method` | Neighborhood search method for `NDT`, options are [`KDTREE`, `DIRECT1`, `DIRECT7`] |
+
+## Floor Detection Component
+
+The `floor_detection_component` is used to detect the floor in the point cloud data. The component subscribes to the `/model_namespace/prefiltering/filtered_points` topic and publishes plane coefficients on the topic `/model_namespace/floor_detection/floor_coeffs`. 
+In structured environments, the floor detection might improve the SLAM performance. 
+
+### Floor Detection Parameters
+
+| Parameter Name | Description |
+|----------------|-------------|
+| `enable_floor_detection` | If true, the floor detection is enabled. |
+| `tilt_deg` | Approximate tilt/pitch angle of the LIDAR sensor in degrees. The cloud is rotated accordingly. |
+| `sensor_height` | Sensor height in meters used to filter points and only keep points in the range of the `sensor_height` +- `height_clip_range`. | 
+| `height_clip_range` | The range around the `sensor_height` to keep points. |
+| `floor_pts_thresh` | Minimum number of points to perform RANSAC plane fitting and mininum number of RANSAC inlier points to publish the plane coefficients. |
+| `floor_normal_thresh` | The maximum allowed angle in degrees between the normal vector of the plane and the vertical axis. |
+| `use_normal_filtering` | If true, points with "non-"vertical normals will be filtered before RANSAC |
+| `normal_filter_thresh` | The maximum allowed angle in degrees between the normal vector of the point and the vertical axis. |
+
 
 ## Multi-Robot-Graph-SLAM Component
 
