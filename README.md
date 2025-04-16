@@ -7,13 +7,17 @@ This repository contains the source code of the `mrg_slam` package for the [Mult
   - [Table of Contents](#table-of-contents)
   - [General Information](#general-information)
   - [Prefiltering Component](#prefiltering-component)
-    - [Prefiltering Inputs and Outputs](#prefiltering-inputs-and-outputs)
+    - [Prefiltering Subscriptions and Publishers](#prefiltering-subscriptions-and-publishers)
     - [Prefiltering Parameters](#prefiltering-parameters)
   - [Scan Matching Odometry Component](#scan-matching-odometry-component)
+    - [Scan Matching Odometry Subscriptions and Publishers](#scan-matching-odometry-subscriptions-and-publishers)
     - [Scan Matching Odometry Parameters](#scan-matching-odometry-parameters)
   - [Floor Detection Component](#floor-detection-component)
     - [Floor Detection Parameters](#floor-detection-parameters)
   - [Multi-Robot-Graph-SLAM Component](#multi-robot-graph-slam-component)
+    - [Multi-Robot-Graph-SLAM Subscriptions and Publishers](#multi-robot-graph-slam-subscriptions-and-publishers)
+    - [Multi-Robot-Graph-SLAM Parameters](#multi-robot-graph-slam-parameters)
+    
 
 ## General Information
 This package contains 4 ROS2 components, see `apps` folder:
