@@ -68,7 +68,7 @@ The `prefiltering_component` is used to filter the point cloud data before it is
 
 | Parameter Name       | Description                                                                 |
 |----------------------|-----------------------------------------------------------------------------|
-| `enable_prefiltering` | If true, the prefiltering is enabled. The prefiltering is used to filter the point cloud data before it is used for the SLAM. |
+| `enable_prefiltering` | If true, the `prefiltering_component` is launched.                        |
 | `downsample_method`  | Specifies the method used for downsampling the point cloud data. Options are [`VOXELGRID`, `APPROX_VOXELGRID`, `NONE`].<br> `VOXELGRID`: downsamples a point cloud by dividing the space into a 3D grid of equally-sized cubes (voxels) and replacing all the points inside each voxel with a single representative point (usually the centroid).<br> `APPROX_VOXELGRID`: very similar to VoxelGrid, but it uses a faster approximation algorithm. Trades speed for accuracy. <br> `NONE`: No downsampling is performed. |
 | `downsample_resolution` | Specifies the resolution for downsampling the point cloud data. Higher values reduce computational load and thin out the cloud more. |
 | `outlier_removal_method` | Specifies the method used for outlier removal. Options are [`STATISTICAL`, `RADIUS`, `NONE`]. <br>`STATISTICAL`: `pcl::StatisticalOutlierRemoval`, the distance and its standard deviation of point to `k` of its neigbors are used to remove outliers. <br> `RADIUS`: `pcl::RadiusOutlierRemoval`, a radius search is performed to find the neighbors of each point.<br> `NONE`: No outlier removal is performed. |
@@ -113,7 +113,7 @@ Odometry through scan matching is susceptible to drift over time.
 
 | Parameter Name | Description |
 |----------------|-------------|
-| `enable_scan_matching_odometry` | If true, the scan matching odometry is enabled. The scan matching odometry is used to estimate the odometry of the robot using the point cloud data. |
+| `enable_scan_matching_odometry` | If true, the `scan_matching_odometry_component` is launched. |
 | `enable_odom_to_file` | If true, the odometry data is saved to a file. A separate `odom_to_file.py` executable is used to save the odometry data to a file. Default `result_file` parameter is set to `'/tmp/' + model_namespace + '_scan_matching_odom.txt'`. |
 | `points_topic` | The topic of the point cloud data. The `model_namespace` is prepended to the topic name. |
 | `odom_frame_id` | The frame of the odometry data. The `model_namespace` is prepended to the frame name. |
@@ -148,7 +148,7 @@ In structured environments, the floor detection might improve the SLAM performan
 
 | Parameter Name | Description |
 |----------------|-------------|
-| `enable_floor_detection` | If true, the floor detection is enabled. |
+| `enable_floor_detection` | If true, the `floor_detection_component` is launched. |
 | `tilt_deg` | Approximate tilt/pitch angle of the LIDAR sensor in degrees. The cloud is rotated accordingly. |
 | `sensor_height` | Sensor height in meters used to filter points and only keep points in the range of the `sensor_height` +- `height_clip_range`. | 
 | `height_clip_range` | The range around the `sensor_height` to keep points. |
@@ -168,3 +168,55 @@ In structured environments, the floor detection might improve the SLAM performan
   - The initial poses of the robots can also be set using the `x`, `y`, `z` (in meters) and `roll`, `pitch`, and `yaw` (in radians) parameters in the configuration file. Alternatively, the initial pose can be set using the command line arguments.
   - You can use any of the above methods to set the initial pose of the robot, where `init_odom_topic` has the highest priority, followed by `init_pose_topic`, and then the `x`, `y`, `z`, `roll`, `pitch`, and `yaw` parameters. `ros2 launch mrg_slam mrg_slam.launch.py init_odom_topic:=/robot1/odom`, or `ros2 launch mrg_slam mrg_slam.launch.py init_pose_topic:=/robot1/pose`, or `ros2 launch mrg_slam mrg_slam.launch.py x:=0 y:=0 z:=0 roll:=0 pitch:=0 yaw:=0` can be used to set the initial pose of the robot using the command line arguments.
   - Each robot performs SLAM in its own local frame. We enable a static transform broadcaster `map2robotmap_publisher` node to publish the transform between the global frame `map` and the local frame of the robot `model_namespace/map`. This way the maps of all robots can be visualized in the global frame rviz2. You can check the tf tree with `ros2 run rqt_tf_tree rqt_tf_tree`. 
+
+### Multi-Robot-Graph-SLAM Subscriptions and Publishers
+
+| Inputs | Type | Information |
+|--------|---------|-----------|
+| `scan_matching_odometry/odom`  | `nav_msgs/msg/Odometry` | **Required**: The odometry data from the scan matching odometry component. The odometry is synced with the point cloud data using `message_filters`. |
+| `prefiltering/filtered_points` | `sensor_msgs/msg/PointCloud2` | **Required**: The filtered point cloud data from the prefiltering component. The point cloud data is synced with the odometry data using `message_filters`. |
+| `/mrg_slam/odom_broadcast` | `mrg_slam_msgs/msg/PoseWithName` | **Required**: The odometry data from the all robots in the system. This information is used to filter out points where other robots are estimated to be. This is a broadcast topic, note the absolute topic name. |
+| `/mrg_slam/slam_pose_broadcast` | `mrg_slam_msgs/msg/PoseWithName` | **Required**: The SLAM pose data from the all robots in the system. This pose contains loop closures and graph optimization. The latest SLAM pose plus the delta odometry pose is used to filter out points where other robots are estimated to be. This is a broadcast topic, note the absolute topic name. |
+| `init_odom_topic` | `nav_msgs/msg/Odometry` | **Optional**: An odometry message used to set the initial pose of the robot. The pose should be given w.r.t. the global map frame for the multi robot SLAM. The `frame_id` is neglected. Has a higher priority than `init_pose_topic`. |
+| `init_pose_topic` | `geometry_msgs/msg/PoseStamped` | **Optional**: A pose message used to set the initial pose of the robot. The pose should be given w.r.t. the global map frame for the multi robot SLAM. The `frame_id` is neglected. |
+
+
+| Outputs | Type | Information |
+|---------|---------|-----------|
+| `/mrg_slam/odom_broadcast` | `mrg_slam_msgs/msg/PoseWithName` | **Required**: The odometry data from the all robots in the system. This information is used to filter out points where other robots are estimated to be. This is a broadcast topic, note the absolute topic name. |
+| `/mrg_slam/slam_pose_broadcast` | `mrg_slam_msgs/msg/PoseWithName` | **Required**: The SLAM pose data from the all robots in the system. This pose contains loop closures and graph optimization. The latest SLAM pose plus the delta odometry pose is used to filter out points where other robots are estimated to be. This is a broadcast topic, note the absolute topic name. |
+| `mrg_slam/odom2map` | `geometry_msgs/msg/TransformStamped` | The transform between the `odom` frame and the `map` frame. |
+| `mrg_slam/map_points` | `sensor_msgs/msg/PointCloud2` | The point cloud data of the map published based on a timer. |
+| `mrg_slam/map_points_service` | `sensor_msgs/msg/PointCloud2` | The point cloud data of the map published via `mrg_slam/publish_map` service. |
+| `mrg_slam/others_poses` | `mrg_slam_msgs/msg/PoseWithNameArray` | The poses of the other robots in the system w.r.t. the own robot. |
+| `mrg_slam/other_robots_removed_points` | `sensor_msgs/msg/PointCloud2` | The point cloud containing points where other robots participating in the SLAM are estimated to be. |
+| `mrg_slam/slam_status` | `mrg_slam_msgs/msg/SlamStatus` |  Convenience message to check the status of the SLAM, whether it is initialized or in optimization. |
+
+
+### Multi-Robot-Graph-SLAM Parameters
+
+| Parameter Name | Description |
+|----------------|-------------|
+| `enable_mrg_slam` | If true, the `mrg_slam_component` is launched. |
+| `own_name` | The name of the robot. This is used to distinguish between the different robots in the multi-robot SLAM. |
+| `multi_robot_names` | The names of the other robots in the system. If the robot is not in this list, the graph information between missing robots will not be exchanged. Can include an empty string "" for using the SLAM without a `model_namespace`. |
+| `robot_remove_points_radius` | The radius around the robot to remove points where other robots are estimated to be. |
+| `x` | The initial x position of the robot in meters. |
+| `y` | The initial y position of the robot in meters. |
+| `z` | The initial z position of the robot in meters. |
+| `roll` | The initial roll angle of the robot in radians. |
+| `pitch` | The initial pitch angle of the robot in radians. |
+| `yaw` | The initial yaw angle of the robot in radians. |
+| `init_pose` | The initial pose of the robot in meters and radians (x, y, z, roll, pitch, yaw). The values above are convenience parameters to set this vector. |
+| `init_odom_topic` | The topic of the odometry data used to set the initial pose of the robot. The `frame_id` is neglected. Has a higher priority than `init_pose_topic`. |
+| `init_pose_topic` | The topic of the pose data used to set the initial pose of the robot. The `frame_id` is neglected. |
+| `map_frame_id` | The frame of the map data. |
+| `odom_frame_id` | The frame of the odometry data. |
+| `odom_sub_topic` | The topic of the odometry data. **TODO**: Check whether manually setting this topic is necessary or not. |
+| `cloud_sub_topic` | The topic of the point cloud data. **TODO**: Check whether manually setting this topic is necessary or not. |
+| `g2o_solver_type` | The type of solver used for the graph optimization. Typical solvers are [`gn_var`, `gn_fix6_3`, `gn_var_cholmod`, `lm_var`, `lm_fix6_3`, `lm_var_cholmod`, ...] |
+| `g2o_solver_num_iterations` | The number of iterations for the graph optimization. |
+| `g2o_verbose` | If true, the graph optimization is verbose. |
+| `enable_gps` | If true, the GPS data is used in the SLAM. |
+| `enable_imu_acceleration` | If true, a prior edge is added to the graph using the IMU acceleration data. |
+| `enable_imu_orientation` | If true, a prior edge is added to the graph using the IMU orientation data. |
