@@ -2,13 +2,26 @@
 cmake_minimum_required(VERSION 3.5)
 project(mrg_slam)
 
-# Can we use C++17 in indigo?
-add_definitions(-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2 -DNDEBUG)
-set(CMAKE_CXX_FLAGS "-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2 -O3")
+# Set module path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-# pcl 1.7 causes a segfault when it is built with debug mode
+# Set build type - this will automatically define NDEBUG in Release mode
 set(CMAKE_BUILD_TYPE "RELEASE")
+
+# Architecture-specific optimizations
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "i386|i686")
+  # x86/x86_64 specific optimizations
+  message(STATUS "x86 architecture detected, adding SSE flags")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2 -O3")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64")
+  # ARM64 specific optimizations
+  message(STATUS "ARM64 architecture detected, adding ARM-specific optimizations")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=armv8-a+fp+simd")
+else()
+  # Generic case for other architectures
+  message(STATUS "Using generic optimizations for ${CMAKE_SYSTEM_PROCESSOR}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
 
 find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
