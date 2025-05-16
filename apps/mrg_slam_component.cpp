@@ -390,6 +390,9 @@ private:
         this->declare_parameter<double>( "gps_edge_stddev_z", 10.0 );
         this->declare_parameter<std::string>( "gps_edge_robust_kernel", "NONE" );
         this->declare_parameter<double>( "gps_edge_robust_kernel_size", 1.0 );
+        this->declare_parameter<bool>( "gps_use_enu", false );
+        this->declare_parameter<bool>( "gps_enu_origin_from_msg", true );
+        this->declare_parameter<std::vector<double>>( "gps_enu_origin", std::vector<double>{} );
 
         // ImuProcessor parameters (not directly used by this class)
         this->declare_parameter<double>( "imu_time_offset", 0.0 );
@@ -1148,6 +1151,13 @@ private:
             std::ofstream zero_utm_ofs( directory + "/zero_utm" );
             zero_utm_ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
+        const auto &enu_origin = gps_processor.enu_origin();
+        const auto &zero_enu = gps_processor.zero_enu();
+        if( enu_origin && zero_enu ) {
+            std::ofstream enu_origin_ofs( directory + "/enu_origin" );
+            enu_origin_ofs << boost::format( "%.8f %.8f %.3f" ) % enu_origin->latitude % enu_origin->longitude % enu_origin->altitude << std::endl;
+            enu_origin_ofs << boost::format( "%.8f %.8f %.3f" ) % zero_enu->x() % zero_enu->y() % zero_enu->z() << std::endl;
+        }
 
         // Write some network statistics
         std::ofstream network_stats_ofs( directory + "/network_stats.txt" );
@@ -1252,12 +1262,25 @@ private:
             }
         }
 
+        const auto &zero_enu = gps_processor.zero_enu();
+        if( zero_enu ) {
+            for( auto &pt : cloud->points ) {
+                pt.getVector3fMap() += ( *zero_enu ).cast<float>();
+            }
+        }
+
         cloud->header.frame_id = map_frame_id;
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         if( zero_utm ) {
             std::ofstream ofs( req->file_path + ".utm" );
             ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
+        }
+
+        const auto &enu_origin = gps_processor.enu_origin();
+        if( enu_origin && zero_enu ) {
+            std::ofstream ofs( req->file_path + ".enu" );
+            ofs << boost::format( "%.8f %.8f %.3f" ) % enu_origin->latitude % enu_origin->longitude % enu_origin->altitude << std::endl;
         }
 
         auto dir = boost::filesystem::path( req->file_path ).remove_filename();
