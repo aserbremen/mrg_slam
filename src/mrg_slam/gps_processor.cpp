@@ -79,7 +79,7 @@ GpsProcessor::gps_callback( geographic_msgs::msg::GeoPointStamped::SharedPtr gps
     std::lock_guard<std::mutex> lock( gps_queue_mutex );
     // TODO check if this works
     gps_msg->header.stamp =
-        ( rclcpp::Time( gps_msg->header.stamp ) + rclcpp::Duration( gps_time_offset, 0 ) ).operator builtin_interfaces::msg::Time();
+        ( rclcpp::Time( gps_msg->header.stamp ) + rclcpp::Duration::from_seconds( gps_time_offset ) ).operator builtin_interfaces::msg::Time();
     gps_queue.push_back( gps_msg );
 }
 
