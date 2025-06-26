@@ -90,6 +90,10 @@ find_package(rclpy REQUIRED)
 # small_gicp
 find_package(small_gicp REQUIRED)
 
+# Geographiclib installs FindGeographicLib.cmake to this non-standard location
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/share/cmake/geographiclib/")
+find_package(GeographicLib REQUIRED)
+
 if (ament_cmake_FOUND)
   add_definitions(-DROS_AVAILABLE=2)
 endif ()
@@ -259,6 +263,7 @@ ament_target_dependencies(mrg_slam_component
   tf2_geometry_msgs
   tf2_eigen
   geodesy
+  GeographicLib
   message_filters
   builtin_interfaces
   std_msgs

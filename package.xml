@@ -29,6 +29,7 @@
   <depend>geographic_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>mrg_slam_msgs</depend>
+  <depend>geographiclib</depend>
   <!-- ROS2 python dependencies -->
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>rclpy</depend>
