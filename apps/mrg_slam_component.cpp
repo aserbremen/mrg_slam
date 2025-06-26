@@ -583,6 +583,10 @@ private:
     {
         std::unique_lock<std::mutex> unique_lck( main_thread_mutex );
 
+        const auto &other_robot_name = slam_pose_msg->robot_name;
+        RCLCPP_INFO_STREAM( this->get_logger(), "Received slam pose from rover " << other_robot_name );
+        others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
+
         const auto &prev_robot_keyframe = graph_database->get_prev_robot_keyframe();
         if( slam_pose_msg->robot_name == own_name || prev_robot_keyframe == nullptr ) {
             return;
@@ -593,10 +597,8 @@ private:
         const auto &edge_ignore_uuids = graph_database->get_edge_ignore_uuids();
 
         // Eigen::Vector2d own_position          = prev_robot_keyframe->estimate().translation().head( 2 );
-        const auto &other_robot_name      = slam_pose_msg->robot_name;
-        double      other_accum_dist      = slam_pose_msg->accum_dist;
-        double     &other_last_accum_dist = others_last_accum_dist[other_robot_name];
-        others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
+        double  other_accum_dist      = slam_pose_msg->accum_dist;
+        double &other_last_accum_dist = others_last_accum_dist[other_robot_name];
 
         if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
             return;
