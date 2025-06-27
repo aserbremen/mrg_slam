@@ -92,8 +92,6 @@ scan_matching_odometry_component:
     enable_scan_matching_odometry: true
     enable_odom_to_file: false
 
-    # used for read_until
-    points_topic: "/velodyne_points"
     odom_frame_id: "odom" # default "odom", is prepended by model_namespace
     robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
@@ -136,8 +134,6 @@ floor_detection_component:
     floor_normal_thresh: 10.0
     use_normal_filtering: true
     normal_filter_thresh: 20.0
-    # used for read_until
-    points_topic: "/velodyne_points" # default "/velodyne_points", is prepended by model_namespace
   
     # remappings are handled in the python respective launch file
 

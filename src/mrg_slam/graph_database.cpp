@@ -162,15 +162,6 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
     }
     keyframe_queue.erase( keyframe_queue.begin(), keyframe_queue.begin() + num_processed + 1 );
 
-    // TODO remove read_until ?
-    // std_msgs::msg::Header read_until;
-    // read_until.stamp =
-    //     ( rclcpp::Time( keyframe_queue[num_processed]->stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
-    // read_until.frame_id = points_topic;
-    // read_until_pub->publish( read_until );
-    // read_until.frame_id = "/filtered_points";
-    // read_until_pub->publish( read_until );
-
     return true;
 }
 

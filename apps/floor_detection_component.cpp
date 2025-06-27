@@ -36,7 +36,6 @@ public:
 
         floor_pub = this->create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
-        read_until_pub     = this->create_publisher<std_msgs::msg::Header>( "floor_detection/read_until", rclcpp::QoS( 32 ) );
         floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points",
                                                                                     rclcpp::QoS( 32 ) );
         floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
@@ -66,7 +65,6 @@ private:
         use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
                                                                                                  // normals will be filtered before RANSAC
         normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
-        points_topic         = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
     }
 
     /**
@@ -97,15 +95,6 @@ private:
         }
 
         floor_pub->publish( coeffs );
-
-        // for offline estimation, not sure why a ptr is created in ROS1
-        std_msgs::msg::Header read_until;
-        read_until.frame_id = points_topic;
-        read_until.stamp = ( rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 ) ).operator builtin_interfaces::msg::Time();
-        read_until_pub->publish( read_until );
-
-        read_until.frame_id = "/filtered_points";
-        read_until_pub->publish( read_until );
     }
 
     /**
@@ -267,9 +256,6 @@ private:
     rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_points_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_filtered_pub;
-
-    std::string                                         points_topic;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr read_until_pub;
 
     // floor detection parameters
     double tilt_deg;

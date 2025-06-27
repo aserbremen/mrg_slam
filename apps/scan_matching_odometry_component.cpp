@@ -74,8 +74,7 @@ public:
                                                                                std::bind( &ScanMatchingOdometryComponent::cloud_callback,
                                                                                           this, std::placeholders::_1 ) );
 
-        read_until_pub = this->create_publisher<std_msgs::msg::Header>( "scan_matching_odometry/read_until", rclcpp::QoS( 32 ) );
-        odom_pub       = this->create_publisher<nav_msgs::msg::Odometry>( "scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
+        odom_pub   = this->create_publisher<nav_msgs::msg::Odometry>( "scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
         trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
         status_pub = this->create_publisher<mrg_slam_msgs::msg::ScanMatchingStatus>( "scan_matching_odometry/status", rclcpp::QoS( 8 ) );
         aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "scan_matching_odometry/aligned_points",
@@ -103,7 +102,6 @@ private:
     void initialize_params()
     {
         // Declare and set ROS2 parameters
-        points_topic        = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
         odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
         robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
@@ -169,15 +167,6 @@ private:
         }
 
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
-
-        // In offline estimation, point clouds until the published time will be supplied
-        std_msgs::msg::Header read_until;
-        read_until.frame_id = points_topic;
-        read_until.stamp = ( rclcpp::Time( cloud_msg->header.stamp ) + rclcpp::Duration( 1, 0 ) ).operator builtin_interfaces::msg::Time();
-        read_until_pub->publish( read_until );
-
-        read_until.frame_id = "/filtered_points";
-        read_until_pub->publish( read_until );
 
         counter++;
     }
@@ -434,7 +423,6 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr   trans_pub;
     rclcpp::Publisher<mrg_slam_msgs::msg::ScanMatchingStatus>::SharedPtr status_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr          aligned_points_pub;
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr                  read_until_pub;
 
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
@@ -456,7 +444,6 @@ private:
     pcl::Registration<PointT, PointT>::Ptr registration;
 
     // Algorithm, ROS2 parameters
-    std::string points_topic;
     std::string odom_frame_id;
     std::string robot_odom_frame_id;
 

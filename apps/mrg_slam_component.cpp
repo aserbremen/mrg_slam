@@ -176,7 +176,6 @@ public:
         odom2map_pub           = this->create_publisher<geometry_msgs::msg::TransformStamped>( "mrg_slam/odom2map", 16 );
         map_points_timer_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points", rclcpp::QoS( 1 ) );
         map_points_service_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
-        read_until_pub         = this->create_publisher<std_msgs::msg::Header>( "mrg_slam/read_until", rclcpp::QoS( 16 ) );
         others_poses_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithNameArray>( "mrg_slam/others_poses", rclcpp::QoS( 16 ) );
         other_robots_removed_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/other_robots_removed_points",
                                                                                                  rclcpp::QoS( 1 ) );
@@ -295,7 +294,6 @@ private:
         // Declare all parameters used by this class and its members first
 
         // General and scenario parameters
-        points_topic      = this->declare_parameter<std::string>( "points_topic", "velodyne_points" );
         own_name          = this->declare_parameter<std::string>( "own_name", "atlas" );
         multi_robot_names = this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
         odom_sub_topic    = this->declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
@@ -428,16 +426,7 @@ private:
         bool   update_required = keyframe_updater->update( odom );
         double accum_d         = keyframe_updater->get_accum_distance();
 
-        if( !update_required ) {
-            if( graph_database->get_keyframe_queue().empty() ) {
-                std_msgs::msg::Header read_until;
-                read_until.stamp    = ( rclcpp::Time( stamp ) + rclcpp::Duration( 10, 0 ) ).operator builtin_interfaces::msg::Time();
-                read_until.frame_id = points_topic;
-                read_until_pub->publish( read_until );
-                read_until.frame_id = "/filtered_points";
-                read_until_pub->publish( read_until );
-            }
-        } else {
+        if( update_required ) {
             pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
             pcl::fromROSMsg( *cloud_msg, *cloud );
             sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg_filtered = cloud_msg;
@@ -961,15 +950,6 @@ private:
         // add keyframes and floor coeffs in the queues to the pose graph, TODO update trans_odom2map?
         bool keyframe_updated = graph_database->flush_keyframe_queue( trans_odom2map );
 
-        if( !keyframe_updated ) {
-            std_msgs::msg::Header read_until;
-            read_until.stamp    = ( this->now() + rclcpp::Duration( 30, 0 ) ).operator builtin_interfaces::msg::Time();
-            read_until.frame_id = points_topic;
-            read_until_pub->publish( read_until );
-            read_until.frame_id = "/filtered_points";
-            read_until_pub->publish( read_until );
-        }
-
         if( !keyframe_updated & !graph_database->flush_static_keyframe_queue()
             & !graph_database->flush_graph_queue( others_prev_robot_keyframes, loop_detector->get_loop_manager() )
             & !graph_database->flush_loaded_graph( loop_detector->get_loop_manager() )
@@ -1152,10 +1132,11 @@ private:
             zero_utm_ofs << boost::format( "%.6f %.6f %.6f" ) % zero_utm->x() % zero_utm->y() % zero_utm->z() << std::endl;
         }
         const auto &enu_origin = gps_processor.enu_origin();
-        const auto &zero_enu = gps_processor.zero_enu();
+        const auto &zero_enu   = gps_processor.zero_enu();
         if( enu_origin && zero_enu ) {
             std::ofstream enu_origin_ofs( directory + "/enu_origin" );
-            enu_origin_ofs << boost::format( "%.8f %.8f %.3f" ) % enu_origin->latitude % enu_origin->longitude % enu_origin->altitude << std::endl;
+            enu_origin_ofs << boost::format( "%.8f %.8f %.3f" ) % enu_origin->latitude % enu_origin->longitude % enu_origin->altitude
+                           << std::endl;
             enu_origin_ofs << boost::format( "%.8f %.8f %.3f" ) % zero_enu->x() % zero_enu->y() % zero_enu->z() << std::endl;
         }
 
@@ -1548,7 +1529,6 @@ private:
     std::unordered_map<std::string, Eigen::Isometry3d>                 others_odom2map;  // odom2map transform for other robots
     std::unordered_map<std::string, std::pair<Eigen::Isometry3d, geometry_msgs::msg::Pose>> others_odom_poses;
 
-    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr         read_until_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_timer_pub;    // timer based map cloud publisher
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_service_pub;  // service based map cloud publisher
 
@@ -1601,7 +1581,6 @@ private:
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;
 
     // More parameters
-    std::string              points_topic;
     std::string              own_name;
     std::vector<std::string> multi_robot_names;
 
