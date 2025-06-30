@@ -177,6 +177,7 @@ mrg_slam_component:
     # this is helpful for navigation algorithms that need a map for planning
     enable_fill_first_cloud: false
     fill_first_cloud_radius: 5.0
+    fill_first_cloud_simple: false
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
@@ -248,7 +249,7 @@ mrg_slam_component:
     graph_exchange_mode: "PATH_PROXIMITY"
     # update params
     graph_update_interval: 3.0
-    map_cloud_update_interval: 2.0
+    map_cloud_update_interval: 5.0
     map_cloud_resolution: 0.1
     # minimum number of points in a voxel to consider it as occupied
     map_cloud_count_threshold: 1

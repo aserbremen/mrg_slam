@@ -330,6 +330,7 @@ private:
         // Fill first cloud parameters
         this->declare_parameter<bool>( "enable_fill_first_cloud", false );
         this->declare_parameter<double>( "fill_first_cloud_radius", 5.0 );
+        this->declare_parameter<bool>( "fill_first_cloud_simple", false );
 
         // GraphDatabase parameters (not directly used by this class)
         this->declare_parameter<bool>( "fix_first_node", false );

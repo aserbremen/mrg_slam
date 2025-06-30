@@ -167,6 +167,7 @@ private:
     std::vector<double> fix_first_node_stddev_vec;
     bool                enable_fill_first_cloud;
     double              fill_first_cloud_radius;
+    bool                fill_first_cloud_simple;
     double              map_cloud_resolution;
     int                 max_keyframes_per_update;
     std::string         odometry_edge_robust_kernel;
