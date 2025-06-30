@@ -588,7 +588,16 @@ private:
         const auto &other_robot_name      = slam_pose_msg->robot_name;
         double      other_accum_dist      = slam_pose_msg->accum_dist;
         double     &other_last_accum_dist = others_last_accum_dist[other_robot_name];
-        others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
+
+        // Check if this slam pose message is already in the queue
+        auto &robot_slam_poses = others_slam_poses[other_robot_name];
+        auto  it               = std::find_if( robot_slam_poses.begin(), robot_slam_poses.end(),
+                                               [&slam_pose_msg]( const mrg_slam_msgs::msg::PoseWithName &slam_pose ) {
+                                    return slam_pose == *slam_pose_msg;
+                                } );
+        if( it == robot_slam_poses.end() ) {
+            robot_slam_poses.push_back( *slam_pose_msg );
+        }
 
         if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
             return;
@@ -957,6 +966,7 @@ private:
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )
             & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id ) ) {
             optimization_timer->reset();
+            publish_slam_pose( graph_database->get_prev_robot_keyframe() );
             return;
         }
 
