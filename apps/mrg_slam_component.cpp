@@ -966,8 +966,10 @@ private:
             & !floor_coeffs_processor.flush( graph_database, graph_slam )
             & !gps_processor.flush( graph_slam, graph_database->get_keyframes() )
             & !imu_processor.flush( graph_slam, graph_database->get_keyframes(), base_frame_id ) ) {
+            if( graph_database->get_prev_robot_keyframe() != nullptr ) {
+                publish_slam_pose( graph_database->get_prev_robot_keyframe() );
+            }
             optimization_timer->reset();
-            publish_slam_pose( graph_database->get_prev_robot_keyframe() );
             return;
         }
 
