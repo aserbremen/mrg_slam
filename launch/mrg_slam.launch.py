@@ -127,37 +127,41 @@ def launch_setup(context, *args, **kwargs):
             package='tf2_ros',
             executable='static_transform_publisher',
             # arguments has to be a list of strings
-            arguments=[str(lidar2base_publisher_params['lidar2base_x']),
-                       str(lidar2base_publisher_params['lidar2base_y']),
-                       str(lidar2base_publisher_params['lidar2base_z']),
-                       str(lidar2base_publisher_params['lidar2base_roll']),
-                       str(lidar2base_publisher_params['lidar2base_pitch']),
-                       str(lidar2base_publisher_params['lidar2base_yaw']),
-                       frame_id,
-                       child_frame_id],
+            arguments=[
+                '--x', str(lidar2base_publisher_params['lidar2base_x']),
+                '--y', str(lidar2base_publisher_params['lidar2base_y']),
+                '--z', str(lidar2base_publisher_params['lidar2base_z']),
+                '--roll', str(lidar2base_publisher_params['lidar2base_roll']),
+                '--pitch', str(lidar2base_publisher_params['lidar2base_pitch']),
+                '--yaw', str(lidar2base_publisher_params['lidar2base_yaw']),
+                '--frame-id', frame_id,
+                '--child-frame-id', child_frame_id,
+            ],
             parameters=[shared_params],
-            output='both'
+            output='both',
         )
 
     # Create the map2robotmap publisher node, if it is enabled and a model_namespace is set
     if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
-        map2robotmap_child_frame_id = model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
+        map2robotmap_child_frame_id = (model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id'])
         map2robotmap_publisher = Node(
             name='map2robotmap_publisher',
             namespace=model_namespace,
             package='tf2_ros',
             executable='static_transform_publisher',
             # arguments has to be a list of strings
-            arguments=[str(map2robotmap_publisher_params['map2robotmap_x']),
-                       str(map2robotmap_publisher_params['map2robotmap_y']),
-                       str(map2robotmap_publisher_params['map2robotmap_z']),
-                       str(map2robotmap_publisher_params['map2robotmap_roll']),
-                       str(map2robotmap_publisher_params['map2robotmap_pitch']),
-                       str(map2robotmap_publisher_params['map2robotmap_yaw']),
-                       map2robotmap_publisher_params['map2robotmap_frame_id'],
-                       map2robotmap_child_frame_id],
+            arguments=[
+                '--x', str(map2robotmap_publisher_params['map2robotmap_x']),
+                '--y', str(map2robotmap_publisher_params['map2robotmap_y']),
+                '--z', str(map2robotmap_publisher_params['map2robotmap_z']),
+                '--roll', str(map2robotmap_publisher_params['map2robotmap_roll']),
+                '--pitch', str(map2robotmap_publisher_params['map2robotmap_pitch']),
+                '--yaw', str(map2robotmap_publisher_params['map2robotmap_yaw']),
+                '--frame-id', map2robotmap_publisher_params['map2robotmap_frame_id'],
+                '--child-frame-id', map2robotmap_child_frame_id,
+            ],
             parameters=[shared_params],
-            output='both'
+            output='both',
         )
 
     # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
