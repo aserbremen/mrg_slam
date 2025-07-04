@@ -10,9 +10,9 @@
 lidar2base_publisher:
   ros__parameters:
     enable_lidar2base_publisher: true
-    lidar2base_x: 0.0012
+    lidar2base_x: 0.0
     lidar2base_y: 0.0
-    lidar2base_z: 0.716
+    lidar2base_z: 1.005
     lidar2base_roll: 0.0
     lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
     lidar2base_yaw: 0.0
