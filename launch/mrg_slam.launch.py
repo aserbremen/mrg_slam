@@ -181,7 +181,9 @@ def launch_setup(context, *args, **kwargs):
         name='map2odom_publisher_ros2',
         namespace=model_namespace,
         output='both',
-        parameters=[mrg_slam_params, shared_params]
+        parameters=[mrg_slam_params, shared_params],
+        remappings=[('/tf', 'tf'),
+                    ('/tf_static', 'tf_static'),]
     )
 
     # Create the container node
@@ -247,7 +249,9 @@ def launch_setup(context, *args, **kwargs):
 
     # prefiltering component
     prefiltering_remaps = [('imu/data', shared_params['imu_topic']),
-                           ('velodyne_points', shared_params['points_topic'])]
+                           ('velodyne_points', shared_params['points_topic']),
+                           ('/tf', 'tf'),
+                           ('/tf_static', 'tf_static')]
     print_remappings(prefiltering_remaps, 'prefiltering_component')
     if model_namespace != '':
         prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
@@ -273,7 +277,9 @@ def launch_setup(context, *args, **kwargs):
             name='scan_matching_odometry_component',
             namespace=model_namespace,
             parameters=[scan_matching_odometry_params, shared_params],
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
+            remappings=[('/tf', 'tf'),
+                        ('/tf_static', 'tf_static'),]
         )
 
     # helper node to write the odometry to a file
@@ -315,7 +321,9 @@ def launch_setup(context, *args, **kwargs):
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
             mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        mrg_slam_remaps = [('imu/data', shared_params['imu_topic'])]
+        mrg_slam_remaps = [('imu/data', shared_params['imu_topic']),
+                           ('/tf', 'tf'),
+                           ('/tf_static', 'tf_static'),]
         print_remappings(mrg_slam_remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
