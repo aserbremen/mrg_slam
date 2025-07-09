@@ -20,11 +20,17 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <string>
 
+// ros message filters
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/time_synchronizer.h>
+
 namespace mrg_slam {
 
 class PrefilteringComponent : public rclcpp::Node {
 public:
-    typedef pcl::PointXYZI PointT;
+    typedef pcl::PointXYZI                                                                                                PointT;
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::PointCloud2, sensor_msgs::msg::PointCloud2> ApproxSyncPolicy;
 
     // We need to pass NodeOptions in ROS2 to register a component
     PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
@@ -74,9 +80,20 @@ public:
                                                                                    std::placeholders::_1 ) );
         }
 
-        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
-                                                                                std::bind( &PrefilteringComponent::cloud_callback, this,
-                                                                                           std::placeholders::_1 ) );
+        if( use_synced_cloud ) {
+            auto qos  = rmw_qos_profile_default;
+            qos.depth = 32;
+            RCLCPP_INFO_STREAM( this->get_logger(), "Using synced cloud with topics: " << cloud_topic1 << " and " << cloud_topic2 );
+            cloud_sub1.subscribe( this, cloud_topic1, qos );
+            cloud_sub2.subscribe( this, cloud_topic2, qos );
+            sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), cloud_sub1, cloud_sub2 ) );
+            sync->registerCallback(
+                std::bind( &PrefilteringComponent::synced_cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
+        } else {
+            points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
+                                                                                   std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                              std::placeholders::_1 ) );
+        }
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
@@ -110,6 +127,10 @@ private:
         scan_period     = this->declare_parameter<double>( "scan_period", 0.1 );
         use_deskewing   = this->declare_parameter<bool>( "deskewing", false );
         base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "base_link" );
+
+        use_synced_cloud = this->declare_parameter<bool>( "use_synced_cloud", false );
+        cloud_topic1     = this->declare_parameter<std::string>( "cloud_topic1", std::string() );
+        cloud_topic2     = this->declare_parameter<std::string>( "cloud_topic2", std::string() );
     }
 
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -152,6 +173,63 @@ private:
         sensor_msgs::msg::PointCloud2 filtered_ros;
         pcl::toROSMsg( *filtered, filtered_ros );
 
+        points_pub->publish( filtered_ros );
+    }
+
+    void synced_cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros1,
+                                sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros2 )
+    {
+        // Convert to pcl pointcloud from PointCloud2
+        pcl::PointCloud<PointT>::Ptr src_cloud1 = std::make_shared<pcl::PointCloud<PointT>>();
+        pcl::PointCloud<PointT>::Ptr src_cloud2 = std::make_shared<pcl::PointCloud<PointT>>();
+        pcl::fromROSMsg( *src_cloud_ros1, *src_cloud1 );
+        pcl::fromROSMsg( *src_cloud_ros2, *src_cloud2 );
+        if( src_cloud1->empty() || src_cloud2->empty() ) {
+            return;
+        }
+
+        // Transform the point clouds to the base_link frame if defined
+        if( !base_link_frame.empty() ) {
+            geometry_msgs::msg::TransformStamped transform1, transform2;
+            try {
+                transform1 = tf_buffer->lookupTransform( base_link_frame, src_cloud1->header.frame_id, rclcpp::Time( 0 ),
+                                                         rclcpp::Duration( 2, 0 ) );
+                transform2 = tf_buffer->lookupTransform( base_link_frame, src_cloud2->header.frame_id, rclcpp::Time( 0 ),
+                                                         rclcpp::Duration( 2, 0 ) );
+            } catch( const tf2::TransformException& ex ) {
+                RCLCPP_WARN( this->get_logger(), "Could not transform source frame %s to target frame %s: %s",
+                             src_cloud1->header.frame_id.c_str(), base_link_frame.c_str(), ex.what() );
+                RCLCPP_WARN( this->get_logger(), "Returning early in cloud_callback from prefiltering component" );
+                return;
+            }
+
+            pcl::PointCloud<PointT>::Ptr transformed1( new pcl::PointCloud<PointT>() );
+            pcl::PointCloud<PointT>::Ptr transformed2( new pcl::PointCloud<PointT>() );
+            pcl_ros::transformPointCloud( *src_cloud1, *transformed1, transform1 );
+            pcl_ros::transformPointCloud( *src_cloud2, *transformed2, transform2 );
+            transformed1->header.frame_id = base_link_frame;
+            transformed1->header.stamp    = src_cloud1->header.stamp;
+            transformed2->header.frame_id = base_link_frame;
+            transformed2->header.stamp    = src_cloud2->header.stamp;
+            src_cloud1                    = transformed1;
+            src_cloud2                    = transformed2;
+        }
+
+        // Merge the two point clouds
+        pcl::PointCloud<PointT>::Ptr merged_cloud = std::make_shared<pcl::PointCloud<PointT>>();
+        pcl::PointCloud<PointT>::concatenate( *src_cloud1, *src_cloud2, *merged_cloud );
+
+        // Deskew the merged cloud
+        merged_cloud = deskewing( merged_cloud );
+
+        // Apply filters
+        pcl::PointCloud<PointT>::ConstPtr filtered = distance_filter( merged_cloud );
+        filtered                                   = downsample( filtered );
+        filtered                                   = outlier_removal( filtered );
+        sensor_msgs::msg::PointCloud2 filtered_ros;
+        pcl::toROSMsg( *filtered, filtered_ros );
+
+        // Publish the filtered point cloud
         points_pub->publish( filtered_ros );
     }
 
@@ -272,6 +350,14 @@ private:
     }
 
 private:
+    bool                                                             use_synced_cloud;
+    std::string                                                      cloud_topic1;
+    std::string                                                      cloud_topic2;
+    message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub1;
+    message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub2;
+    std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>> sync;
+
+
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
     std::vector<sensor_msgs::msg::Imu::ConstSharedPtr>     imu_queue;
 

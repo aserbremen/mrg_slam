@@ -83,7 +83,10 @@ prefiltering_component:
     scan_period: 0.1
     deskewing: false
     base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
-    
+
+    use_synced_cloud: true
+    cloud_topic1: "ouster/points"
+    cloud_topic2: "depth/color/points"
     # remappings are handled in the python respective launch file
 
 # Scan matching component parameters
