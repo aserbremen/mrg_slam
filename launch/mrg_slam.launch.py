@@ -249,8 +249,8 @@ def launch_setup(context, *args, **kwargs):
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
-    prefiltering_remaps = [tf_remappings + ('imu/data', shared_params['imu_topic']),
-                           ('velodyne_points', shared_params['points_topic'])]
+    prefiltering_remaps = tf_remappings + [('imu/data', shared_params['imu_topic']),
+                                           ('velodyne_points', shared_params['points_topic'])]
     print_remappings(prefiltering_remaps, 'prefiltering_component')
     if model_namespace != '':
         prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
@@ -319,7 +319,7 @@ def launch_setup(context, *args, **kwargs):
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
             mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        mrg_slam_remaps = [tf_remappings + ('imu/data', shared_params['imu_topic'])]
+        mrg_slam_remaps = tf_remappings + [('imu/data', shared_params['imu_topic'])]
         print_remappings(mrg_slam_remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
