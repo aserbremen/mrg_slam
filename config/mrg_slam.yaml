@@ -27,7 +27,7 @@ lidar2base_publisher:
 #                   -> bestla/keyframe
 map2robotmap_publisher:
   ros__parameters:
-    enable_map2robotmap_publisher: true
+    enable_map2robotmap_publisher: false
     map2robotmap_x: 0.0
     map2robotmap_y: 0.0
     map2robotmap_z: 0.0
@@ -84,7 +84,7 @@ prefiltering_component:
     deskewing: false
     base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
     
-    use_synced_cloud: true
+    use_synced_cloud: false
     cloud_topic1: "ouster/points"
     cloud_topic2: "depth/color/points"
 
@@ -179,9 +179,9 @@ mrg_slam_component:
     enable_imu_orientation: false
     # whether to fill a circular ground plane below the robot's very first keyframe at initialization
     # this is helpful for navigation algorithms that need a map for planning
-    enable_fill_first_cloud: false
-    fill_first_cloud_radius: 5.0
-    fill_first_cloud_simple: false
+    enable_fill_first_cloud: true
+    fill_first_cloud_radius: 7.0
+    fill_first_cloud_simple: true
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
