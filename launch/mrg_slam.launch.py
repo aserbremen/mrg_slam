@@ -94,11 +94,17 @@ def launch_setup(context, *args, **kwargs):
 
     # Overwrite the parameters from the yaml file with the ones from the cli
     shared_params = overwrite_yaml_params_from_cli(shared_params, context.launch_configurations)
-    lidar2base_publisher_params = overwrite_yaml_params_from_cli(lidar2base_publisher_params, context.launch_configurations)
-    map2robotmap_publisher_params = overwrite_yaml_params_from_cli(map2robotmap_publisher_params, context.launch_configurations)
+    lidar2base_publisher_params = overwrite_yaml_params_from_cli(
+        lidar2base_publisher_params, context.launch_configurations
+    )
+    map2robotmap_publisher_params = overwrite_yaml_params_from_cli(
+        map2robotmap_publisher_params, context.launch_configurations
+    )
     velodyne_params = overwrite_yaml_params_from_cli(velodyne_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
-    scan_matching_odometry_params = overwrite_yaml_params_from_cli(scan_matching_odometry_params, context.launch_configurations)
+    scan_matching_odometry_params = overwrite_yaml_params_from_cli(
+        scan_matching_odometry_params, context.launch_configurations
+    )
     floor_detection_params = overwrite_yaml_params_from_cli(floor_detection_params, context.launch_configurations)
     mrg_slam_params = overwrite_yaml_params_from_cli(mrg_slam_params, context.launch_configurations)
 
@@ -114,6 +120,9 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(floor_detection_params, 'floor_detection_params')
     print_yaml_params(mrg_slam_params, 'mrg_slam_params')
 
+    tf_remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
+    print_remappings(tf_remappings, 'tf_remappings')
+
     # Create the static transform publisher node between the base and the lidar frame
     if lidar2base_publisher_params['enable_lidar2base_publisher']:
         frame_id = lidar2base_publisher_params['base_frame_id']
@@ -128,22 +137,33 @@ def launch_setup(context, *args, **kwargs):
             executable='static_transform_publisher',
             # arguments has to be a list of strings
             arguments=[
-                '--x', str(lidar2base_publisher_params['lidar2base_x']),
-                '--y', str(lidar2base_publisher_params['lidar2base_y']),
-                '--z', str(lidar2base_publisher_params['lidar2base_z']),
-                '--roll', str(lidar2base_publisher_params['lidar2base_roll']),
-                '--pitch', str(lidar2base_publisher_params['lidar2base_pitch']),
-                '--yaw', str(lidar2base_publisher_params['lidar2base_yaw']),
-                '--frame-id', frame_id,
-                '--child-frame-id', child_frame_id,
+                '--x',
+                str(lidar2base_publisher_params['lidar2base_x']),
+                '--y',
+                str(lidar2base_publisher_params['lidar2base_y']),
+                '--z',
+                str(lidar2base_publisher_params['lidar2base_z']),
+                '--roll',
+                str(lidar2base_publisher_params['lidar2base_roll']),
+                '--pitch',
+                str(lidar2base_publisher_params['lidar2base_pitch']),
+                '--yaw',
+                str(lidar2base_publisher_params['lidar2base_yaw']),
+                '--frame-id',
+                frame_id,
+                '--child-frame-id',
+                child_frame_id,
             ],
             parameters=[shared_params],
             output='both',
+            remappings=tf_remappings,
         )
 
     # Create the map2robotmap publisher node, if it is enabled and a model_namespace is set
     if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
-        map2robotmap_child_frame_id = (model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id'])
+        map2robotmap_child_frame_id = (
+            model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
+        )
         map2robotmap_publisher = Node(
             name='map2robotmap_publisher',
             namespace=model_namespace,
@@ -151,17 +171,26 @@ def launch_setup(context, *args, **kwargs):
             executable='static_transform_publisher',
             # arguments has to be a list of strings
             arguments=[
-                '--x', str(map2robotmap_publisher_params['map2robotmap_x']),
-                '--y', str(map2robotmap_publisher_params['map2robotmap_y']),
-                '--z', str(map2robotmap_publisher_params['map2robotmap_z']),
-                '--roll', str(map2robotmap_publisher_params['map2robotmap_roll']),
-                '--pitch', str(map2robotmap_publisher_params['map2robotmap_pitch']),
-                '--yaw', str(map2robotmap_publisher_params['map2robotmap_yaw']),
-                '--frame-id', map2robotmap_publisher_params['map2robotmap_frame_id'],
-                '--child-frame-id', map2robotmap_child_frame_id,
+                '--x',
+                str(map2robotmap_publisher_params['map2robotmap_x']),
+                '--y',
+                str(map2robotmap_publisher_params['map2robotmap_y']),
+                '--z',
+                str(map2robotmap_publisher_params['map2robotmap_z']),
+                '--roll',
+                str(map2robotmap_publisher_params['map2robotmap_roll']),
+                '--pitch',
+                str(map2robotmap_publisher_params['map2robotmap_pitch']),
+                '--yaw',
+                str(map2robotmap_publisher_params['map2robotmap_yaw']),
+                '--frame-id',
+                map2robotmap_publisher_params['map2robotmap_frame_id'],
+                '--child-frame-id',
+                map2robotmap_child_frame_id,
             ],
             parameters=[shared_params],
             output='both',
+            remappings=tf_remappings,
         )
 
     # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
@@ -171,10 +200,8 @@ def launch_setup(context, *args, **kwargs):
             executable='clock_publisher_ros2.py',
             name=model_namespace + '_clock_publisher_ros2',
             parameters=[clock_publisher_ros2_params, shared_params],
-            output='both'
+            output='both',
         )
-
-    tf_remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
     # Create the map2odom publisher node
     map2odom_publisher_ros2 = Node(
@@ -184,7 +211,7 @@ def launch_setup(context, *args, **kwargs):
         namespace=model_namespace,
         output='both',
         parameters=[mrg_slam_params, shared_params],
-        remappings=tf_remappings
+        remappings=tf_remappings,
     )
 
     # Create the container node
@@ -197,6 +224,11 @@ def launch_setup(context, *args, **kwargs):
     container_name = 'mrg_slam_container'
     if model_namespace != '':
         container_name = model_namespace + '/mrg_slam_container'  # used in composable nodes
+    container_remaps = tf_remappings + [
+        ('imu/data', shared_params['imu_topic']),
+        ('velodyne_points', shared_params['points_topic']),
+    ]
+    print_remappings(container_remaps, 'container_remappings')
     container = Node(
         package='rclcpp_components',
         executable='component_container_mt',
@@ -204,7 +236,9 @@ def launch_setup(context, *args, **kwargs):
         namespace=model_namespace,
         output='both',
         parameters=[shared_params],
-        prefix=prefix
+        prefix=prefix,
+        remappings=tf_remappings  # some more remappings only used in prefiltering_component, but we keep them here
+        + [('imu/data', shared_params['imu_topic']), ('velodyne_points', shared_params['points_topic'])],
     )
 
     # Launch the velodyne driver and pointcloud transform node if the lidar is enabled in the config
@@ -212,8 +246,9 @@ def launch_setup(context, *args, **kwargs):
     # Also, we set the frame_ids according to the model_namespace, e.g. atlas/velodyne (default without namespace = velodyne)
     if velodyne_params['enable_velodyne']:
         velodyne_driver_share_dir = get_package_share_directory('velodyne_driver')
-        velodyne_params_file = os.path.join(velodyne_driver_share_dir, 'config',
-                                            velodyne_params['velodyne_driver']['driver_node_params_file'])
+        velodyne_params_file = os.path.join(
+            velodyne_driver_share_dir, 'config', velodyne_params['velodyne_driver']['driver_node_params_file']
+        )
         with open(velodyne_params_file, 'r') as f:
             driver_node_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
         # overwrite the frame_id to consider the model_namespace
@@ -225,33 +260,34 @@ def launch_setup(context, *args, **kwargs):
             name='velodyne_driver_node',
             namespace=model_namespace,
             parameters=[shared_params, driver_node_params],
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
         )
         velodyne_transform_share_dir = get_package_share_directory('velodyne_pointcloud')
-        velodyne_transform_params_file = os.path.join(velodyne_transform_share_dir, 'config',
-                                                      velodyne_params['velodyne_transform']['transform_node_params_file'])
+        velodyne_transform_params_file = os.path.join(
+            velodyne_transform_share_dir, 'config', velodyne_params['velodyne_transform']['transform_node_params_file']
+        )
         with open(velodyne_transform_params_file, 'r') as f:
             transform_node_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
         # overwrite the frame_id to consider the model_namespace, and set correct calibration file
         if model_namespace != '':
-            transform_node_params['fixed_frame'] = model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
-        transform_node_params['calibration'] = os.path.join(velodyne_transform_share_dir, 'params',
-                                                            velodyne_params['velodyne_transform']['calibration'])
+            transform_node_params['fixed_frame'] = (
+                model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
+            )
+        transform_node_params['calibration'] = os.path.join(
+            velodyne_transform_share_dir, 'params', velodyne_params['velodyne_transform']['calibration']
+        )
         velodyne_transform_node = ComposableNode(
             package='velodyne_pointcloud',
             plugin='velodyne_pointcloud::Transform',
             name='velodyne_transform_node',
             namespace=model_namespace,
             parameters=[shared_params, transform_node_params],
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
         )
 
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
-    prefiltering_remaps = tf_remappings + [('imu/data', shared_params['imu_topic']),
-                                           ('velodyne_points', shared_params['points_topic'])]
-    print_remappings(prefiltering_remaps, 'prefiltering_component')
     if model_namespace != '':
         prefiltering_params['base_link_frame'] = model_namespace + '/' + prefiltering_params['base_link_frame']
     if prefiltering_params['enable_prefiltering']:
@@ -261,14 +297,17 @@ def launch_setup(context, *args, **kwargs):
             name='prefiltering_component',
             namespace=model_namespace,
             parameters=[prefiltering_params, shared_params],
-            remappings=prefiltering_remaps,
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
         )
 
     # scan_matching_odometry component
     # set the correct frame ids according to the model namespace
-    scan_matching_odometry_params['odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
-    scan_matching_odometry_params['robot_odom_frame_id'] = model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
+    scan_matching_odometry_params['odom_frame_id'] = (
+        model_namespace + '/' + scan_matching_odometry_params['odom_frame_id']
+    )
+    scan_matching_odometry_params['robot_odom_frame_id'] = (
+        model_namespace + '/' + scan_matching_odometry_params['robot_odom_frame_id']
+    )
     if scan_matching_odometry_params['enable_scan_matching_odometry']:
         scan_matching_odometry_node = ComposableNode(
             package='mrg_slam',
@@ -277,21 +316,21 @@ def launch_setup(context, *args, **kwargs):
             namespace=model_namespace,
             parameters=[scan_matching_odometry_params, shared_params],
             extra_arguments=[{'use_intra_process_comms': True}],
-            remappings=tf_remappings
         )
 
     # helper node to write the odometry to a file
-    if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
-        scan_matching_odometry_remaps = [('odom', 'scan_matching_odometry/odom')]
+    if (
+        scan_matching_odometry_params['enable_scan_matching_odometry']
+        and scan_matching_odometry_params['enable_odom_to_file']
+    ):
         odom_to_file_node = Node(
             name='odom_to_file',
             package='mrg_slam',
             executable='odom_to_file.py',
             namespace=model_namespace,
-            remappings=scan_matching_odometry_remaps,
+            remappings=[('odom', 'scan_matching_odometry/odom')],
             output='screen',
-            parameters=[{'result_file': '/tmp/' + model_namespace + '_scan_matching_odom.txt',
-                         'every_n': 1}],
+            parameters=[{'result_file': '/tmp/' + model_namespace + '_scan_matching_odom.txt', 'every_n': 1}],
         )
 
     # floor_detection component
@@ -302,7 +341,7 @@ def launch_setup(context, *args, **kwargs):
             name='floor_detection_component',
             namespace=model_namespace,
             parameters=[floor_detection_params, shared_params],
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
         )
 
     # mrg_slam component
@@ -319,16 +358,13 @@ def launch_setup(context, *args, **kwargs):
         if model_namespace != '':
             mrg_slam_params['map_frame_id'] = model_namespace + '/' + mrg_slam_params['map_frame_id']
             mrg_slam_params['odom_frame_id'] = model_namespace + '/' + mrg_slam_params['odom_frame_id']
-        mrg_slam_remaps = tf_remappings + [('imu/data', shared_params['imu_topic'])]
-        print_remappings(mrg_slam_remaps, 'mrg_slam_component')
         mrg_slam_node = ComposableNode(
             package='mrg_slam',
             plugin='mrg_slam::MrgSlamComponent',
             name='mrg_slam_component',
             namespace=model_namespace,
             parameters=[mrg_slam_params, shared_params],
-            remappings=mrg_slam_remaps,
-            extra_arguments=[{'use_intra_process_comms': True}]
+            extra_arguments=[{'use_intra_process_comms': True}],
         )
 
     composable_nodes = []
@@ -346,8 +382,7 @@ def launch_setup(context, *args, **kwargs):
 
     # https://docs.ros.org/en/foxy/How-To-Guides/Launching-composable-nodes.html
     load_composable_nodes = LoadComposableNodes(
-        target_container=container_name,
-        composable_node_descriptions=composable_nodes
+        target_container=container_name, composable_node_descriptions=composable_nodes
     )
 
     launch_description_list = []
@@ -361,7 +396,10 @@ def launch_setup(context, *args, **kwargs):
     launch_description_list.append(map2odom_publisher_ros2)
     launch_description_list.append(container)
     launch_description_list.append(load_composable_nodes)
-    if scan_matching_odometry_params['enable_scan_matching_odometry'] and scan_matching_odometry_params['enable_odom_to_file']:
+    if (
+        scan_matching_odometry_params['enable_scan_matching_odometry']
+        and scan_matching_odometry_params['enable_odom_to_file']
+    ):
         launch_description_list.append(odom_to_file_node)
     # Return nodes to our OpaqueFunction
     return launch_description_list
