@@ -81,8 +81,7 @@ public:
                                                                                     rclcpp::QoS( 32 ) );
 
         // Initialize the transform broadcaster
-        odom_broadcaster     = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
-        keyframe_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
+        odom_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
 
         // Initialize the transform listener
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
@@ -306,7 +305,7 @@ private:
         // broadcast keyframe with namespace aware topic name
         std::string keyframe_str   = this->get_effective_namespace() == "/" ? "keyframe" : this->get_effective_namespace() + "/keyframe";
         auto        keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
-        keyframe_broadcaster->sendTransform( keyframe_trans );
+        odom_broadcaster->sendTransform( keyframe_trans );
 
         double delta_trans = trans.block<3, 1>( 0, 3 ).norm();
         double delta_angle = std::acos( Eigen::Quaternionf( trans.block<3, 3>( 0, 0 ) ).w() );
@@ -427,7 +426,6 @@ private:
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
     std::unique_ptr<tf2_ros::TransformBroadcaster> odom_broadcaster;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> keyframe_broadcaster;
 
     // odometry calculation
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose;
