@@ -297,6 +297,7 @@ def launch_setup(context, *args, **kwargs):
             namespace=model_namespace,
             parameters=[prefiltering_params, shared_params],
             extra_arguments=[{'use_intra_process_comms': True}],
+            remappings=[('imu/data', shared_params['imu_topic']), ('velodyne_points', shared_params['points_topic'])],
         )
 
     # scan_matching_odometry component
@@ -365,6 +366,7 @@ def launch_setup(context, *args, **kwargs):
             namespace=model_namespace,
             parameters=[mrg_slam_params, shared_params],
             extra_arguments=[{'use_intra_process_comms': True}],
+            remappings=[('imu/data', shared_params['imu_topic'])],
         )
 
     composable_nodes = []
