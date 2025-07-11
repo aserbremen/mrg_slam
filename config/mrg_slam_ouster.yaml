@@ -27,7 +27,7 @@ lidar2base_publisher:
 #                   -> bestla/keyframe
 map2robotmap_publisher:
   ros__parameters:
-    enable_map2robotmap_publisher: true
+    enable_map2robotmap_publisher: false
     map2robotmap_x: 0.0
     map2robotmap_y: 0.0
     map2robotmap_z: 0.0
@@ -84,7 +84,7 @@ prefiltering_component:
     deskewing: false
     base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
 
-    use_synced_cloud: true
+    use_synced_cloud: false
     cloud_topic1: "ouster/points"
     cloud_topic2: "depth/color/points"
     # remappings are handled in the python respective launch file
@@ -183,7 +183,7 @@ mrg_slam_component:
     fill_first_cloud_simple: false
     # keyframe registration params
     max_keyframes_per_update: 10000
-    keyframe_delta_trans: 0.5
+    keyframe_delta_trans: 1.0
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     # fix first node for optimization stability
     fix_first_node: true
