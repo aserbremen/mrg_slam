@@ -80,7 +80,7 @@ public:
                                                                                    std::placeholders::_1 ) );
         }
 
-        if( use_synced_cloud ) {
+        if( publish_synced_cloud ) {
             auto qos  = rmw_qos_profile_default;
             qos.depth = 32;
             RCLCPP_INFO_STREAM( this->get_logger(), "Using synced cloud with topics: " << cloud_topic1 << " and " << cloud_topic2 );
@@ -89,11 +89,16 @@ public:
             sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), cloud_sub1, cloud_sub2 ) );
             sync->registerCallback(
                 std::bind( &PrefilteringComponent::synced_cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
+
+            synced_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/synced_filtered_points",
+                                                                                       rclcpp::QoS( 32 ) );
         } else {
-            points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
-                                                                                   std::bind( &PrefilteringComponent::cloud_callback, this,
-                                                                                              std::placeholders::_1 ) );
+            points_sub        = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
+                                                                                          std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                                     std::placeholders::_1 ) );
+            synced_points_pub = nullptr;
         }
+
         points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
@@ -128,9 +133,9 @@ private:
         use_deskewing   = this->declare_parameter<bool>( "deskewing", false );
         base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "base_link" );
 
-        use_synced_cloud = this->declare_parameter<bool>( "use_synced_cloud", false );
-        cloud_topic1     = this->declare_parameter<std::string>( "cloud_topic1", std::string() );
-        cloud_topic2     = this->declare_parameter<std::string>( "cloud_topic2", std::string() );
+        publish_synced_cloud = this->declare_parameter<bool>( "publish_synced_cloud", false );
+        cloud_topic1         = this->declare_parameter<std::string>( "cloud_topic1", std::string() );
+        cloud_topic2         = this->declare_parameter<std::string>( "cloud_topic2", std::string() );
     }
 
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -184,7 +189,14 @@ private:
         pcl::PointCloud<PointT>::Ptr src_cloud2 = std::make_shared<pcl::PointCloud<PointT>>();
         pcl::fromROSMsg( *src_cloud_ros1, *src_cloud1 );
         pcl::fromROSMsg( *src_cloud_ros2, *src_cloud2 );
-        if( src_cloud1->empty() || src_cloud2->empty() ) {
+        if( src_cloud1->empty() ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Received empty point cloud in synced_cloud_callback on topic "
+                                                        << cloud_sub1.getTopic() << " skipping processing" );
+            return;
+        }
+        if( src_cloud2->empty() ) {
+            RCLCPP_WARN_STREAM( this->get_logger(), "Received empty point cloud in synced_cloud_callback on topic "
+                                                        << cloud_sub2.getTopic() << " skipping processing" );
             return;
         }
 
@@ -215,22 +227,31 @@ private:
             src_cloud2                    = transformed2;
         }
 
+        // Apply filters for the first cloud
+        pcl::PointCloud<PointT>::ConstPtr filtered1 = deskewing( src_cloud1 );
+        filtered1                                   = distance_filter( filtered1 );
+        filtered1                                   = downsample( filtered1 );
+        filtered1                                   = outlier_removal( filtered1 );
+        sensor_msgs::msg::PointCloud2 filtered1_ros;
+        pcl::toROSMsg( *filtered1, filtered1_ros );
+
+        // Apply filters for the second cloud
+        pcl::PointCloud<PointT>::ConstPtr filtered2 = deskewing( src_cloud2 );
+        filtered2                                   = distance_filter( filtered2 );
+        filtered2                                   = downsample( filtered2 );
+        filtered2                                   = outlier_removal( filtered2 );
+
+        points_pub->publish( filtered1_ros );
+
         // Merge the two point clouds
         pcl::PointCloud<PointT>::Ptr merged_cloud = std::make_shared<pcl::PointCloud<PointT>>();
-        pcl::PointCloud<PointT>::concatenate( *src_cloud1, *src_cloud2, *merged_cloud );
-
-        // Deskew the merged cloud
-        merged_cloud = deskewing( merged_cloud );
-
-        // Apply filters
-        pcl::PointCloud<PointT>::ConstPtr filtered = distance_filter( merged_cloud );
-        filtered                                   = downsample( filtered );
-        filtered                                   = outlier_removal( filtered );
-        sensor_msgs::msg::PointCloud2 filtered_ros;
-        pcl::toROSMsg( *filtered, filtered_ros );
+        pcl::PointCloud<PointT>::concatenate( *filtered1, *filtered2, *merged_cloud );
 
         // Publish the filtered point cloud
-        points_pub->publish( filtered_ros );
+        sensor_msgs::msg::PointCloud2 merged_cloud_ros;
+        pcl::toROSMsg( *merged_cloud, merged_cloud_ros );
+
+        synced_points_pub->publish( merged_cloud_ros );
     }
 
     pcl::PointCloud<PointT>::ConstPtr downsample( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
@@ -350,7 +371,7 @@ private:
     }
 
 private:
-    bool                                                             use_synced_cloud;
+    bool                                                             publish_synced_cloud;
     std::string                                                      cloud_topic1;
     std::string                                                      cloud_topic2;
     message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub1;
@@ -363,6 +384,8 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    points_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    synced_points_pub;
+
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr colored_pub;
 
