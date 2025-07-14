@@ -9,7 +9,7 @@
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
-    enable_lidar2base_publisher: true
+    enable_lidar2base_publisher: false
     lidar2base_x: 0.0
     lidar2base_y: 0.0
     lidar2base_z: 1.005
@@ -147,7 +147,7 @@ mrg_slam_component:
     # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "atlas" # is overwritten by the model_namespace
     # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
-    multi_robot_names: ["atlas", "bestla"]
+    multi_robot_names: ["atlas", "bestla", "artemis"]
     robot_remove_points_radius: 2.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
