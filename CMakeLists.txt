@@ -81,7 +81,7 @@ find_package(geographic_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(message_filters REQUIRED)
-find_package(ndt_omp REQUIRED)
+find_package(PCLOMP 1.0)
 find_package(fast_gicp REQUIRED)
 # ROS2 python depencencies
 find_package(ament_cmake_python REQUIRED)
@@ -117,6 +117,7 @@ add_library(floor_detection_component SHARED
 target_link_libraries(floor_detection_component
   ${PCL_LIBRARIES}
   small_gicp::small_gicp
+  pclomp::registration
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(floor_detection_component
@@ -129,7 +130,6 @@ ament_target_dependencies(floor_detection_component
   sensor_msgs
   nav_msgs
   mrg_slam_msgs
-  ndt_omp
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
@@ -155,6 +155,7 @@ add_library(scan_matching_odometry_component SHARED
 target_link_libraries(scan_matching_odometry_component
   ${PCL_LIBRARIES}
   small_gicp::small_gicp
+  pclomp::registration
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(scan_matching_odometry_component
@@ -168,7 +169,6 @@ ament_target_dependencies(scan_matching_odometry_component
   sensor_msgs
   nav_msgs
   mrg_slam_msgs
-  ndt_omp
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
@@ -192,6 +192,7 @@ add_library(prefiltering_component SHARED
 # Link non ament packages
 target_link_libraries(prefiltering_component
   ${PCL_LIBRARIES}
+  pclomp::registration
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(prefiltering_component
@@ -204,7 +205,6 @@ ament_target_dependencies(prefiltering_component
   geometry_msgs
   sensor_msgs
   nav_msgs
-  ndt_omp
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
@@ -252,6 +252,7 @@ target_link_libraries(mrg_slam_component
   ${G2O_TYPES_SLAM3D}
   ${G2O_TYPES_SLAM3D_ADDONS}
   small_gicp::small_gicp
+  pclomp::registration
 )
 # Handles includes and linking of other ament targets
 ament_target_dependencies(mrg_slam_component
@@ -275,7 +276,6 @@ ament_target_dependencies(mrg_slam_component
   visualization_msgs
   mrg_slam_msgs
   fast_gicp
-  ndt_omp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
 rclcpp_components_register_nodes(mrg_slam_component "mrg_slam::MrgSlamComponent")
