@@ -180,8 +180,8 @@ mrg_slam_component:
     # whether to fill a circular ground plane below the robot's very first keyframe at initialization
     # this is helpful for navigation algorithms that need a map for planning
     enable_fill_first_cloud: true
-    fill_first_cloud_radius: 7.0
-    fill_first_cloud_simple: true
+    fill_first_cloud_radius: 4.0
+    fill_first_cloud_simple: false
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
