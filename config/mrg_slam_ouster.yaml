@@ -148,7 +148,7 @@ mrg_slam_component:
     own_name: "atlas" # is overwritten by the model_namespace
     # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
     multi_robot_names: ["atlas", "bestla", "artemis"]
-    robot_remove_points_radius: 2.0
+    robot_remove_points_radius: 1.0
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
     # gravelpit tubs bestla x 8 y -20 z -2.05
@@ -179,8 +179,8 @@ mrg_slam_component:
     # whether to fill a circular ground plane below the robot's very first keyframe at initialization
     # this is helpful for navigation algorithms that need a map for planning
     enable_fill_first_cloud: true
-    fill_first_cloud_radius: 7.5
-    fill_first_cloud_simple: true
+    fill_first_cloud_radius: 4.0
+    fill_first_cloud_simple: false 
     # keyframe registration params
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 0.75
