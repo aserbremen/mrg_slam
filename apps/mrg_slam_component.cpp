@@ -855,17 +855,17 @@ private:
             snapshot = keyframes_snapshot;
         }
 
-        double      resolution      = req->resolution == 0 ? map_cloud_resolution : req->resolution;
-        int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
-        std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
+//        double      resolution      = req->resolution == 0 ? map_cloud_resolution : req->resolution;
+//        int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
+//        std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, req->skip_first_cloud );
+        auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution, map_cloud_count_threshold, req->skip_first_cloud );
         if( !cloud ) {
             RCLCPP_WARN_STREAM( this->get_logger(), "Failed to generate map cloud" );
             res->success = false;
             return;
         }
-        cloud->header.frame_id = frame_id;
+        cloud->header.frame_id = map_frame_id;
         cloud->header.stamp    = snapshot.back()->cloud->header.stamp;
 
         auto cloud_msg = sensor_msgs::msg::PointCloud2::SharedPtr( new sensor_msgs::msg::PointCloud2() );
