@@ -147,8 +147,8 @@ mrg_slam_component:
     # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "atlas" # is overwritten by the model_namespace
     # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
-    multi_robot_names: ["atlas", "bestla", "artemis"]
-    robot_remove_points_radius: 1.0
+    multi_robot_names: ["atlas", "bestla", "artemis"] # list of all robot names, including the own robot
+    robot_remove_points_radius: 2.5
     # Initial pose
     # gravelpit tubs atlas x 10 y -13 z -2.15
     # gravelpit tubs bestla x 8 y -20 z -2.05
@@ -178,12 +178,12 @@ mrg_slam_component:
     enable_imu_orientation: false
     # whether to fill a circular ground plane below the robot's very first keyframe at initialization
     # this is helpful for navigation algorithms that need a map for planning
-    enable_fill_first_cloud: true
+    enable_fill_first_cloud: false
     fill_first_cloud_radius: 5.0
     fill_first_cloud_simple: false 
     # keyframe registration params
     max_keyframes_per_update: 10000
-    keyframe_delta_trans: 0.75
+    keyframe_delta_trans: 0.5
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     # fix first node for optimization stability
     fix_first_node: true
