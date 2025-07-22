@@ -39,13 +39,13 @@ public:
 
         initialize_params();
 
+        int downsample_resolution = this->get_parameter( "downsample_resolution" ).as_double();
         if( downsample_method == "VOXELGRID" ) {
-            std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
             auto voxelgrid = new pcl::VoxelGrid<PointT>();
             voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "prefiltering_count_threshold" ).as_int() );
             downsample_filter.reset( voxelgrid );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
-            std::cout << "downsample: APPROX_VOXELGRID " << downsample_resolution << std::endl;
             pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
             approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             downsample_filter = approx_voxelgrid;
@@ -116,8 +116,9 @@ private:
     void initialize_params()
     {
         // Declare and set parameters
-        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        downsample_method = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        declare_parameter<double>( "downsample_resolution", 0.1 );
+        declare_parameter<int>( "prefiltering_count_threshold", 1 );
 
         outlier_removal_method        = this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
         statistical_mean_k            = this->declare_parameter<int>( "statistical_mean_k", 20 );
@@ -260,6 +261,16 @@ private:
             return cloud;
         }
 
+        // Update minimum points number per voxel if applicable
+        if( downsample_method == "VOXELGRID" ) {
+            auto voxelgrid = std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter );
+            if( voxelgrid ) {
+                voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "prefiltering_count_threshold" ).as_int() );
+                auto down_sample_res = get_parameter( "downsample_resolution" ).as_double();
+                voxelgrid->setLeafSize( down_sample_res, down_sample_res, down_sample_res );
+            }
+        }
+
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         downsample_filter->setInputCloud( cloud );
         downsample_filter->filter( *filtered );
@@ -394,7 +405,6 @@ private:
 
     // Algorithm, ROS2 parameters
     std::string downsample_method;
-    double      downsample_resolution;
 
     std::string outlier_removal_method;
     int         statistical_mean_k;
