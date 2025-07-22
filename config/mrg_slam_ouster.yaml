@@ -256,8 +256,8 @@ mrg_slam_component:
     map_cloud_update_interval: 5.0
     map_cloud_resolution: 0.1
     map_cloud_dist_threshold: 0.0 # max dist for scan points, 0 to ignore
-    # minimum number of points in a voxel to consider it as occupied
-    map_cloud_count_threshold: 2
+    skip_first_cloud: false # whether to skip the first cloud in the map cloud generation
+    map_cloud_count_threshold: 2 # minimum number of points in a voxel to consider it as occupied
     save_graph: false
     # if result_dir is given, all kinds of stats will be saved in this directory
     result_dir: ""

@@ -300,11 +300,12 @@ private:
         cloud_sub_topic   = this->declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
-        map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
-        odom_frame_id             = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
+        map_frame_id  = this->declare_parameter<std::string>( "map_frame_id", "map" );
+        odom_frame_id = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
         this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
         this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
-        this->declare_parameter<int>( "map_cloud_dist_threshold", 0 );
+        this->declare_parameter<double>( "map_cloud_dist_threshold", 0.0 );
+        this->declare_parameter<bool>( "skip_first_cloud", false );
 
         // Initial pose parameters
         init_odom_topic = this->declare_parameter<std::string>( "init_odom_topic", "NONE" );
@@ -791,7 +792,9 @@ private:
             cloud_msg_update_required = false;
         }
 
-        auto cloud = map_cloud_generator->generate( snapshot, this->get_parameter( "map_cloud_resolution" ).as_double(), this->get_parameter( "map_cloud_count_threshold" ).as_int(), this->get_parameter( "map_cloud_dist_threshold" ).as_double() );
+        auto cloud = map_cloud_generator->generate( snapshot, this->get_parameter( "map_cloud_resolution" ).as_double(),
+                                                    this->get_parameter( "map_cloud_count_threshold" ).as_int(),
+                                                    this->get_parameter( "map_cloud_dist_threshold" ).as_double() );
         if( !cloud ) {
             return false;
         }
@@ -856,14 +859,16 @@ private:
             snapshot = keyframes_snapshot;
         }
 
-        double      resolution      = req->resolution == 0 ? this->get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
-        int         count_threshold = req->count_threshold < 0 ? this->get_parameter( "map_cloud_count_threshold" ).as_int() : req->count_threshold;
+        double resolution   = req->resolution == 0 ? this->get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
+        int count_threshold = req->count_threshold < 0 ? this->get_parameter( "map_cloud_count_threshold" ).as_int() : req->count_threshold;
         // TODO: add to request after field test
-        //float       dist_threshold  = req->dist_threshold == 0 ? this->get_parameter( "map_cloud_dist_threshold" ).as_double() : req->dist_threshold;
-        float       dist_threshold  = this->get_parameter( "map_cloud_dist_threshold" ).as_double();
-        std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
+        // float       dist_threshold  = req->dist_threshold == 0 ? this->get_parameter( "map_cloud_dist_threshold" ).as_double() :
+        // req->dist_threshold;
+        float       dist_threshold = this->get_parameter( "map_cloud_dist_threshold" ).as_double();
+        std::string frame_id       = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, dist_threshold, req->skip_first_cloud );
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, dist_threshold,
+                                                    this->get_parameter( "skip_first_cloud" ).as_bool() );
         if( !cloud ) {
             RCLCPP_WARN_STREAM( this->get_logger(), "Failed to generate map cloud" );
             res->success = false;
@@ -1257,11 +1262,12 @@ private:
         snapshots_mutex.unlock();
 
 
-        double      resolution      = req->resolution == 0 ? this->get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
-        int         count_threshold = req->count_threshold < 0 ? this->get_parameter( "map_cloud_count_threshold" ).as_int() : req->count_threshold;
+        double resolution   = req->resolution == 0 ? this->get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
+        int count_threshold = req->count_threshold < 0 ? this->get_parameter( "map_cloud_count_threshold" ).as_int() : req->count_threshold;
         // TODO: add to request after field test
-        //float       dist_threshold  = req->dist_threshold == 0 ? this->get_parameter( "map_cloud_dist_threshold" ).as_double() : req->dist_threshold;
-        float       dist_threshold  = this->get_parameter( "map_cloud_dist_threshold" ).as_double();
+        // float       dist_threshold  = req->dist_threshold == 0 ? this->get_parameter( "map_cloud_dist_threshold" ).as_double() :
+        // req->dist_threshold;
+        float dist_threshold = this->get_parameter( "map_cloud_dist_threshold" ).as_double();
 
         auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, dist_threshold );
         if( !cloud ) {
