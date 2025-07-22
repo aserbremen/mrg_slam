@@ -13,12 +13,14 @@ MapCloudGenerator::~MapCloudGenerator() {}
 
 pcl::PointCloud<MapCloudGenerator::PointT>::Ptr
 MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold,
-                             bool skip_first_cloud ) const
+                             float distance_threshold, bool skip_first_cloud ) const
 {
     if( keyframes.empty() ) {
         std::cerr << "warning: keyframes empty!!" << std::endl;
         return nullptr;
     }
+
+    float distance_threshold_sqr = distance_threshold * distance_threshold;
 
     pcl::PointCloud<PointT>::Ptr cloud( new pcl::PointCloud<PointT>() );
     cloud->reserve( keyframes.front()->cloud->size() * keyframes.size() );
@@ -31,7 +33,11 @@ MapCloudGenerator::generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes
         Eigen::Matrix4f pose = keyframe->pose.matrix().cast<float>();
         for( const auto& src_pt : keyframe->cloud->points ) {
             PointT dst_pt;
-            dst_pt.getVector4fMap() = pose * src_pt.getVector4fMap();
+            const auto src_pt_vec4f = src_pt.getVector4fMap();
+            if( distance_threshold > 0 && (src_pt_vec4f[0]*src_pt_vec4f[0] + src_pt_vec4f[1]*src_pt_vec4f[1] + src_pt_vec4f[2]*src_pt_vec4f[2]) > distance_threshold_sqr ) {
+                continue;
+            }
+            dst_pt.getVector4fMap() = pose * src_pt_vec4f;
             dst_pt.intensity        = src_pt.intensity;
             cloud->push_back( dst_pt );
         }

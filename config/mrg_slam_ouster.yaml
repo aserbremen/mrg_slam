@@ -255,6 +255,7 @@ mrg_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 5.0
     map_cloud_resolution: 0.1
+    map_cloud_dist_threshold: 0.0 # max dist for scan points, 0 to ignore
     # minimum number of points in a voxel to consider it as occupied
     map_cloud_count_threshold: 2
     save_graph: false
