@@ -65,6 +65,7 @@ prefiltering_component:
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
     downsample_resolution: 0.1
+    prefiltering_count_threshold: 1
     
     # Outlier removal method options [STATISTICAL, RADIUS, NONE]
     outlier_removal_method: "RADIUS" 
@@ -112,7 +113,6 @@ scan_matching_odometry_component:
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "NONE"
     downsample_resolution: 0.1
-    prefiltering_count_threshold: 1
 
     # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
     registration_method: "SMALL_GICP"
