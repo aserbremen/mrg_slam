@@ -238,8 +238,7 @@ def launch_setup(context, *args, **kwargs):
         output='both',
         parameters=[shared_params],
         prefix=prefix,
-        remappings=tf_remappings  # some more remappings only used in prefiltering_component, but we keep them here
-        + [('imu/data', shared_params['imu_topic']), ('velodyne_points', shared_params['points_topic'])],
+        remappings=container_remaps,
     )
 
     # Launch the velodyne driver and pointcloud transform node if the lidar is enabled in the config
@@ -318,6 +317,7 @@ def launch_setup(context, *args, **kwargs):
             namespace=model_namespace,
             parameters=[scan_matching_odometry_params, shared_params],
             extra_arguments=[{'use_intra_process_comms': True}],
+            remappings=tf_remappings,
         )
 
     # helper node to write the odometry to a file
