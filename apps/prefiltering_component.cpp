@@ -34,25 +34,25 @@ public:
         initialize_params();
 
         double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
-        if( downsample_method == "VOXELGRID" ) {
+        if( downsample_method_ == "VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
             auto voxelgrid = new pcl::VoxelGrid<PointT>();
             voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter.reset( voxelgrid );
-        } else if( downsample_method == "APPROX_VOXELGRID" ) {
+            downsample_filter_.reset( voxelgrid );
+        } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: APPROX_VOXELGRID " << downsample_resolution );
             pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
             approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter = approx_voxelgrid;
+            downsample_filter_ = approx_voxelgrid;
         } else {
-            if( downsample_method != "NONE" ) {
-                RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method << "), use passthrough filter" );
+            if( downsample_method_ != "NONE" ) {
+                RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method_ << "), use passthrough filter" );
             }
             RCLCPP_INFO( get_logger(), "downsample: NONE" );
         }
 
-        std::string outlier_removal_method = get_parameter( "outlier_removal_method" ).as_string();
-        if( outlier_removal_method == "STATISTICAL" ) {
+        std::string outlier_removal_method_ = get_parameter( "outlier_removal_method" ).as_string();
+        if( outlier_removal_method_ == "STATISTICAL" ) {
             int    statistical_mean_k            = get_parameter( "statistical_mean_k" ).as_int();
             double statistical_stddev_mul_thresh = get_parameter( "statistical_stddev" ).as_double();
             RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: STATISTICAL mean_k = " << statistical_mean_k
@@ -60,8 +60,8 @@ public:
             pcl::StatisticalOutlierRemoval<PointT>::Ptr sor( new pcl::StatisticalOutlierRemoval<PointT>() );
             sor->setMeanK( statistical_mean_k );
             sor->setStddevMulThresh( statistical_stddev_mul_thresh );
-            outlier_removal_filter = sor;
-        } else if( outlier_removal_method == "RADIUS" ) {
+            outlier_removal_filter_ = sor;
+        } else if( outlier_removal_method_ == "RADIUS" ) {
             double radius_radius        = get_parameter( "radius_radius" ).as_double();
             int    radius_min_neighbors = get_parameter( "radius_min_neighbors" ).as_int();
             RCLCPP_INFO_STREAM( get_logger(),
@@ -69,26 +69,26 @@ public:
             pcl::RadiusOutlierRemoval<PointT>::Ptr rad( new pcl::RadiusOutlierRemoval<PointT>() );
             rad->setRadiusSearch( radius_radius );
             rad->setMinNeighborsInRadius( radius_min_neighbors );
-            outlier_removal_filter = rad;
+            outlier_removal_filter_ = rad;
         } else {
             RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: NONE" );
         }
 
         if( get_parameter( "enable_deskewing" ).as_bool() ) {
-            imu_sub = create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
-                                                                  std::bind( &PrefilteringComponent::imu_callback, this,
-                                                                             std::placeholders::_1 ) );
+            imu_sub_ = create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
+                                                                   std::bind( &PrefilteringComponent::imu_callback, this,
+                                                                              std::placeholders::_1 ) );
         }
 
-        points_sub  = create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
-                                                                          std::bind( &PrefilteringComponent::cloud_callback, this,
-                                                                                     std::placeholders::_1 ) );
-        points_pub  = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
-        colored_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
+        points_sub_  = create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
+                                                                           std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                      std::placeholders::_1 ) );
+        points_pub_  = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
+        colored_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
         // setup transform listener
-        tf_buffer   = std::make_unique<tf2_ros::Buffer>( get_clock() );
-        tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
+        tf_buffer_   = std::make_unique<tf2_ros::Buffer>( get_clock() );
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>( *tf_buffer_ );
 
         // Optionally print the all parameters declared in this node so far
         print_ros2_parameters( get_node_parameters_interface(), get_logger() );
@@ -99,13 +99,13 @@ public:
 private:
     void initialize_params()
     {
-        base_link_frame = declare_parameter<std::string>( "base_link_frame", "base_link" );
+        base_link_frame_ = declare_parameter<std::string>( "base_link_frame", "base_link" );
         // Downsampling parameters
-        downsample_method = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_method_ = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
         declare_parameter<double>( "downsample_resolution", 0.1 );
         declare_parameter<int>( "downsample_min_points_per_voxel", 1 );
         // Outlier removal parameters
-        outlier_removal_method = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        outlier_removal_method_ = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
         declare_parameter<int>( "statistical_mean_k", 20 );
         declare_parameter<double>( "statistical_stddev", 1.0 );
         declare_parameter<double>( "radius_radius", 0.8 );
@@ -119,7 +119,7 @@ private:
         declare_parameter<double>( "scan_period", 0.1 );
     }
 
-    void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
+    void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue_.push_back( imu_msg ); }
 
     void cloud_callback( sensor_msgs::msg::PointCloud2::ConstSharedPtr src_cloud_ros )
     {
@@ -133,22 +133,22 @@ private:
         src_cloud = deskewing( src_cloud );
 
         // if base_link_frame is defined, transform the input cloud to the frame
-        if( !base_link_frame.empty() ) {
+        if( !base_link_frame_.empty() ) {
             geometry_msgs::msg::TransformStamped transform;
             try {
                 // lookupTransform contains a Duration as parameter
-                transform = tf_buffer->lookupTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ),
-                                                        rclcpp::Duration( 2, 0 ) );
+                transform = tf_buffer_->lookupTransform( base_link_frame_, src_cloud->header.frame_id, rclcpp::Time( 0 ),
+                                                         rclcpp::Duration( 2, 0 ) );
             } catch( const tf2::TransformException& ex ) {
                 RCLCPP_WARN( get_logger(), "Could not transform source frame %s to target frame %s: %s", src_cloud->header.frame_id.c_str(),
-                             base_link_frame.c_str(), ex.what() );
+                             base_link_frame_.c_str(), ex.what() );
                 RCLCPP_WARN( get_logger(), "Returning early in cloud_callback from prefiltering component" );
                 return;
             }
 
             pcl::PointCloud<PointT>::Ptr transformed( new pcl::PointCloud<PointT>() );
             pcl_ros::transformPointCloud( *src_cloud, *transformed, transform );
-            transformed->header.frame_id = base_link_frame;
+            transformed->header.frame_id = base_link_frame_;
             transformed->header.stamp    = src_cloud->header.stamp;
             src_cloud                    = transformed;
         }
@@ -159,29 +159,29 @@ private:
         sensor_msgs::msg::PointCloud2 filtered_ros;
         pcl::toROSMsg( *filtered, filtered_ros );
 
-        points_pub->publish( filtered_ros );
+        points_pub_->publish( filtered_ros );
     }
 
     pcl::PointCloud<PointT>::ConstPtr downsample( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !downsample_filter ) {
+        if( !downsample_filter_ ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         // Dynamically set the downsampling resolution based on the parameter
         double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
-        if( downsample_method == "VOXELGRID" ) {
-            pcl::VoxelGrid<PointT>::Ptr voxelgrid( std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter ) );
+        if( downsample_method_ == "VOXELGRID" ) {
+            pcl::VoxelGrid<PointT>::Ptr voxelgrid( std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter_ ) );
             voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
-        } else if( downsample_method == "APPROX_VOXELGRID" ) {
+        } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
             pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid(
-                std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter ) );
+                std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter_ ) );
             approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
         }
-        downsample_filter->setInputCloud( cloud );
-        downsample_filter->filter( *filtered );
+        downsample_filter_->setInputCloud( cloud );
+        downsample_filter_->filter( *filtered );
         filtered->header = cloud->header;
 
         return filtered;
@@ -189,25 +189,25 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr outlier_removal( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !outlier_removal_filter ) {
+        if( !outlier_removal_filter_ ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         // Dynamically set the outlier removal parameters based on the parameter
-        if( outlier_removal_method == "STATISTICAL" ) {
+        if( outlier_removal_method_ == "STATISTICAL" ) {
             pcl::StatisticalOutlierRemoval<PointT>::Ptr sor(
-                std::dynamic_pointer_cast<pcl::StatisticalOutlierRemoval<PointT>>( outlier_removal_filter ) );
+                std::dynamic_pointer_cast<pcl::StatisticalOutlierRemoval<PointT>>( outlier_removal_filter_ ) );
             sor->setMeanK( get_parameter( "statistical_mean_k" ).as_int() );
             sor->setStddevMulThresh( get_parameter( "statistical_stddev" ).as_double() );
-        } else if( outlier_removal_method == "RADIUS" ) {
+        } else if( outlier_removal_method_ == "RADIUS" ) {
             pcl::RadiusOutlierRemoval<PointT>::Ptr rad(
-                std::dynamic_pointer_cast<pcl::RadiusOutlierRemoval<PointT>>( outlier_removal_filter ) );
+                std::dynamic_pointer_cast<pcl::RadiusOutlierRemoval<PointT>>( outlier_removal_filter_ ) );
             rad->setRadiusSearch( get_parameter( "radius_radius" ).as_double() );
             rad->setMinNeighborsInRadius( get_parameter( "radius_min_neighbors" ).as_int() );
         }
-        outlier_removal_filter->setInputCloud( cloud );
-        outlier_removal_filter->filter( *filtered );
+        outlier_removal_filter_->setInputCloud( cloud );
+        outlier_removal_filter_->filter( *filtered );
         filtered->header = cloud->header;
 
         return filtered;
@@ -241,12 +241,12 @@ private:
     pcl::PointCloud<PointT>::Ptr deskewing( const pcl::PointCloud<PointT>::Ptr& cloud )
     {
         rclcpp::Time stamp = pcl_conversions::fromPCL( cloud->header.stamp );
-        if( imu_queue.empty() ) {
+        if( imu_queue_.empty() ) {
             return cloud;
         }
 
         // the color encodes the point number in the point sequence
-        if( colored_pub->get_subscription_count() ) {
+        if( colored_pub_->get_subscription_count() ) {
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored( new pcl::PointCloud<pcl::PointXYZRGB>() );
             colored->header   = cloud->header;
             colored->is_dense = cloud->is_dense;
@@ -263,20 +263,20 @@ private:
             }
             sensor_msgs::msg::PointCloud2 colored_ros;
             pcl::toROSMsg( *colored, colored_ros );
-            colored_pub->publish( colored_ros );
+            colored_pub_->publish( colored_ros );
         }
 
-        sensor_msgs::msg::Imu::ConstSharedPtr imu_msg = imu_queue.front();
+        sensor_msgs::msg::Imu::ConstSharedPtr imu_msg = imu_queue_.front();
 
-        auto loc = imu_queue.begin();
-        for( ; loc != imu_queue.end(); loc++ ) {
+        auto loc = imu_queue_.begin();
+        for( ; loc != imu_queue_.end(); loc++ ) {
             imu_msg = ( *loc );
             if( rclcpp::Time( ( *loc )->header.stamp ) > stamp ) {
                 break;
             }
         }
 
-        imu_queue.erase( imu_queue.begin(), loc );
+        imu_queue_.erase( imu_queue_.begin(), loc );
 
         Eigen::Vector3f ang_v( imu_msg->angular_velocity.x, imu_msg->angular_velocity.y, imu_msg->angular_velocity.z );
         ang_v *= -1;
@@ -305,24 +305,24 @@ private:
     }
 
 private:
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
-    std::vector<sensor_msgs::msg::Imu::ConstSharedPtr>     imu_queue;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    std::vector<sensor_msgs::msg::Imu::ConstSharedPtr>     imu_queue_;
 
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    points_pub;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr    points_pub_;
 
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr colored_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr colored_pub_;
 
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
-    std::unique_ptr<tf2_ros::Buffer>            tf_buffer;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::unique_ptr<tf2_ros::Buffer>            tf_buffer_;
 
-    pcl::Filter<PointT>::Ptr downsample_filter;
-    pcl::Filter<PointT>::Ptr outlier_removal_filter;
+    pcl::Filter<PointT>::Ptr downsample_filter_;
+    pcl::Filter<PointT>::Ptr outlier_removal_filter_;
 
     // ROS2 parameters, not changed at runtime
-    std::string base_link_frame;         // the frame to which the point cloud will be transformed
-    std::string downsample_method;       // determines the filter type for downsampling
-    std::string outlier_removal_method;  // determines the filter type for outlier removal
+    std::string base_link_frame_;         // the frame to which the point cloud will be transformed
+    std::string downsample_method_;       // determines the filter type for downsampling
+    std::string outlier_removal_method_;  // determines the filter type for outlier removal
 };
 
 }  // namespace mrg_slam
