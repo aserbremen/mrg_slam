@@ -96,22 +96,24 @@ scan_matching_odometry_component:
     enable_odom_to_file: false
 
     odom_frame_id: "odom" # default "odom", is prepended by model_namespace
-    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
-    keyframe_delta_trans: 0.75
+    keyframe_delta_translation: 0.75
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     keyframe_delta_time: 10000.0
 
-    transform_thresholding: false
-    max_acceptable_trans: 1.0
+    enable_transform_thresholding: false
+    max_acceptable_translation: 1.0
     max_acceptable_angle: 1.0 # rad
 
-    enable_robot_odometry_init_guess: false
     enable_imu_frontend: false
+
+    enable_robot_odometry_init_guess: false
+    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
 
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "NONE"
     downsample_resolution: 0.1
+    downsample_min_points_per_voxel: 1 # only available for VOXELGRID
 
     # Registration method options [ICP, GICP, NDT, GICP_OMP, FAST_GICP (recommended), FAST_VGICP (recommended)]
     registration_method: "SMALL_GICP"
