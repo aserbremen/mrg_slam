@@ -62,6 +62,8 @@ prefiltering_component:
   ros__parameters:
     enable_prefiltering: true
 
+    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
+
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
     downsample_resolution: 0.1
@@ -76,14 +78,14 @@ prefiltering_component:
     radius_min_neighbors: 2
 
     # Distance filter
-    use_distance_filter: true
+    enable_distance_filter: true
     distance_near_thresh: 0.1
     distance_far_thresh: 35.0
 
+    # Deskewing parameters
+    enable_deskewing: false
     scan_period: 0.1
-    deskewing: false
-    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
-    
+
     # remappings are handled in the python respective launch file
 
 # Scan matching component parameters

@@ -33,42 +33,48 @@ public:
 
         initialize_params();
 
+        double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
         if( downsample_method == "VOXELGRID" ) {
-            std::cout << "downsample: VOXELGRID " << downsample_resolution << std::endl;
+            RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
             auto voxelgrid = new pcl::VoxelGrid<PointT>();
             voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             downsample_filter.reset( voxelgrid );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
-            std::cout << "downsample: APPROX_VOXELGRID " << downsample_resolution << std::endl;
+            RCLCPP_INFO_STREAM( get_logger(), "downsample: APPROX_VOXELGRID " << downsample_resolution );
             pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
             approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             downsample_filter = approx_voxelgrid;
         } else {
             if( downsample_method != "NONE" ) {
-                std::cerr << "warning: unknown downsampling type (" << downsample_method << ")" << std::endl;
-                std::cerr << "       : use passthrough filter" << std::endl;
+                RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method << "), use passthrough filter" );
             }
-            std::cout << "downsample: NONE" << std::endl;
+            RCLCPP_INFO( get_logger(), "downsample: NONE" );
         }
 
+        std::string outlier_removal_method = get_parameter( "outlier_removal_method" ).as_string();
         if( outlier_removal_method == "STATISTICAL" ) {
-            std::cout << "outlier_removal: STATISTICAL " << statistical_mean_k << " - " << statistical_stddev_mul_thresh << std::endl;
+            int    statistical_mean_k            = get_parameter( "statistical_mean_k" ).as_int();
+            double statistical_stddev_mul_thresh = get_parameter( "statistical_stddev" ).as_double();
+            RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: STATISTICAL mean_k = " << statistical_mean_k
+                                                                                       << ", stddev = " << statistical_stddev_mul_thresh );
             pcl::StatisticalOutlierRemoval<PointT>::Ptr sor( new pcl::StatisticalOutlierRemoval<PointT>() );
             sor->setMeanK( statistical_mean_k );
             sor->setStddevMulThresh( statistical_stddev_mul_thresh );
             outlier_removal_filter = sor;
         } else if( outlier_removal_method == "RADIUS" ) {
-            std::cout << "outlier_removal: RADIUS " << radius_radius << " - " << radius_min_neighbors << std::endl;
-
+            double radius_radius        = get_parameter( "radius_radius" ).as_double();
+            int    radius_min_neighbors = get_parameter( "radius_min_neighbors" ).as_int();
+            RCLCPP_INFO_STREAM( get_logger(),
+                                "outlier_removal: RADIUS radius = " << radius_radius << ", min_neighbors = " << radius_min_neighbors );
             pcl::RadiusOutlierRemoval<PointT>::Ptr rad( new pcl::RadiusOutlierRemoval<PointT>() );
             rad->setRadiusSearch( radius_radius );
             rad->setMinNeighborsInRadius( radius_min_neighbors );
             outlier_removal_filter = rad;
         } else {
-            std::cout << "outlier_removal: NONE" << std::endl;
+            RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: NONE" );
         }
 
-        if( use_deskewing ) {
+        if( get_parameter( "enable_deskewing" ).as_bool() ) {
             imu_sub = create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
                                                                   std::bind( &PrefilteringComponent::imu_callback, this,
                                                                              std::placeholders::_1 ) );
@@ -93,23 +99,23 @@ public:
 private:
     void initialize_params()
     {
-        // Declare and set parameters
-        downsample_method     = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        downsample_resolution = declare_parameter<double>( "downsample_resolution", 0.1 );
-
-        outlier_removal_method        = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
-        statistical_mean_k            = declare_parameter<int>( "statistical_mean_k", 20 );
-        statistical_stddev_mul_thresh = declare_parameter<double>( "statistical_stddev", 1.0 );
-        radius_radius                 = declare_parameter<double>( "radius_radius", 0.8 );
-        radius_min_neighbors          = declare_parameter<int>( "radius_min_neighbors", 2 );
-
-        use_distance_filter  = declare_parameter<bool>( "use_distance_filter", true );
-        distance_near_thresh = declare_parameter<double>( "distance_near_thresh", 1.0 );
-        distance_far_thresh  = declare_parameter<double>( "distance_far_thresh", 100.0 );
-
-        scan_period     = declare_parameter<double>( "scan_period", 0.1 );
-        use_deskewing   = declare_parameter<bool>( "deskewing", false );
         base_link_frame = declare_parameter<std::string>( "base_link_frame", "base_link" );
+        // Downsampling parameters
+        downsample_method = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        declare_parameter<double>( "downsample_resolution", 0.1 );
+        // Outlier removal parameters
+        outlier_removal_method = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        declare_parameter<int>( "statistical_mean_k", 20 );
+        declare_parameter<double>( "statistical_stddev", 1.0 );
+        declare_parameter<double>( "radius_radius", 0.8 );
+        declare_parameter<int>( "radius_min_neighbors", 2 );
+        // Distance filter parameters
+        declare_parameter<bool>( "enable_distance_filter", true );
+        declare_parameter<double>( "distance_near_thresh", 1.0 );
+        declare_parameter<double>( "distance_far_thresh", 35.0 );
+        // Deskewing parameters
+        declare_parameter<bool>( "enable_deskewing", false );
+        declare_parameter<double>( "scan_period", 0.1 );
     }
 
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -162,6 +168,16 @@ private:
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
+        // Dynamically set the downsampling resolution based on the parameter
+        double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+        if( downsample_method == "VOXELGRID" ) {
+            pcl::VoxelGrid<PointT>::Ptr voxelgrid( std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter ) );
+            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+        } else if( downsample_method == "APPROX_VOXELGRID" ) {
+            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid(
+                std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter ) );
+            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+        }
         downsample_filter->setInputCloud( cloud );
         downsample_filter->filter( *filtered );
         filtered->header = cloud->header;
@@ -176,6 +192,18 @@ private:
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
+        // Dynamically set the outlier removal parameters based on the parameter
+        if( outlier_removal_method == "STATISTICAL" ) {
+            pcl::StatisticalOutlierRemoval<PointT>::Ptr sor(
+                std::dynamic_pointer_cast<pcl::StatisticalOutlierRemoval<PointT>>( outlier_removal_filter ) );
+            sor->setMeanK( get_parameter( "statistical_mean_k" ).as_int() );
+            sor->setStddevMulThresh( get_parameter( "statistical_stddev" ).as_double() );
+        } else if( outlier_removal_method == "RADIUS" ) {
+            pcl::RadiusOutlierRemoval<PointT>::Ptr rad(
+                std::dynamic_pointer_cast<pcl::RadiusOutlierRemoval<PointT>>( outlier_removal_filter ) );
+            rad->setRadiusSearch( get_parameter( "radius_radius" ).as_double() );
+            rad->setMinNeighborsInRadius( get_parameter( "radius_min_neighbors" ).as_int() );
+        }
         outlier_removal_filter->setInputCloud( cloud );
         outlier_removal_filter->filter( *filtered );
         filtered->header = cloud->header;
@@ -185,13 +213,15 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr distance_filter( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !use_distance_filter ) {
+        if( !get_parameter( "enable_distance_filter" ).as_bool() ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         filtered->reserve( cloud->size() );
 
+        double distance_near_thresh = get_parameter( "distance_near_thresh" ).as_double();
+        double distance_far_thresh  = get_parameter( "distance_far_thresh" ).as_double();
         std::copy_if( cloud->begin(), cloud->end(), std::back_inserter( filtered->points ), [&]( const PointT& p ) {
             double d = p.getVector3fMap().norm();
             return d > distance_near_thresh && d < distance_far_thresh;
@@ -256,6 +286,7 @@ private:
         deskewed->height   = cloud->height;
         deskewed->resize( cloud->size() );
 
+        double scan_period = get_parameter( "scan_period" ).as_double();
         for( int i = 0; i < (int)cloud->size(); i++ ) {
             const auto& pt = cloud->at( i );
 
@@ -283,26 +314,13 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener;
     std::unique_ptr<tf2_ros::Buffer>            tf_buffer;
 
-    // Algorithm, ROS2 parameters
-    std::string downsample_method;
-    double      downsample_resolution;
-
-    std::string outlier_removal_method;
-    int         statistical_mean_k;
-    double      statistical_stddev_mul_thresh;
-    double      radius_radius;
-    int         radius_min_neighbors;
-
-    bool   use_distance_filter;
-    double distance_near_thresh;
-    double distance_far_thresh;
-
-    double      scan_period;
-    bool        use_deskewing;
-    std::string base_link_frame;
-
     pcl::Filter<PointT>::Ptr downsample_filter;
     pcl::Filter<PointT>::Ptr outlier_removal_filter;
+
+    // ROS2 parameters, not changed at runtime
+    std::string base_link_frame;         // the frame to which the point cloud will be transformed
+    std::string downsample_method;       // determines the filter type for downsampling
+    std::string outlier_removal_method;  // determines the filter type for outlier removal
 };
 
 }  // namespace mrg_slam
