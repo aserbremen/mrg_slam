@@ -30,7 +30,7 @@ public:
     // We need to pass NodeOptions in ROS2 to register a component
     ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options )
     {
-        RCLCPP_INFO( this->get_logger(), "Initializing scan_matching_odometry_component..." );
+        RCLCPP_INFO( get_logger(), "Initializing scan_matching_odometry_component..." );
 
         initialize_params();
 
@@ -61,34 +61,33 @@ public:
             // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, false );
-            msf_pose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose", rclcpp::QoS( 1 ),
-                                                                                                     fcn_false );
+            msf_pose_sub = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose", rclcpp::QoS( 1 ),
+                                                                                               fcn_false );
 
             std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_true =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, true );
-            msf_pose_after_update_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-                "msf_core/pose_after_update", rclcpp::QoS( 1 ), fcn_true );
+            msf_pose_after_update_sub = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose_after_update",
+                                                                                                            rclcpp::QoS( 1 ), fcn_true );
         }
 
-        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
-                                                                               std::bind( &ScanMatchingOdometryComponent::cloud_callback,
-                                                                                          this, std::placeholders::_1 ) );
+        points_sub = create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
+                                                                         std::bind( &ScanMatchingOdometryComponent::cloud_callback, this,
+                                                                                    std::placeholders::_1 ) );
 
-        odom_pub   = this->create_publisher<nav_msgs::msg::Odometry>( "scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
-        trans_pub  = this->create_publisher<geometry_msgs::msg::TransformStamped>( "scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
-        status_pub = this->create_publisher<mrg_slam_msgs::msg::ScanMatchingStatus>( "scan_matching_odometry/status", rclcpp::QoS( 8 ) );
-        aligned_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "scan_matching_odometry/aligned_points",
-                                                                                    rclcpp::QoS( 32 ) );
+        odom_pub   = create_publisher<nav_msgs::msg::Odometry>( "scan_matching_odometry/odom", rclcpp::QoS( 32 ) );
+        trans_pub  = create_publisher<geometry_msgs::msg::TransformStamped>( "scan_matching_odometry/transform", rclcpp::QoS( 32 ) );
+        status_pub = create_publisher<mrg_slam_msgs::msg::ScanMatchingStatus>( "scan_matching_odometry/status", rclcpp::QoS( 8 ) );
+        aligned_points_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "scan_matching_odometry/aligned_points", rclcpp::QoS( 32 ) );
 
         // Initialize the transform broadcaster
         odom_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
 
         // Initialize the transform listener
-        tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
+        tf_buffer   = std::make_unique<tf2_ros::Buffer>( get_clock() );
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
 
         // Optionally print the all parameters declared in this node so far
-        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
+        print_ros2_parameters( get_node_parameters_interface(), get_logger() );
     }
 
 
@@ -101,39 +100,39 @@ private:
     void initialize_params()
     {
         // Declare and set ROS2 parameters
-        odom_frame_id       = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        robot_odom_frame_id = this->declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
+        odom_frame_id       = declare_parameter<std::string>( "odom_frame_id", "odom" );
+        robot_odom_frame_id = declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
-        keyframe_delta_trans = this->declare_parameter<double>( "keyframe_delta_trans", 0.25 );
-        keyframe_delta_angle = this->declare_parameter<double>( "keyframe_delta_angle", 0.15 );
-        keyframe_delta_time  = this->declare_parameter<double>( "keyframe_delta_time", 1.0 );
+        keyframe_delta_trans = declare_parameter<double>( "keyframe_delta_trans", 0.25 );
+        keyframe_delta_angle = declare_parameter<double>( "keyframe_delta_angle", 0.15 );
+        keyframe_delta_time  = declare_parameter<double>( "keyframe_delta_time", 1.0 );
 
-        transform_thresholding = this->declare_parameter<bool>( "transform_thresholding", false );
-        max_acceptable_trans   = this->declare_parameter<double>( "max_acceptable_trans", 1.0 );
-        max_acceptable_angle   = this->declare_parameter<double>( "max_acceptable_angle", 1.0 );
+        transform_thresholding = declare_parameter<bool>( "transform_thresholding", false );
+        max_acceptable_trans   = declare_parameter<double>( "max_acceptable_trans", 1.0 );
+        max_acceptable_angle   = declare_parameter<double>( "max_acceptable_angle", 1.0 );
 
-        enable_robot_odometry_init_guess = this->declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
-        enable_imu_frontend              = this->declare_parameter<bool>( "enable_imu_frontend", false );
+        enable_robot_odometry_init_guess = declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
+        enable_imu_frontend              = declare_parameter<bool>( "enable_imu_frontend", false );
 
-        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        downsample_method     = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_resolution = declare_parameter<double>( "downsample_resolution", 0.1 );
 
-        result_dir = this->declare_parameter<std::string>( "result_dir", "" );
+        result_dir = declare_parameter<std::string>( "result_dir", "" );
         if( result_dir.back() == '/' ) {
             result_dir.pop_back();
         }
 
         // Regastration method parameters, used in select_registration_method()
-        this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
-        this->declare_parameter<int>( "reg_num_threads", 0 );
-        this->declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
-        this->declare_parameter<int>( "reg_maximum_iterations", 64 );
-        this->declare_parameter<double>( "reg_max_correspondence_distance", 2.0 );
-        this->declare_parameter<int>( "reg_max_optimizer_iterations", 20 );
-        this->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false );
-        this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
-        this->declare_parameter<double>( "reg_resolution", 1.0 );
-        this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+        declare_parameter<std::string>( "registration_method", "FAST_GICP" );
+        declare_parameter<int>( "reg_num_threads", 0 );
+        declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
+        declare_parameter<int>( "reg_maximum_iterations", 64 );
+        declare_parameter<double>( "reg_max_correspondence_distance", 2.0 );
+        declare_parameter<int>( "reg_max_optimizer_iterations", 20 );
+        declare_parameter<bool>( "reg_use_reciprocal_correspondences", false );
+        declare_parameter<int>( "reg_correspondence_randomness", 20 );
+        declare_parameter<double>( "reg_resolution", 1.0 );
+        declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
     }
 
     /**
@@ -156,13 +155,12 @@ private:
         registration_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
         cloud_sizes.push_back( cloud->size() );
         if( counter % 100 == 0 ) {
-            RCLCPP_DEBUG_STREAM( this->get_logger(), "Average scan matching odom registration time: "
-                                                         << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 )
-                                                                / registration_times.size()
-                                                         << "us" );
-            RCLCPP_DEBUG_STREAM( this->get_logger(),
-                                 "average scan matching odom cloud size: " << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 )
-                                                                                  / cloud_sizes.size() );
+            RCLCPP_DEBUG_STREAM( get_logger(), "Average scan matching odom registration time: "
+                                                   << std::accumulate( registration_times.begin(), registration_times.end(), 0.0 )
+                                                          / registration_times.size()
+                                                   << "us" );
+            RCLCPP_DEBUG_STREAM( get_logger(), "average scan matching odom cloud size: "
+                                                   << std::accumulate( cloud_sizes.begin(), cloud_sizes.end(), 0.0 ) / cloud_sizes.size() );
         }
 
         publish_odometry( cloud_msg->header.stamp, cloud_msg->header.frame_id, pose );
@@ -244,7 +242,7 @@ private:
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );
                 } catch( const tf2::TransformException& ex ) {
-                    RCLCPP_WARN( this->get_logger(),
+                    RCLCPP_WARN( get_logger(),
                                  "Could not look up transform with target frame %s, target time %9.f, source frame %s, source time %.9f, "
                                  "fixed frame %s: %s",
                                  cloud->header.frame_id.c_str(), stamp.seconds(), cloud->header.frame_id.c_str(), prev_time.seconds(),
@@ -256,7 +254,7 @@ private:
                     transform = tf_buffer->lookupTransform( cloud->header.frame_id, rclcpp::Time( 0 ), cloud->header.frame_id, prev_time,
                                                             robot_odom_frame_id );
                 } catch( const tf2::TransformException& ex ) {
-                    RCLCPP_WARN( this->get_logger(),
+                    RCLCPP_WARN( get_logger(),
                                  "Could not look up transform with target frame %s, target time %9.f, source frame %s, source time %.9f, "
                                  "fixed frame %s: %s",
                                  cloud->header.frame_id.c_str(), stamp.seconds(), cloud->header.frame_id.c_str(), prev_time.seconds(),
@@ -265,7 +263,7 @@ private:
             }
 
             if( rclcpp::Time( transform.header.stamp ).nanoseconds() == 0 ) {
-                RCLCPP_WARN_STREAM( this->get_logger(),
+                RCLCPP_WARN_STREAM( get_logger(),
                                     "failed to look up transform between " << cloud->header.frame_id << " and " << robot_odom_frame_id );
             } else {
                 msf_source = "odometry";
@@ -279,8 +277,8 @@ private:
         publish_scan_matching_status( stamp, cloud->header.frame_id, aligned, msf_source, msf_delta );
 
         if( !registration->hasConverged() ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "scan matching has not converged!!" );
-            RCLCPP_INFO_STREAM( this->get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
+            RCLCPP_INFO_STREAM( get_logger(), "scan matching has not converged!!" );
+            RCLCPP_INFO_STREAM( get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
             return keyframe_pose * prev_trans;
         }
 
@@ -293,8 +291,8 @@ private:
             double          da    = std::acos( Eigen::Quaternionf( delta.block<3, 3>( 0, 0 ) ).w() );
 
             if( dx > max_acceptable_trans || da > max_acceptable_angle ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), "too large transform!!  " << dx << "[m] " << da << "[rad]" );
-                RCLCPP_INFO_STREAM( this->get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
+                RCLCPP_INFO_STREAM( get_logger(), "too large transform!!  " << dx << "[m] " << da << "[rad]" );
+                RCLCPP_INFO_STREAM( get_logger(), "ignore this frame(" << stamp.seconds() << ")" );
                 return keyframe_pose * prev_trans;
             }
         }
@@ -303,7 +301,7 @@ private:
         prev_trans = trans;
 
         // broadcast keyframe with namespace aware topic name
-        std::string keyframe_str   = this->get_effective_namespace() == "/" ? "keyframe" : this->get_effective_namespace() + "/keyframe";
+        std::string keyframe_str   = get_effective_namespace() == "/" ? "keyframe" : get_effective_namespace() + "/keyframe";
         auto        keyframe_trans = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
         odom_broadcaster->sendTransform( keyframe_trans );
 
@@ -343,7 +341,7 @@ private:
         trans_pub->publish( odom_trans );
 
         // broadcast the transform over tf
-        RCLCPP_INFO_STREAM_ONCE( this->get_logger(),
+        RCLCPP_INFO_STREAM_ONCE( get_logger(),
                                  "broadcasting transform from " << odom_trans.header.frame_id << " to " << odom_trans.child_frame_id );
         odom_broadcaster->sendTransform( odom_trans );
 

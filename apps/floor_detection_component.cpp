@@ -26,22 +26,21 @@ public:
 
     FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options ), clock( get_clock() )
     {
-        RCLCPP_INFO( this->get_logger(), "Initializing floor_detection_component ..." );
+        RCLCPP_INFO( get_logger(), "Initializing floor_detection_component ..." );
 
         initialize_params();
 
-        points_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
-                                                                               std::bind( &FloorDetectionComponent::cloud_callback, this,
-                                                                                          std::placeholders::_1 ) );
+        points_sub = create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
+                                                                         std::bind( &FloorDetectionComponent::cloud_callback, this,
+                                                                                    std::placeholders::_1 ) );
 
-        floor_pub = this->create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub = create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
-        floor_filtered_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points",
-                                                                                    rclcpp::QoS( 32 ) );
-        floor_points_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
+        floor_filtered_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points", rclcpp::QoS( 32 ) );
+        floor_points_pub   = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
 
         // Optionally print the all parameters declared in this node so far
-        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
+        print_ros2_parameters( get_node_parameters_interface(), get_logger() );
     }
 
     virtual ~FloorDetectionComponent() {}
@@ -53,18 +52,18 @@ private:
     void initialize_params()
     {
         // Declare and set parameters
-        tilt_deg          = this->declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
-        sensor_height     = this->declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
-        height_clip_range = this->declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height -
+        tilt_deg          = declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
+        sensor_height     = declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
+        height_clip_range = declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height -
                                                                     height_clip_range, sensor_height + height_clip_range] will be used for
                                                                     floor detection */
-        floor_pts_thresh = this->declare_parameter<int>( "floor_pts_thresh", 512 );  // minimum number of support points of RANSAC to accept
-                                                                                     // a detected floor plane
-        floor_normal_thresh = this->declare_parameter<double>( "floor_normal_thresh", 10.0 );    // verticality check thresold for the
-                                                                                                 // detected floor plane [deg]
-        use_normal_filtering = this->declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
-                                                                                                 // normals will be filtered before RANSAC
-        normal_filter_thresh = this->declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
+        floor_pts_thresh = declare_parameter<int>( "floor_pts_thresh", 512 );      // minimum number of support points of RANSAC to accept
+                                                                                   // a detected floor plane
+        floor_normal_thresh = declare_parameter<double>( "floor_normal_thresh", 10.0 );    // verticality check thresold for the
+                                                                                           // detected floor plane [deg]
+        use_normal_filtering = declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
+                                                                                           // normals will be filtered before RANSAC
+        normal_filter_thresh = declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
     }
 
     /**

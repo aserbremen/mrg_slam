@@ -29,7 +29,7 @@ public:
     // We need to pass NodeOptions in ROS2 to register a component
     PrefilteringComponent( const rclcpp::NodeOptions& options ) : Node( "prefiltering_component", options )
     {
-        RCLCPP_INFO( this->get_logger(), "Initializing prefiltering_component..." );
+        RCLCPP_INFO( get_logger(), "Initializing prefiltering_component..." );
 
         initialize_params();
 
@@ -69,23 +69,23 @@ public:
         }
 
         if( use_deskewing ) {
-            imu_sub = this->create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
-                                                                        std::bind( &PrefilteringComponent::imu_callback, this,
-                                                                                   std::placeholders::_1 ) );
+            imu_sub = create_subscription<sensor_msgs::msg::Imu>( "imu/data", rclcpp::QoS( 1 ),
+                                                                  std::bind( &PrefilteringComponent::imu_callback, this,
+                                                                             std::placeholders::_1 ) );
         }
 
-        points_sub  = this->create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
-                                                                                std::bind( &PrefilteringComponent::cloud_callback, this,
-                                                                                           std::placeholders::_1 ) );
-        points_pub  = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
-        colored_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
+        points_sub  = create_subscription<sensor_msgs::msg::PointCloud2>( "velodyne_points", rclcpp::QoS( 64 ),
+                                                                          std::bind( &PrefilteringComponent::cloud_callback, this,
+                                                                                     std::placeholders::_1 ) );
+        points_pub  = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
+        colored_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
         // setup transform listener
-        tf_buffer   = std::make_unique<tf2_ros::Buffer>( this->get_clock() );
+        tf_buffer   = std::make_unique<tf2_ros::Buffer>( get_clock() );
         tf_listener = std::make_shared<tf2_ros::TransformListener>( *tf_buffer );
 
         // Optionally print the all parameters declared in this node so far
-        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
+        print_ros2_parameters( get_node_parameters_interface(), get_logger() );
     }
 
     virtual ~PrefilteringComponent() {}
@@ -94,22 +94,22 @@ private:
     void initialize_params()
     {
         // Declare and set parameters
-        downsample_method     = this->declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
-        downsample_resolution = this->declare_parameter<double>( "downsample_resolution", 0.1 );
+        downsample_method     = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        downsample_resolution = declare_parameter<double>( "downsample_resolution", 0.1 );
 
-        outlier_removal_method        = this->declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
-        statistical_mean_k            = this->declare_parameter<int>( "statistical_mean_k", 20 );
-        statistical_stddev_mul_thresh = this->declare_parameter<double>( "statistical_stddev", 1.0 );
-        radius_radius                 = this->declare_parameter<double>( "radius_radius", 0.8 );
-        radius_min_neighbors          = this->declare_parameter<int>( "radius_min_neighbors", 2 );
+        outlier_removal_method        = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        statistical_mean_k            = declare_parameter<int>( "statistical_mean_k", 20 );
+        statistical_stddev_mul_thresh = declare_parameter<double>( "statistical_stddev", 1.0 );
+        radius_radius                 = declare_parameter<double>( "radius_radius", 0.8 );
+        radius_min_neighbors          = declare_parameter<int>( "radius_min_neighbors", 2 );
 
-        use_distance_filter  = this->declare_parameter<bool>( "use_distance_filter", true );
-        distance_near_thresh = this->declare_parameter<double>( "distance_near_thresh", 1.0 );
-        distance_far_thresh  = this->declare_parameter<double>( "distance_far_thresh", 100.0 );
+        use_distance_filter  = declare_parameter<bool>( "use_distance_filter", true );
+        distance_near_thresh = declare_parameter<double>( "distance_near_thresh", 1.0 );
+        distance_far_thresh  = declare_parameter<double>( "distance_far_thresh", 100.0 );
 
-        scan_period     = this->declare_parameter<double>( "scan_period", 0.1 );
-        use_deskewing   = this->declare_parameter<bool>( "deskewing", false );
-        base_link_frame = this->declare_parameter<std::string>( "base_link_frame", "base_link" );
+        scan_period     = declare_parameter<double>( "scan_period", 0.1 );
+        use_deskewing   = declare_parameter<bool>( "deskewing", false );
+        base_link_frame = declare_parameter<std::string>( "base_link_frame", "base_link" );
     }
 
     void imu_callback( sensor_msgs::msg::Imu::ConstSharedPtr imu_msg ) { imu_queue.push_back( imu_msg ); }
@@ -133,9 +133,9 @@ private:
                 transform = tf_buffer->lookupTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ),
                                                         rclcpp::Duration( 2, 0 ) );
             } catch( const tf2::TransformException& ex ) {
-                RCLCPP_WARN( this->get_logger(), "Could not transform source frame %s to target frame %s: %s",
-                             src_cloud->header.frame_id.c_str(), base_link_frame.c_str(), ex.what() );
-                RCLCPP_WARN( this->get_logger(), "Returning early in cloud_callback from prefiltering component" );
+                RCLCPP_WARN( get_logger(), "Could not transform source frame %s to target frame %s: %s", src_cloud->header.frame_id.c_str(),
+                             base_link_frame.c_str(), ex.what() );
+                RCLCPP_WARN( get_logger(), "Returning early in cloud_callback from prefiltering component" );
                 return;
             }
 

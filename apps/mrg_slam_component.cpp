@@ -81,15 +81,14 @@ public:
     {
         // Since we need to pass the shared pointer from this node to other classes and functions, we start a one-shot timer to call the
         // onInit() method
-        one_shot_initalization_timer = this->create_wall_timer( std::chrono::milliseconds( 100 ),
-                                                                std::bind( &MrgSlamComponent::onInit, this ) );
+        one_shot_initalization_timer = create_wall_timer( std::chrono::milliseconds( 100 ), std::bind( &MrgSlamComponent::onInit, this ) );
     }
     virtual ~MrgSlamComponent() {}
 
     // Initialize the component
     virtual void onInit()
     {
-        RCLCPP_INFO( this->get_logger(), "Initializing mrg_slam component..." );
+        RCLCPP_INFO( get_logger(), "Initializing mrg_slam component..." );
         // Deactivate this timer immediately so the initialization is only performed once
         one_shot_initalization_timer->cancel();
 
@@ -114,8 +113,8 @@ public:
             odom_sub_topic  = "/" + own_name + odom_sub_topic;
             cloud_sub_topic = "/" + own_name + cloud_sub_topic;
         }
-        RCLCPP_INFO( this->get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
-        RCLCPP_INFO( this->get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
+        RCLCPP_INFO( get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
+        RCLCPP_INFO( get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
         odom_sub.subscribe( node_ros, odom_sub_topic, qos );
@@ -125,16 +124,16 @@ public:
         sync->registerCallback( std::bind( &MrgSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
         // broadcast subscriptions, note that the topic is absolute and not potentially prefixed with the robot name/namespace
-        odom_broadcast_sub = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
-            "/mrg_slam/odom_broadcast", rclcpp::QoS( 100 ),
-            std::bind( &MrgSlamComponent::odom_broadcast_callback, this, std::placeholders::_1 ) );
+        odom_broadcast_sub = create_subscription<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 100 ),
+                                                                                    std::bind( &MrgSlamComponent::odom_broadcast_callback,
+                                                                                               this, std::placeholders::_1 ) );
 
         // Use a reentrant callbackgroup for odom_broadcast_sub to avoid deadlock, enabling the publish graph service to be called from the
         // same thread as the slam_pose_broadcast_callback
         rclcpp::SubscriptionOptions      sub_options;
-        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
+        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group = create_callback_group( rclcpp::CallbackGroupType::Reentrant );
         sub_options.callback_group                                = reentrant_callback_group;
-        slam_pose_broadcast_sub                                   = this->create_subscription<mrg_slam_msgs::msg::PoseWithName>(
+        slam_pose_broadcast_sub                                   = create_subscription<mrg_slam_msgs::msg::PoseWithName>(
             "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 100 ),
             std::bind( &MrgSlamComponent::slam_pose_broadcast_callback, this, std::placeholders::_1 ), sub_options );
 
@@ -145,9 +144,9 @@ public:
                 if( !robot_name.empty() ) {
                     service_topic = "/" + robot_name + service_topic;
                 }
-                request_graph_service_clients[robot_name] = this->create_client<mrg_slam_msgs::srv::PublishGraph>(
+                request_graph_service_clients[robot_name] = create_client<mrg_slam_msgs::srv::PublishGraph>(
                     service_topic, rmw_qos_profile_services_default, reentrant_callback_group );
-                RCLCPP_INFO_STREAM( this->get_logger(),
+                RCLCPP_INFO_STREAM( get_logger(),
                                     "Creating publish graph service client for " << robot_name << " with topic " << service_topic );
                 others_last_accum_dist[robot_name]          = -1.0;
                 others_last_graph_exchange_time[robot_name] = -1.0;
@@ -155,37 +154,34 @@ public:
         }
 
         if( init_odom_topic != "NONE" ) {
-            init_odom_sub = this->create_subscription<nav_msgs::msg::Odometry>( init_odom_topic, rclcpp::QoS( 32 ),
-                                                                                std::bind( &MrgSlamComponent::init_odom_callback, this,
-                                                                                           std::placeholders::_1 ) );
-            RCLCPP_INFO_STREAM( this->get_logger(), "Subscribing to init_odom (nav_msgs::msg::Odometry) topic " << init_odom_topic );
+            init_odom_sub = create_subscription<nav_msgs::msg::Odometry>( init_odom_topic, rclcpp::QoS( 32 ),
+                                                                          std::bind( &MrgSlamComponent::init_odom_callback, this,
+                                                                                     std::placeholders::_1 ) );
+            RCLCPP_INFO_STREAM( get_logger(), "Subscribing to init_odom (nav_msgs::msg::Odometry) topic " << init_odom_topic );
         } else if( init_pose_topic != "NONE" ) {
-            init_pose_sub = this->create_subscription<geometry_msgs::msg::PoseStamped>( init_pose_topic, rclcpp::QoS( 32 ),
-                                                                                        std::bind( &MrgSlamComponent::init_pose_callback,
-                                                                                                   this, std::placeholders::_1 ) );
-            RCLCPP_INFO_STREAM( this->get_logger(),
-                                "Subscribing to init_pose (geometry_msgs::msg::PoseStamped) topic " << init_pose_topic );
+            init_pose_sub = create_subscription<geometry_msgs::msg::PoseStamped>( init_pose_topic, rclcpp::QoS( 32 ),
+                                                                                  std::bind( &MrgSlamComponent::init_pose_callback, this,
+                                                                                             std::placeholders::_1 ) );
+            RCLCPP_INFO_STREAM( get_logger(), "Subscribing to init_pose (geometry_msgs::msg::PoseStamped) topic " << init_pose_topic );
         }
 
         // publishers
         // broadcast topics, note that the topic is absolute and not potentially prefixed with the robot name/namespace
-        odom_broadcast_pub      = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
-        slam_pose_broadcast_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast",
-                                                                                            rclcpp::QoS( 16 ) );
+        odom_broadcast_pub      = create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/odom_broadcast", rclcpp::QoS( 16 ) );
+        slam_pose_broadcast_pub = create_publisher<mrg_slam_msgs::msg::PoseWithName>( "/mrg_slam/slam_pose_broadcast", rclcpp::QoS( 16 ) );
         // robot specific topics
-        odom2map_pub           = this->create_publisher<geometry_msgs::msg::TransformStamped>( "mrg_slam/odom2map", 16 );
-        map_points_timer_pub   = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points", rclcpp::QoS( 1 ) );
-        map_points_service_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
-        others_poses_pub = this->create_publisher<mrg_slam_msgs::msg::PoseWithNameArray>( "mrg_slam/others_poses", rclcpp::QoS( 16 ) );
-        other_robots_removed_points_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/other_robots_removed_points",
-                                                                                                 rclcpp::QoS( 1 ) );
+        odom2map_pub           = create_publisher<geometry_msgs::msg::TransformStamped>( "mrg_slam/odom2map", 16 );
+        map_points_timer_pub   = create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points", rclcpp::QoS( 1 ) );
+        map_points_service_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/map_points_service", rclcpp::QoS( 1 ) );
+        others_poses_pub       = create_publisher<mrg_slam_msgs::msg::PoseWithNameArray>( "mrg_slam/others_poses", rclcpp::QoS( 16 ) );
+        other_robots_removed_points_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "mrg_slam/other_robots_removed_points",
+                                                                                           rclcpp::QoS( 1 ) );
 
         // Create another reentrant callback group for the slam_status_publisher and all callbacks it publishes from
         rclcpp::PublisherOptions         pub_options;
-        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = this->create_callback_group( rclcpp::CallbackGroupType::Reentrant );
+        rclcpp::CallbackGroup::SharedPtr reentrant_callback_group2 = create_callback_group( rclcpp::CallbackGroupType::Reentrant );
         pub_options.callback_group                                 = reentrant_callback_group2;
-        slam_status_publisher = this->create_publisher<mrg_slam_msgs::msg::SlamStatus>( "mrg_slam/slam_status", rclcpp::QoS( 16 ),
-                                                                                        pub_options );
+        slam_status_publisher = create_publisher<mrg_slam_msgs::msg::SlamStatus>( "mrg_slam/slam_status", rclcpp::QoS( 16 ), pub_options );
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
@@ -207,47 +203,44 @@ public:
                             std::shared_ptr<mrg_slam_msgs::srv::AddStaticKeyFrames::Response>      res )>
             add_static_keyframes_service_callback = std::bind( &MrgSlamComponent::add_static_keyframes_service, this, std::placeholders::_1,
                                                                std::placeholders::_2 );
-        add_static_keyframes_service_server       = this->create_service<mrg_slam_msgs::srv::AddStaticKeyFrames>(
+        add_static_keyframes_service_server       = create_service<mrg_slam_msgs::srv::AddStaticKeyFrames>(
             "mrg_slam/add_static_keyframes", add_static_keyframes_service_callback );
         // Save graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Response>      res )>
             save_graph_service_callback = std::bind( &MrgSlamComponent::save_graph_service, this, std::placeholders::_1,
                                                      std::placeholders::_2 );
-        save_graph_service_server       = this->create_service<mrg_slam_msgs::srv::SaveGraph>( "mrg_slam/save_graph",
-                                                                                               save_graph_service_callback );
+        save_graph_service_server = create_service<mrg_slam_msgs::srv::SaveGraph>( "mrg_slam/save_graph", save_graph_service_callback );
         // Load graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Response>      res )>
             load_graph_service_callback = std::bind( &MrgSlamComponent::load_graph_service, this, std::placeholders::_1,
                                                      std::placeholders::_2 );
-        load_graph_service_server       = this->create_service<mrg_slam_msgs::srv::LoadGraph>( "mrg_slam/load_graph",
-                                                                                               load_graph_service_callback );
+        load_graph_service_server = create_service<mrg_slam_msgs::srv::LoadGraph>( "mrg_slam/load_graph", load_graph_service_callback );
         // Save map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Response>      res )>
             save_map_service_callback = std::bind( &MrgSlamComponent::save_map_service, this, std::placeholders::_1,
                                                    std::placeholders::_2 );
-        save_map_service_server       = this->create_service<mrg_slam_msgs::srv::SaveMap>( "mrg_slam/save_map", save_map_service_callback );
+        save_map_service_server       = create_service<mrg_slam_msgs::srv::SaveMap>( "mrg_slam/save_map", save_map_service_callback );
         // Get map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::GetMap::Response>      res )>
             get_map_service_callback = std::bind( &MrgSlamComponent::get_map_service, this, std::placeholders::_1, std::placeholders::_2 );
-        get_map_service_server       = this->create_service<mrg_slam_msgs::srv::GetMap>( "mrg_slam/get_map", get_map_service_callback );
+        get_map_service_server       = create_service<mrg_slam_msgs::srv::GetMap>( "mrg_slam/get_map", get_map_service_callback );
         // Publish map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Response>      res )>
             publish_map_service_callback = std::bind( &MrgSlamComponent::publish_map_service, this, std::placeholders::_1,
                                                       std::placeholders::_2 );
-        publish_map_service_server       = this->create_service<mrg_slam_msgs::srv::PublishMap>( "mrg_slam/publish_map",
-                                                                                                 publish_map_service_callback );
+        publish_map_service_server = create_service<mrg_slam_msgs::srv::PublishMap>( "mrg_slam/publish_map", publish_map_service_callback );
         // Get graph estimate service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Response>      res )>
             get_graph_estimate_service_callback = std::bind( &MrgSlamComponent::get_graph_estimate_service, this, std::placeholders::_1,
                                                              std::placeholders::_2 );
-        get_graph_estimate_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphEstimate>(
-            "mrg_slam/get_graph_estimate", get_graph_estimate_service_callback );
+        get_graph_estimate_service_server       = create_service<mrg_slam_msgs::srv::GetGraphEstimate>( "mrg_slam/get_graph_estimate",
+                                                                                                        get_graph_estimate_service_callback );
         // Publish graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Response>      res )>
@@ -257,22 +250,22 @@ public:
         if( !own_name.empty() ) {
             publish_graph_service_topic = "/" + own_name + "/" + publish_graph_service_topic;
         }
-        publish_graph_service_server = this->create_service<mrg_slam_msgs::srv::PublishGraph>( publish_graph_service_topic,
-                                                                                               publish_graph_service_callback );
+        publish_graph_service_server = create_service<mrg_slam_msgs::srv::PublishGraph>( publish_graph_service_topic,
+                                                                                         publish_graph_service_callback );
         // Request graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Response>      res )>
             request_graph_service_callback = std::bind( &MrgSlamComponent::request_graph_service, this, std::placeholders::_1,
                                                         std::placeholders::_2 );
-        request_graph_service_server       = this->create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
-                                                                                                      request_graph_service_callback );
+        request_graph_service_server       = create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
+                                                                                                request_graph_service_callback );
         // Get graph IDs (gids) service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Response>      res )>
             get_graph_uuids_service_callback = std::bind( &MrgSlamComponent::get_graph_uuids_service, this, std::placeholders::_1,
                                                           std::placeholders::_2 );
-        get_graph_uuids_service_server       = this->create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
-                                                                                                        get_graph_uuids_service_callback );
+        get_graph_uuids_service_server       = create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
+                                                                                                  get_graph_uuids_service_callback );
 
         // Initialize all processors
         gps_processor.onInit( node_ros );
@@ -285,7 +278,7 @@ public:
         slam_status_publisher->publish( slam_status_msg );
 
         // Print the all parameters declared in this node so far
-        print_ros2_parameters( this->get_node_parameters_interface(), this->get_logger() );
+        print_ros2_parameters( get_node_parameters_interface(), get_logger() );
     }
 
 private:
@@ -294,120 +287,120 @@ private:
         // Declare all parameters used by this class and its members first
 
         // General and scenario parameters
-        own_name          = this->declare_parameter<std::string>( "own_name", "atlas" );
-        multi_robot_names = this->declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        odom_sub_topic    = this->declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
-        cloud_sub_topic   = this->declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
+        own_name          = declare_parameter<std::string>( "own_name", "atlas" );
+        multi_robot_names = declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
+        odom_sub_topic    = declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
+        cloud_sub_topic   = declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
-        map_frame_id              = this->declare_parameter<std::string>( "map_frame_id", "map" );
-        odom_frame_id             = this->declare_parameter<std::string>( "odom_frame_id", "odom" );
-        map_cloud_resolution      = this->declare_parameter<double>( "map_cloud_resolution", 0.05 );
-        map_cloud_count_threshold = this->declare_parameter<int>( "map_cloud_count_threshold", 2 );
+        map_frame_id              = declare_parameter<std::string>( "map_frame_id", "map" );
+        odom_frame_id             = declare_parameter<std::string>( "odom_frame_id", "odom" );
+        map_cloud_resolution      = declare_parameter<double>( "map_cloud_resolution", 0.05 );
+        map_cloud_count_threshold = declare_parameter<int>( "map_cloud_count_threshold", 2 );
 
         // Initial pose parameters
-        init_odom_topic = this->declare_parameter<std::string>( "init_odom_topic", "NONE" );
-        init_pose_topic = this->declare_parameter<std::string>( "init_pose_topic", "NONE" );
-        init_pose_vec   = this->declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
+        init_odom_topic = declare_parameter<std::string>( "init_odom_topic", "NONE" );
+        init_pose_topic = declare_parameter<std::string>( "init_pose_topic", "NONE" );
+        init_pose_vec   = declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
 
         // Removing points of other robots from point cloud
-        robot_remove_points_radius = this->declare_parameter<double>( "robot_remove_points_radius", 2.0 );
+        robot_remove_points_radius = declare_parameter<double>( "robot_remove_points_radius", 2.0 );
 
         // GraphSLAM parameters
-        fix_first_node_adaptive   = this->declare_parameter<bool>( "fix_first_node_adaptive", false );
-        g2o_solver_type           = this->declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
-        g2o_solver_num_iterations = this->declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
-        save_graph                = this->declare_parameter<bool>( "save_graph", true );
-        this->declare_parameter<bool>( "g2o_verbose", false );
-        graph_update_interval               = this->declare_parameter<double>( "graph_update_interval", 3.0 );
-        map_cloud_update_interval           = this->declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-        graph_request_min_accum_dist        = this->declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
-        graph_request_max_robot_dist        = this->declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
-        graph_request_min_time_delay        = this->declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
-        std::string graph_exchange_mode_str = this->declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
+        fix_first_node_adaptive   = declare_parameter<bool>( "fix_first_node_adaptive", false );
+        g2o_solver_type           = declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
+        g2o_solver_num_iterations = declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
+        save_graph                = declare_parameter<bool>( "save_graph", true );
+        declare_parameter<bool>( "g2o_verbose", false );
+        graph_update_interval               = declare_parameter<double>( "graph_update_interval", 3.0 );
+        map_cloud_update_interval           = declare_parameter<double>( "map_cloud_update_interval", 10.0 );
+        graph_request_min_accum_dist        = declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
+        graph_request_max_robot_dist        = declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
+        graph_request_min_time_delay        = declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
+        std::string graph_exchange_mode_str = declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
         graph_exchange_mode                 = graph_exchange_mode_from_string( graph_exchange_mode_str );
 
         // Fill first cloud parameters
-        this->declare_parameter<bool>( "enable_fill_first_cloud", false );
-        this->declare_parameter<double>( "fill_first_cloud_radius", 5.0 );
-        this->declare_parameter<bool>( "fill_first_cloud_simple", false );
+        declare_parameter<bool>( "enable_fill_first_cloud", false );
+        declare_parameter<double>( "fill_first_cloud_radius", 5.0 );
+        declare_parameter<bool>( "fill_first_cloud_simple", false );
 
         // GraphDatabase parameters (not directly used by this class)
-        this->declare_parameter<bool>( "fix_first_node", false );
-        this->declare_parameter<std::vector<double>>( "fix_first_node_stddev",
-                                                      std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ),
-                                                                           angles::from_degrees( 5 ), angles::from_degrees( 5 ) } );
-        this->declare_parameter<int>( "max_keyframes_per_update", 10 );
-        this->declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
-        this->declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
-        this->declare_parameter<std::string>( "loop_closure_edge_robust_kernel", "Huber" );
-        this->declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
-        this->declare_parameter<std::string>( "result_dir", "" );
+        declare_parameter<bool>( "fix_first_node", false );
+        declare_parameter<std::vector<double>>( "fix_first_node_stddev",
+                                                std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ), angles::from_degrees( 5 ),
+                                                                     angles::from_degrees( 5 ) } );
+        declare_parameter<int>( "max_keyframes_per_update", 10 );
+        declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
+        declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );
+        declare_parameter<std::string>( "loop_closure_edge_robust_kernel", "Huber" );
+        declare_parameter<double>( "loop_closure_edge_robust_kernel_size", 1.0 );
+        declare_parameter<std::string>( "result_dir", "" );
 
         // KeyframeUpdater parameters (not directly used by this class)
-        this->declare_parameter<double>( "keyframe_delta_trans", 2.0 );
-        this->declare_parameter<double>( "keyframe_delta_angle", 2.0 );
+        declare_parameter<double>( "keyframe_delta_trans", 2.0 );
+        declare_parameter<double>( "keyframe_delta_angle", 2.0 );
 
         // LoopDetector parameters (not directly used by this class)
-        this->declare_parameter<double>( "distance_thresh", 5.0 );
-        this->declare_parameter<double>( "accum_distance_thresh", 8.0 );
-        this->declare_parameter<double>( "accum_distance_thresh_other_slam_instance", 7.5 );
-        this->declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
-        this->declare_parameter<double>( "fitness_score_thresh", 0.5 );
-        this->declare_parameter<bool>( "use_planar_registration_guess", false );
-        this->declare_parameter<bool>( "use_loop_closure_consistency_check", true );
-        this->declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
-        this->declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
+        declare_parameter<double>( "distance_thresh", 5.0 );
+        declare_parameter<double>( "accum_distance_thresh", 8.0 );
+        declare_parameter<double>( "accum_distance_thresh_other_slam_instance", 7.5 );
+        declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
+        declare_parameter<double>( "fitness_score_thresh", 0.5 );
+        declare_parameter<bool>( "use_planar_registration_guess", false );
+        declare_parameter<bool>( "use_loop_closure_consistency_check", true );
+        declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
+        declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
 
         // Loop closure (scan matching registration LoopDetector) parameters (not directly used by this class)
-        this->declare_parameter<std::string>( "registration_method", "FAST_GICP" );
-        this->declare_parameter<int>( "reg_num_threads", 0 );
-        this->declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
-        this->declare_parameter<int>( "reg_maximum_iterations", 64 );
-        this->declare_parameter<double>( "reg_max_correspondence_distance", 2.0 );
-        this->declare_parameter<int>( "reg_max_optimizer_iterations", 20 );
-        this->declare_parameter<bool>( "reg_use_reciprocal_correspondences", false );
-        this->declare_parameter<int>( "reg_correspondence_randomness", 20 );
-        this->declare_parameter<double>( "reg_resolution", 1.0 );
-        this->declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
+        declare_parameter<std::string>( "registration_method", "FAST_GICP" );
+        declare_parameter<int>( "reg_num_threads", 0 );
+        declare_parameter<double>( "reg_transformation_epsilon", 0.1 );
+        declare_parameter<int>( "reg_maximum_iterations", 64 );
+        declare_parameter<double>( "reg_max_correspondence_distance", 2.0 );
+        declare_parameter<int>( "reg_max_optimizer_iterations", 20 );
+        declare_parameter<bool>( "reg_use_reciprocal_correspondences", false );
+        declare_parameter<int>( "reg_correspondence_randomness", 20 );
+        declare_parameter<double>( "reg_resolution", 1.0 );
+        declare_parameter<std::string>( "reg_nn_search_method", "DIRECT7" );
 
         // InformationMatrixCalculator parameters (not directly used by this class)
-        this->declare_parameter<bool>( "use_const_inf_matrix", false );
-        this->declare_parameter<double>( "const_stddev_x", 0.5 );
-        this->declare_parameter<double>( "const_stddev_q", 0.1 );
-        this->declare_parameter<double>( "var_gain_a", 20.0 );
-        this->declare_parameter<double>( "min_stddev_x", 0.1 );
-        this->declare_parameter<double>( "max_stddev_x", 5.0 );
-        this->declare_parameter<double>( "min_stddev_q", 0.05 );
-        this->declare_parameter<double>( "max_stddev_q", 0.2 );
-        // this->declare_parameter<double>( "fitness_score_thresh", 0.5 ); // already declared for LoopDetector
+        declare_parameter<bool>( "use_const_inf_matrix", false );
+        declare_parameter<double>( "const_stddev_x", 0.5 );
+        declare_parameter<double>( "const_stddev_q", 0.1 );
+        declare_parameter<double>( "var_gain_a", 20.0 );
+        declare_parameter<double>( "min_stddev_x", 0.1 );
+        declare_parameter<double>( "max_stddev_x", 5.0 );
+        declare_parameter<double>( "min_stddev_q", 0.05 );
+        declare_parameter<double>( "max_stddev_q", 0.2 );
+        // declare_parameter<double>( "fitness_score_thresh", 0.5 ); // already declared for LoopDetector
 
         // GpsProcessor parameters (not directly used by this class)
-        this->declare_parameter<bool>( "enable_gps", true );
-        this->declare_parameter<double>( "gps_time_offset", 0.0 );
-        this->declare_parameter<double>( "gps_edge_stddev_xy", 10000.0 );
-        this->declare_parameter<double>( "gps_edge_stddev_z", 10.0 );
-        this->declare_parameter<std::string>( "gps_edge_robust_kernel", "NONE" );
-        this->declare_parameter<double>( "gps_edge_robust_kernel_size", 1.0 );
-        this->declare_parameter<bool>( "gps_use_enu", false );
-        this->declare_parameter<bool>( "gps_enu_origin_from_msg", true );
-        this->declare_parameter<std::vector<double>>( "gps_enu_origin", std::vector<double>{} );
+        declare_parameter<bool>( "enable_gps", true );
+        declare_parameter<double>( "gps_time_offset", 0.0 );
+        declare_parameter<double>( "gps_edge_stddev_xy", 10000.0 );
+        declare_parameter<double>( "gps_edge_stddev_z", 10.0 );
+        declare_parameter<std::string>( "gps_edge_robust_kernel", "NONE" );
+        declare_parameter<double>( "gps_edge_robust_kernel_size", 1.0 );
+        declare_parameter<bool>( "gps_use_enu", false );
+        declare_parameter<bool>( "gps_enu_origin_from_msg", true );
+        declare_parameter<std::vector<double>>( "gps_enu_origin", std::vector<double>{} );
 
         // ImuProcessor parameters (not directly used by this class)
-        this->declare_parameter<double>( "imu_time_offset", 0.0 );
-        this->declare_parameter<bool>( "enable_imu_orientation", false );
-        this->declare_parameter<bool>( "enable_imu_acceleration", false );
-        this->declare_parameter<double>( "imu_orientation_edge_stddev", 0.1 );
-        this->declare_parameter<double>( "imu_acceleration_edge_stddev", 3.0 );
-        this->declare_parameter<std::string>( "imu_orientation_edge_robust_kernel", "NONE" );
-        this->declare_parameter<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" );
-        this->declare_parameter<double>( "imu_orientation_edge_robust_kernel_size", 1.0 );
-        this->declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
+        declare_parameter<double>( "imu_time_offset", 0.0 );
+        declare_parameter<bool>( "enable_imu_orientation", false );
+        declare_parameter<bool>( "enable_imu_acceleration", false );
+        declare_parameter<double>( "imu_orientation_edge_stddev", 0.1 );
+        declare_parameter<double>( "imu_acceleration_edge_stddev", 3.0 );
+        declare_parameter<std::string>( "imu_orientation_edge_robust_kernel", "NONE" );
+        declare_parameter<std::string>( "imu_acceleration_edge_robust_kernel", "NONE" );
+        declare_parameter<double>( "imu_orientation_edge_robust_kernel_size", 1.0 );
+        declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
 
         // FloorCoeffsProcessor parameters (not directly used by this class)
-        this->declare_parameter<double>( "floor_edge_stddev", 10.0 );
-        this->declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
-        this->declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
+        declare_parameter<double>( "floor_edge_stddev", 10.0 );
+        declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
+        declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
     }
 
     /**
@@ -519,15 +512,15 @@ private:
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         // try to initialize pose from init_odom or init_pose topic
         if( init_odom_topic != "NONE" || init_pose_topic != "NONE" ) {
-            RCLCPP_INFO_STREAM( this->get_logger(),
+            RCLCPP_INFO_STREAM( get_logger(),
                                 "Trying to initialize pose from odom topic: " << init_odom_topic << " or pose topic: " << init_pose_topic );
             std::lock_guard<std::mutex> lock( init_pose_mutex );
             if( init_pose_msg == nullptr ) {
-                RCLCPP_WARN_STREAM( this->get_logger(), "No initial pose received yet, waiting for it..." );
+                RCLCPP_WARN_STREAM( get_logger(), "No initial pose received yet, waiting for it..." );
                 return false;
             }
             if( graph_database->get_keyframe_queue().empty() ) {
-                RCLCPP_WARN_STREAM( this->get_logger(), "No keyframes in the queue, waiting for them..." );
+                RCLCPP_WARN_STREAM( get_logger(), "No keyframes in the queue, waiting for them..." );
                 return false;
             }
             Eigen::Isometry3d pose( Eigen::Isometry3d::Identity() );
@@ -537,7 +530,7 @@ private:
                                                                                     // the received pose
             pose_mat = pose.matrix();
         } else {  // use init_pose vector to initialize pose
-            RCLCPP_INFO_STREAM( this->get_logger(), "Initializing pose from init_pose vector" );
+            RCLCPP_INFO_STREAM( get_logger(), "Initializing pose from init_pose vector" );
             Eigen::Matrix<double, 6, 1> p( init_pose_vec.data() );
             pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitZ() )
                                                * Eigen::AngleAxisd( p[4], Eigen::Vector3d::UnitY() )
@@ -546,7 +539,7 @@ private:
             pose_mat.topRightCorner<3, 1>() = p.head<3>();
             // don't remove odom because we assume that the provided pose corresponds to the pose of the rover when starting the system
         }
-        RCLCPP_INFO_STREAM( this->get_logger(), "initial pose:\n" << pose_mat );
+        RCLCPP_INFO_STREAM( get_logger(), "initial pose:\n" << pose_mat );
         trans_odom2map_mutex.lock();
         trans_odom2map.matrix() = pose_mat;
         trans_odom2map_mutex.unlock();
@@ -564,7 +557,7 @@ private:
     void publish_slam_pose( mrg_slam::KeyFrame::ConstPtr kf )
     {
         mrg_slam_msgs::msg::PoseWithName slam_pose_msg;
-        slam_pose_msg.header.stamp    = this->now();
+        slam_pose_msg.header.stamp    = now();
         slam_pose_msg.header.frame_id = map_frame_id;
         slam_pose_msg.pose            = isometry2pose( kf->node->estimate() );
         slam_pose_msg.robot_name      = own_name;
@@ -595,7 +588,7 @@ private:
             return;
         }
         if( others_last_graph_exchange_time[other_robot_name] >= 0.0
-            && this->now().seconds() - others_last_graph_exchange_time[other_robot_name] < graph_request_min_time_delay ) {
+            && now().seconds() - others_last_graph_exchange_time[other_robot_name] < graph_request_min_time_delay ) {
             return;
         }
 
@@ -629,25 +622,25 @@ private:
         // Check if other_robot_name is registered in the SLAM experiment (param: multi_robot_names)
         if( request_graph_service_clients.find( other_robot_name ) == request_graph_service_clients.end() ) {
             RCLCPP_WARN_STREAM(
-                this->get_logger(),
+                get_logger(),
                 "Trying to request graph from "
                     << other_robot_name
                     << " which is not registered as a request graph service client (param: multi_robot_names), returning..." );
             return;
         }
 
-        others_last_graph_exchange_time[other_robot_name] = this->now().seconds();
+        others_last_graph_exchange_time[other_robot_name] = now().seconds();
         while( !request_graph_service_clients[other_robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
             if( !rclcpp::ok() ) {
                 return;
             }
-            RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+            RCLCPP_WARN_STREAM_THROTTLE( get_logger(), *get_clock(), 1000,
                                          "Waiting for service " << request_graph_service_clients[other_robot_name]->get_service_name()
                                                                 << " to appear..." );
         }
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Requesting graph from rover " << other_robot_name << " with new accum dist "
-                                                                               << other_accum_dist - other_last_accum_dist << "m" );
+        RCLCPP_INFO_STREAM( get_logger(), "Requesting graph from rover " << other_robot_name << " with new accum dist "
+                                                                         << other_accum_dist - other_last_accum_dist << "m" );
         slam_status_msg.in_graph_exchange = true;
         slam_status_publisher->publish( slam_status_msg );
         mrg_slam_msgs::srv::PublishGraph::Request::SharedPtr req = std::make_shared<mrg_slam_msgs::srv::PublishGraph::Request>();
@@ -673,13 +666,13 @@ private:
         std::future_status status        = result_future.wait_for( std::chrono::seconds( 20 ) );
 
         if( status == std::future_status::timeout ) {
-            RCLCPP_WARN_STREAM( this->get_logger(), "Request graph service call to rover " << other_robot_name << " timed out" );
+            RCLCPP_WARN_STREAM( get_logger(), "Request graph service call to rover " << other_robot_name << " timed out" );
             slam_status_msg.in_graph_exchange = false;
             slam_status_publisher->publish( slam_status_msg );
             return;
         }
         if( status == std::future_status::ready ) {
-            RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << other_robot_name << " successful" );
+            RCLCPP_INFO_STREAM( get_logger(), "Request graph service call to rover " << other_robot_name << " successful" );
         }
         auto result = result_future.get();
         // collect some statistics
@@ -852,7 +845,7 @@ private:
 
         auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, req->skip_first_cloud );
         if( !cloud ) {
-            RCLCPP_WARN_STREAM( this->get_logger(), "Failed to generate map cloud" );
+            RCLCPP_WARN_STREAM( get_logger(), "Failed to generate map cloud" );
             res->success = false;
             return;
         }
@@ -1008,7 +1001,7 @@ private:
         slam_status_msg.in_optimization = true;
         slam_status_publisher->publish( slam_status_msg );
         start = std::chrono::high_resolution_clock::now();
-        graph_slam->optimize( g2o_solver_num_iterations, this->get_parameter( "g2o_verbose" ).as_bool() );
+        graph_slam->optimize( g2o_solver_num_iterations, get_parameter( "g2o_verbose" ).as_bool() );
         end = std::chrono::high_resolution_clock::now();
         graph_optimization_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
 
@@ -1236,8 +1229,8 @@ private:
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
 
-        RCLCPP_INFO_STREAM( this->get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution
-                                                                         << " and count_threshold " << req->count_threshold );
+        RCLCPP_INFO_STREAM( get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution
+                                                                   << " and count_threshold " << req->count_threshold );
 
         snapshots_mutex.lock();
         snapshot = keyframes_snapshot;
@@ -1312,10 +1305,10 @@ private:
                 return;
             }
 
-            RCLCPP_INFO_STREAM( this->get_logger(), "Received publish graph request from "
-                                                        << req->robot_name << " with " << req->processed_keyframe_uuid_strs.size()
-                                                        << " processed keyframes and " << req->processed_edge_uuid_strs.size()
-                                                        << " processed edges." );
+            RCLCPP_INFO_STREAM( get_logger(), "Received publish graph request from "
+                                                  << req->robot_name << " with " << req->processed_keyframe_uuid_strs.size()
+                                                  << " processed keyframes and " << req->processed_edge_uuid_strs.size()
+                                                  << " processed edges." );
 
             res->graph.robot_name               = own_name;
             res->graph.latest_keyframe_uuid_str = prev_robot_keyframe->uuid_str;
@@ -1330,10 +1323,10 @@ private:
                 auto it_processed_uuids = std::find( req->processed_keyframe_uuid_strs.begin(), req->processed_keyframe_uuid_strs.end(),
                                                      src->uuid_str );
                 if( it_processed_uuids != req->processed_keyframe_uuid_strs.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped, already processed" );
+                    RCLCPP_DEBUG_STREAM( get_logger(), src->readable_id << " skipped, already processed" );
                     continue;
                 } else {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " publishing" );
+                    RCLCPP_DEBUG_STREAM( get_logger(), src->readable_id << " publishing" );
                 }
 
                 mrg_slam_msgs::msg::KeyFrameRos dst;
@@ -1360,10 +1353,10 @@ private:
                 auto it_processed_uuids = std::find( req->processed_edge_uuid_strs.begin(), req->processed_edge_uuid_strs.end(),
                                                      src->uuid_str );
                 if( it_processed_uuids != req->processed_edge_uuid_strs.end() ) {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " skipped,already processed" );
+                    RCLCPP_DEBUG_STREAM( get_logger(), src->readable_id << " skipped, already processed" );
                     continue;
                 } else {
-                    RCLCPP_DEBUG_STREAM( this->get_logger(), src->readable_id << " publishing" );
+                    RCLCPP_DEBUG_STREAM( get_logger(), src->readable_id << " publishing" );
                 }
 
                 mrg_slam_msgs::msg::EdgeRos dst;
@@ -1389,8 +1382,7 @@ private:
             sent_graph_bytes.push_back( graph_bytes );
 
 
-            RCLCPP_INFO_STREAM( this->get_logger(),
-                                "Published graph with " << added_keyframes << " keyframes and " << added_edges << " edges" );
+            RCLCPP_INFO_STREAM( get_logger(), "Published graph with " << added_keyframes << " keyframes and " << added_edges << " edges" );
         }
     }
 
@@ -1422,15 +1414,15 @@ private:
                 continue;
             }
             if( request_graph_service_clients.find( robot_name ) == request_graph_service_clients.end() ) {
-                RCLCPP_WARN_STREAM( this->get_logger(), "Skipping request graph from "
-                                                            << robot_name << " which is not registered as a request graph service client" );
+                RCLCPP_WARN_STREAM( get_logger(), "Skipping request graph from "
+                                                      << robot_name << " which is not registered as a request graph service client" );
                 continue;
             }
             while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
                 if( !rclcpp::ok() ) {
                     return;
                 }
-                RCLCPP_WARN_STREAM_THROTTLE( this->get_logger(), *this->get_clock(), 1000,
+                RCLCPP_WARN_STREAM_THROTTLE( get_logger(), *get_clock(), 1000,
                                              "Waiting for service " << request_graph_service_clients[robot_name]->get_service_name()
                                                                     << " to appear..." );
             }
@@ -1438,11 +1430,11 @@ private:
             auto               result_future = request_graph_service_clients[robot_name]->async_send_request( pub_req );
             std::future_status status        = result_future.wait_for( std::chrono::seconds( 10 ) );
             if( status == std::future_status::timeout ) {
-                RCLCPP_ERROR_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
+                RCLCPP_ERROR_STREAM( get_logger(), "Request graph service call to rover " << robot_name << " timed out" );
                 return;
             }
             if( status == std::future_status::ready ) {
-                RCLCPP_INFO_STREAM( this->get_logger(), "Request graph service call to rover " << robot_name << " successful" );
+                RCLCPP_INFO_STREAM( get_logger(), "Request graph service call to rover " << robot_name << " successful" );
             }
             auto result = result_future.get();
 
