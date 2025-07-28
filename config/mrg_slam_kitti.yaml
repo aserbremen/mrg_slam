@@ -47,7 +47,8 @@ prefiltering_component:
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
     downsample_resolution: 0.4
-    
+    downsample_min_points_per_voxel: 1 # only available for VOXELGRID
+
     # Outlier removal method options [STATISTICAL, RADIUS, NONE]
     outlier_removal_method: "RADIUS" 
     # Further parameters when choosing STATISTICAL

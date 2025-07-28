@@ -103,6 +103,7 @@ private:
         // Downsampling parameters
         downsample_method = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
         declare_parameter<double>( "downsample_resolution", 0.1 );
+        declare_parameter<int>( "downsample_min_points_per_voxel", 1 );
         // Outlier removal parameters
         outlier_removal_method = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
         declare_parameter<int>( "statistical_mean_k", 20 );
@@ -173,6 +174,7 @@ private:
         if( downsample_method == "VOXELGRID" ) {
             pcl::VoxelGrid<PointT>::Ptr voxelgrid( std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter ) );
             voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
             pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid(
                 std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter ) );
