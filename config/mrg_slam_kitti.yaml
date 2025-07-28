@@ -9,6 +9,7 @@
 # Transform between lidar and base_link
 lidar2base_publisher:
   ros__parameters:
+    enable_lidar2base_publisher: true
     lidar2base_x: 0.0
     lidar2base_y: 0.0
     lidar2base_z: 0.0
@@ -57,7 +58,7 @@ prefiltering_component:
     # Distance filter
     use_distance_filter: true
     distance_near_thresh: 0.1
-    distance_far_thresh: 100.0
+    distance_far_thresh: 35.0
 
     scan_period: 0.1
     deskewing: false
@@ -162,7 +163,7 @@ mrg_slam_component:
     # fix first node for optimization stability
     fix_first_node: true
     fix_first_node_adaptive: false
-    fix_first_node_stddev: [0.5, 0.5, 0.5, 0.0872665, 0.0872665, 0.0872665] # rad for stddev
+    fix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
     # loop closure params
     distance_thresh: 20.0 # maximum allowed xy distance threshold for loop closure candidates
     accum_distance_thresh: 25.0 # minimum distance to accumulate between keyframes of the same robot for considering them as loop closure candidates
