@@ -626,7 +626,16 @@ private:
             return;
         }
 
-        // TODO handle case of no connection to other robot, only delete the other robot's slam poses if the graph exchange was successful
+        // Check if other_robot_name is registered in the SLAM experiment (param: multi_robot_names)
+        if( request_graph_service_clients.find( other_robot_name ) == request_graph_service_clients.end() ) {
+            RCLCPP_WARN_STREAM(
+                this->get_logger(),
+                "Trying to request graph from "
+                    << other_robot_name
+                    << " which is not registered as a request graph service client (param: multi_robot_names), returning..." );
+            return;
+        }
+
         others_last_graph_exchange_time[other_robot_name] = this->now().seconds();
         while( !request_graph_service_clients[other_robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
             if( !rclcpp::ok() ) {
@@ -1412,9 +1421,9 @@ private:
             if( robot_name == own_name ) {
                 continue;
             }
-            auto it = std::find( multi_robot_names.begin(), multi_robot_names.end(), robot_name );
-            if( it == multi_robot_names.end() ) {
-                RCLCPP_WARN_STREAM( this->get_logger(), "Robot " << robot_name << " is not in the list of known robots to request graph" );
+            if( request_graph_service_clients.find( robot_name ) == request_graph_service_clients.end() ) {
+                RCLCPP_WARN_STREAM( this->get_logger(), "Skipping request graph from "
+                                                            << robot_name << " which is not registered as a request graph service client" );
                 continue;
             }
             while( !request_graph_service_clients[robot_name]->wait_for_service( std::chrono::seconds( 2 ) ) ) {
