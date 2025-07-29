@@ -93,7 +93,7 @@ public:
 private:
     void initialize_params()
     {
-        base_link_frame_ = declare_parameter<std::string>( "base_link_frame", "base_link" );
+        declare_parameter<std::string>( "base_link_frame", "base_link" );
         // Downsampling parameters
         declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
         declare_parameter<double>( "downsample_resolution", 0.1 );
@@ -127,22 +127,23 @@ private:
         src_cloud = deskewing( src_cloud );
 
         // if base_link_frame is defined, transform the input cloud to the frame
-        if( !base_link_frame_.empty() ) {
+        std::string base_link_frame = get_parameter( "base_link_frame" ).as_string();
+        if( !base_link_frame.empty() ) {
             geometry_msgs::msg::TransformStamped transform;
             try {
                 // lookupTransform contains a Duration as parameter
-                transform = tf_buffer_->lookupTransform( base_link_frame_, src_cloud->header.frame_id, rclcpp::Time( 0 ),
+                transform = tf_buffer_->lookupTransform( base_link_frame, src_cloud->header.frame_id, rclcpp::Time( 0 ),
                                                          rclcpp::Duration( 2, 0 ) );
             } catch( const tf2::TransformException& ex ) {
                 RCLCPP_WARN( get_logger(), "Could not transform source frame %s to target frame %s: %s", src_cloud->header.frame_id.c_str(),
-                             base_link_frame_.c_str(), ex.what() );
+                             base_link_frame.c_str(), ex.what() );
                 RCLCPP_WARN( get_logger(), "Returning early in cloud_callback from prefiltering component" );
                 return;
             }
 
             pcl::PointCloud<PointT>::Ptr transformed( new pcl::PointCloud<PointT>() );
             pcl_ros::transformPointCloud( *src_cloud, *transformed, transform );
-            transformed->header.frame_id = base_link_frame_;
+            transformed->header.frame_id = base_link_frame;
             transformed->header.stamp    = src_cloud->header.stamp;
             src_cloud                    = transformed;
         }
@@ -313,9 +314,6 @@ private:
     // pcl::Filter<PointT>::Ptr                    outlier_removal_filter_;
     pcl::StatisticalOutlierRemoval<PointT>::Ptr statistical_outlier_removal_filter_;
     pcl::RadiusOutlierRemoval<PointT>::Ptr      radius_outlier_removal_filter_;
-
-    // ROS2 parameters, not changed at runtime
-    std::string base_link_frame_;  // the frame to which the point cloud will be transformed
 };
 
 }  // namespace mrg_slam
