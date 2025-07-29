@@ -33,17 +33,17 @@ public:
 
         initialize_params();
 
-        double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+        // Initialize voxel grid filters
+        voxelgrid_filter_        = std::make_shared<pcl::VoxelGrid<PointT>>();
+        approx_voxelgrid_filter_ = std::make_shared<pcl::ApproximateVoxelGrid<PointT>>();
+
+        double      downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+        std::string downsample_method_    = get_parameter( "downsample_method" ).as_string();
+
         if( downsample_method_ == "VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
-            auto voxelgrid = new pcl::VoxelGrid<PointT>();
-            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter_.reset( voxelgrid );
         } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: APPROX_VOXELGRID " << downsample_resolution );
-            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
-            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter_ = approx_voxelgrid;
         } else {
             if( downsample_method_ != "NONE" ) {
                 RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method_ << "), use passthrough filter" );
@@ -51,25 +51,19 @@ public:
             RCLCPP_INFO( get_logger(), "downsample: NONE" );
         }
 
+        // Initialize outlier removal filters
+        statistical_outlier_removal_filter_ = std::make_shared<pcl::StatisticalOutlierRemoval<PointT>>();
+        radius_outlier_removal_filter_      = std::make_shared<pcl::RadiusOutlierRemoval<PointT>>();
+
         std::string outlier_removal_method_ = get_parameter( "outlier_removal_method" ).as_string();
         if( outlier_removal_method_ == "STATISTICAL" ) {
-            int    statistical_mean_k            = get_parameter( "statistical_mean_k" ).as_int();
-            double statistical_stddev_mul_thresh = get_parameter( "statistical_stddev" ).as_double();
-            RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: STATISTICAL mean_k = " << statistical_mean_k
-                                                                                       << ", stddev = " << statistical_stddev_mul_thresh );
-            pcl::StatisticalOutlierRemoval<PointT>::Ptr sor( new pcl::StatisticalOutlierRemoval<PointT>() );
-            sor->setMeanK( statistical_mean_k );
-            sor->setStddevMulThresh( statistical_stddev_mul_thresh );
-            outlier_removal_filter_ = sor;
+            RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: STATISTICAL mean_k = "
+                                                  << get_parameter( "statistical_mean_k" ).as_int()
+                                                  << ", stddev = " << get_parameter( "statistical_stddev" ).as_double() );
         } else if( outlier_removal_method_ == "RADIUS" ) {
-            double radius_radius        = get_parameter( "radius_radius" ).as_double();
-            int    radius_min_neighbors = get_parameter( "radius_min_neighbors" ).as_int();
-            RCLCPP_INFO_STREAM( get_logger(),
-                                "outlier_removal: RADIUS radius = " << radius_radius << ", min_neighbors = " << radius_min_neighbors );
-            pcl::RadiusOutlierRemoval<PointT>::Ptr rad( new pcl::RadiusOutlierRemoval<PointT>() );
-            rad->setRadiusSearch( radius_radius );
-            rad->setMinNeighborsInRadius( radius_min_neighbors );
-            outlier_removal_filter_ = rad;
+            RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: RADIUS radius = " << get_parameter( "radius_radius" ).as_double()
+                                                                                  << ", min_neighbors = "
+                                                                                  << get_parameter( "radius_min_neighbors" ).as_int() );
         } else {
             RCLCPP_INFO_STREAM( get_logger(), "outlier_removal: NONE" );
         }
@@ -101,11 +95,11 @@ private:
     {
         base_link_frame_ = declare_parameter<std::string>( "base_link_frame", "base_link" );
         // Downsampling parameters
-        downsample_method_ = declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
+        declare_parameter<std::string>( "downsample_method", "VOXELGRID" );
         declare_parameter<double>( "downsample_resolution", 0.1 );
         declare_parameter<int>( "downsample_min_points_per_voxel", 1 );
         // Outlier removal parameters
-        outlier_removal_method_ = declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
+        declare_parameter<std::string>( "outlier_removal_method", "STATISTICAL" );
         declare_parameter<int>( "statistical_mean_k", 20 );
         declare_parameter<double>( "statistical_stddev", 1.0 );
         declare_parameter<double>( "radius_radius", 0.8 );
@@ -164,24 +158,23 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr downsample( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !downsample_filter_ ) {
+        std::string downsample_method_ = get_parameter( "downsample_method" ).as_string();
+        if( downsample_method_ == "NONE" ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
-        // Dynamically set the downsampling resolution based on the parameter
-        double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+        double                       downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
         if( downsample_method_ == "VOXELGRID" ) {
-            pcl::VoxelGrid<PointT>::Ptr voxelgrid( std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter_ ) );
-            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
+            voxelgrid_filter_->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            voxelgrid_filter_->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
+            voxelgrid_filter_->setInputCloud( cloud );
+            voxelgrid_filter_->filter( *filtered );
         } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
-            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid(
-                std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter_ ) );
-            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            approx_voxelgrid_filter_->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            approx_voxelgrid_filter_->setInputCloud( cloud );
+            approx_voxelgrid_filter_->filter( *filtered );
         }
-        downsample_filter_->setInputCloud( cloud );
-        downsample_filter_->filter( *filtered );
         filtered->header = cloud->header;
 
         return filtered;
@@ -189,25 +182,23 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr outlier_removal( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !outlier_removal_filter_ ) {
+        std::string outlier_removal_method = get_parameter( "outlier_removal_method" ).as_string();
+        if( outlier_removal_method == "NONE" ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
-        // Dynamically set the outlier removal parameters based on the parameter
-        if( outlier_removal_method_ == "STATISTICAL" ) {
-            pcl::StatisticalOutlierRemoval<PointT>::Ptr sor(
-                std::dynamic_pointer_cast<pcl::StatisticalOutlierRemoval<PointT>>( outlier_removal_filter_ ) );
-            sor->setMeanK( get_parameter( "statistical_mean_k" ).as_int() );
-            sor->setStddevMulThresh( get_parameter( "statistical_stddev" ).as_double() );
-        } else if( outlier_removal_method_ == "RADIUS" ) {
-            pcl::RadiusOutlierRemoval<PointT>::Ptr rad(
-                std::dynamic_pointer_cast<pcl::RadiusOutlierRemoval<PointT>>( outlier_removal_filter_ ) );
-            rad->setRadiusSearch( get_parameter( "radius_radius" ).as_double() );
-            rad->setMinNeighborsInRadius( get_parameter( "radius_min_neighbors" ).as_int() );
+        if( outlier_removal_method == "STATISTICAL" ) {
+            statistical_outlier_removal_filter_->setMeanK( get_parameter( "statistical_mean_k" ).as_int() );
+            statistical_outlier_removal_filter_->setStddevMulThresh( get_parameter( "statistical_stddev" ).as_double() );
+            statistical_outlier_removal_filter_->setInputCloud( cloud );
+            statistical_outlier_removal_filter_->filter( *filtered );
+        } else if( outlier_removal_method == "RADIUS" ) {
+            radius_outlier_removal_filter_->setRadiusSearch( get_parameter( "radius_radius" ).as_double() );
+            radius_outlier_removal_filter_->setMinNeighborsInRadius( get_parameter( "radius_min_neighbors" ).as_int() );
+            radius_outlier_removal_filter_->setInputCloud( cloud );
+            radius_outlier_removal_filter_->filter( *filtered );
         }
-        outlier_removal_filter_->setInputCloud( cloud );
-        outlier_removal_filter_->filter( *filtered );
         filtered->header = cloud->header;
 
         return filtered;
@@ -316,13 +307,15 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::unique_ptr<tf2_ros::Buffer>            tf_buffer_;
 
-    pcl::Filter<PointT>::Ptr downsample_filter_;
-    pcl::Filter<PointT>::Ptr outlier_removal_filter_;
+    pcl::VoxelGrid<PointT>::Ptr            voxelgrid_filter_;
+    pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid_filter_;
+
+    // pcl::Filter<PointT>::Ptr                    outlier_removal_filter_;
+    pcl::StatisticalOutlierRemoval<PointT>::Ptr statistical_outlier_removal_filter_;
+    pcl::RadiusOutlierRemoval<PointT>::Ptr      radius_outlier_removal_filter_;
 
     // ROS2 parameters, not changed at runtime
-    std::string base_link_frame_;         // the frame to which the point cloud will be transformed
-    std::string downsample_method_;       // determines the filter type for downsampling
-    std::string outlier_removal_method_;  // determines the filter type for outlier removal
+    std::string base_link_frame_;  // the frame to which the point cloud will be transformed
 };
 
 }  // namespace mrg_slam
