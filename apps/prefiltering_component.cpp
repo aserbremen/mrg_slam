@@ -38,15 +38,15 @@ public:
         approx_voxelgrid_filter_ = std::make_shared<pcl::ApproximateVoxelGrid<PointT>>();
 
         double      downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
-        std::string downsample_method_    = get_parameter( "downsample_method" ).as_string();
+        std::string downsample_method     = get_parameter( "downsample_method" ).as_string();
 
-        if( downsample_method_ == "VOXELGRID" ) {
+        if( downsample_method == "VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
-        } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
+        } else if( downsample_method == "APPROX_VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: APPROX_VOXELGRID " << downsample_resolution );
         } else {
-            if( downsample_method_ != "NONE" ) {
-                RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method_ << "), use passthrough filter" );
+            if( downsample_method != "NONE" ) {
+                RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method << "), use passthrough filter" );
             }
             RCLCPP_INFO( get_logger(), "downsample: NONE" );
         }
@@ -159,19 +159,19 @@ private:
 
     pcl::PointCloud<PointT>::ConstPtr downsample( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        std::string downsample_method_ = get_parameter( "downsample_method" ).as_string();
-        if( downsample_method_ == "NONE" ) {
+        std::string downsample_method = get_parameter( "downsample_method" ).as_string();
+        if( downsample_method == "NONE" ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         double                       downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
-        if( downsample_method_ == "VOXELGRID" ) {
+        if( downsample_method == "VOXELGRID" ) {
             voxelgrid_filter_->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             voxelgrid_filter_->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
             voxelgrid_filter_->setInputCloud( cloud );
             voxelgrid_filter_->filter( *filtered );
-        } else if( downsample_method_ == "APPROX_VOXELGRID" ) {
+        } else if( downsample_method == "APPROX_VOXELGRID" ) {
             approx_voxelgrid_filter_->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
             approx_voxelgrid_filter_->setInputCloud( cloud );
             approx_voxelgrid_filter_->filter( *filtered );
