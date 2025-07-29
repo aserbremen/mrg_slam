@@ -39,7 +39,6 @@ public:
 
         double      downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
         std::string downsample_method     = get_parameter( "downsample_method" ).as_string();
-
         if( downsample_method == "VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
@@ -80,11 +79,10 @@ public:
         points_pub_  = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 32 ) );
         colored_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>( "prefiltering/colored_points", rclcpp::QoS( 32 ) );
 
-        // setup transform listener
         tf_buffer_   = std::make_unique<tf2_ros::Buffer>( get_clock() );
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>( *tf_buffer_ );
 
-        // Optionally print the all parameters declared in this node so far
+        // Print the all parameters declared in this node so far
         print_ros2_parameters( get_node_parameters_interface(), get_logger() );
     }
 
@@ -311,7 +309,6 @@ private:
     pcl::VoxelGrid<PointT>::Ptr            voxelgrid_filter_;
     pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid_filter_;
 
-    // pcl::Filter<PointT>::Ptr                    outlier_removal_filter_;
     pcl::StatisticalOutlierRemoval<PointT>::Ptr statistical_outlier_removal_filter_;
     pcl::RadiusOutlierRemoval<PointT>::Ptr      radius_outlier_removal_filter_;
 };
