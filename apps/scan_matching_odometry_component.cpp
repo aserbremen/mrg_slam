@@ -34,41 +34,38 @@ public:
 
         initialize_params();
 
-        double downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+        voxel_grid_filter        = std::make_shared<pcl::VoxelGrid<PointT>>();
+        approx_voxel_grid_filter = std::make_shared<pcl::ApproximateVoxelGrid<PointT>>();
+
+        std::string downsample_method     = get_parameter( "downsample_method" ).as_string();
+        double      downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
+
         if( downsample_method == "VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: VOXELGRID " << downsample_resolution );
-            auto voxelgrid = new pcl::VoxelGrid<PointT>();
-            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
-            downsample_filter.reset( voxelgrid );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
             RCLCPP_INFO_STREAM( get_logger(), "downsample: APPROX_VOXELGRID " << downsample_resolution );
-            pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxelgrid( new pcl::ApproximateVoxelGrid<PointT>() );
-            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            downsample_filter = approx_voxelgrid;
         } else {
             if( downsample_method != "NONE" ) {
                 RCLCPP_WARN_STREAM( get_logger(), "unknown downsampling type (" << downsample_method << "), use passthrough filter" );
             }
             RCLCPP_INFO_STREAM( get_logger(), "downsample: NONE" );
-            pcl::PassThrough<PointT>::Ptr passthrough( new pcl::PassThrough<PointT>() );
-            downsample_filter = passthrough;
         }
 
         registration = select_registration_method( static_cast<rclcpp::Node*>( this ) );
 
-        if( enable_imu_frontend ) {
+        if( get_parameter( "enable_imu_frontend" ).as_bool() ) {
             // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters
             // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/
-            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_false =
+            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> callback_fcn_false =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, false );
             msf_pose_sub = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose", rclcpp::QoS( 1 ),
-                                                                                               fcn_false );
+                                                                                               callback_fcn_false );
 
-            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> fcn_true =
+            std::function<void( const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose_msg )> callback_fcn_true =
                 std::bind( &ScanMatchingOdometryComponent::msf_pose_callback, this, std::placeholders::_1, true );
             msf_pose_after_update_sub = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>( "msf_core/pose_after_update",
-                                                                                                            rclcpp::QoS( 1 ), fcn_true );
+                                                                                                            rclcpp::QoS( 1 ),
+                                                                                                            callback_fcn_true );
         }
 
         points_sub = create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
@@ -81,7 +78,7 @@ public:
         aligned_points_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "scan_matching_odometry/aligned_points", rclcpp::QoS( 32 ) );
 
         // Initialize the transform broadcaster
-        odom_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
+        tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>( *this );
 
         // Initialize the transform listener
         tf_buffer   = std::make_unique<tf2_ros::Buffer>( get_clock() );
@@ -100,7 +97,7 @@ private:
     void initialize_params()
     {
         // Declare and set ROS2 parameters
-        odom_frame_id = declare_parameter<std::string>( "odom_frame_id", "odom" );
+        declare_parameter<std::string>( "odom_frame_id", "odom" );
 
         declare_parameter<double>( "keyframe_delta_translation", 0.25 );
         declare_parameter<double>( "keyframe_delta_angle", 0.15 );
@@ -110,12 +107,12 @@ private:
         declare_parameter<double>( "max_acceptable_translation", 1.0 );
         declare_parameter<double>( "max_acceptable_angle", 1.0 );
 
-        enable_imu_frontend = declare_parameter<bool>( "enable_imu_frontend", false );
+        declare_parameter<bool>( "enable_imu_frontend", false );
 
-        enable_robot_odometry_init_guess = declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
-        robot_odom_frame_id              = declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
+        declare_parameter<bool>( "enable_robot_odometry_init_guess", false );
+        declare_parameter<std::string>( "robot_odom_frame_id", "robot_odom" );
 
-        downsample_method = declare_parameter<std::string>( "downsample_method", "NONE" );
+        declare_parameter<std::string>( "downsample_method", "NONE" );
         declare_parameter<double>( "downsample_resolution", 0.1 );
         declare_parameter<int>( "downsample_min_points_per_voxel", 1 );
 
@@ -166,22 +163,23 @@ private:
      */
     pcl::PointCloud<PointT>::ConstPtr downsample( const pcl::PointCloud<PointT>::ConstPtr& cloud ) const
     {
-        if( !downsample_filter ) {
+        std::string downsample_method = get_parameter( "downsample_method" ).as_string();
+        if( downsample_method == "NONE" ) {
             return cloud;
         }
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT>() );
         double                       downsample_resolution = get_parameter( "downsample_resolution" ).as_double();
         if( downsample_method == "VOXELGRID" ) {
-            auto voxelgrid = std::dynamic_pointer_cast<pcl::VoxelGrid<PointT>>( downsample_filter );
-            voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
-            voxelgrid->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
+            voxel_grid_filter->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            voxel_grid_filter->setMinimumPointsNumberPerVoxel( get_parameter( "downsample_min_points_per_voxel" ).as_int() );
+            voxel_grid_filter->setInputCloud( cloud );
+            voxel_grid_filter->filter( *filtered );
         } else if( downsample_method == "APPROX_VOXELGRID" ) {
-            auto approx_voxelgrid = std::dynamic_pointer_cast<pcl::ApproximateVoxelGrid<PointT>>( downsample_filter );
-            approx_voxelgrid->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            approx_voxel_grid_filter->setLeafSize( downsample_resolution, downsample_resolution, downsample_resolution );
+            approx_voxel_grid_filter->setInputCloud( cloud );
+            approx_voxel_grid_filter->filter( *filtered );
         }
-        downsample_filter->setInputCloud( cloud );
-        downsample_filter->filter( *filtered );
 
         return filtered;
     }
@@ -210,7 +208,7 @@ private:
         std::string       msf_source;
         Eigen::Isometry3f msf_delta = Eigen::Isometry3f::Identity();
 
-        if( enable_imu_frontend ) {
+        if( get_parameter( "enable_imu_frontend" ).as_bool() ) {
             if( msf_pose && rclcpp::Time( msf_pose->header.stamp ) > keyframe_stamp && msf_pose_after_update
                 && rclcpp::Time( msf_pose_after_update->header.stamp ) > keyframe_stamp ) {
                 Eigen::Isometry3d pose0 = pose2isometry( msf_pose_after_update->pose.pose );
@@ -220,10 +218,11 @@ private:
                 msf_source = "imu";
                 msf_delta  = delta.cast<float>();
             } else {
-                RCLCPP_WARN( get_logger(), "msf data is too old" );
+                RCLCPP_WARN( get_logger(), "msf data is too old, or msf_pose subscriptions are not initialized" );
             }
-        } else if( enable_robot_odometry_init_guess && !( prev_time.nanoseconds() == 0 ) ) {
+        } else if( get_parameter( "enable_robot_odometry_init_guess" ).as_bool() && !( prev_time.nanoseconds() == 0 ) ) {
             geometry_msgs::msg::TransformStamped transform;
+            std::string                          robot_odom_frame_id = get_parameter( "robot_odom_frame_id" ).as_string();
             // According to https://answers.ros.org/question/312648/could-not-find-waitfortransform-function-in-tf2-package-of-ros2/ the
             // equivalent for waitforTransform is to use canTransform of tfBuffer with a timeout
             if( tf_buffer->canTransform( cloud->header.frame_id, stamp, cloud->header.frame_id, prev_time, robot_odom_frame_id,
@@ -281,7 +280,7 @@ private:
 
             if( dx > get_parameter( "max_acceptable_translation" ).as_double()
                 || da > get_parameter( "max_acceptable_angle" ).as_double() ) {
-                RCLCPP_INFO_STREAM( get_logger(), "too large transform!! " << dx << "[m] " << da << "[rad], ignoring frame at ("
+                RCLCPP_WARN_STREAM( get_logger(), "too large transform!! " << dx << "[m] " << da << "[rad], ignoring frame at ("
                                                                            << stamp.seconds() << ")" );
 
                 // TODO implement consecutive rejections reset
@@ -294,9 +293,10 @@ private:
         prev_trans = trans;
 
         // broadcast keyframe with namespace aware topic name
+        std::string odom_frame_id      = get_parameter( "odom_frame_id" ).as_string();
         std::string keyframe_str       = get_effective_namespace() == "/" ? "keyframe" : get_effective_namespace() + "/keyframe";
         auto        keyframe_transform = matrix2transform( stamp, keyframe_pose, odom_frame_id, keyframe_str );
-        odom_broadcaster->sendTransform( keyframe_transform );
+        tf_broadcaster->sendTransform( keyframe_transform );
 
         double delta_translation = trans.block<3, 1>( 0, 3 ).norm();
         double delta_angle       = std::acos( Eigen::Quaternionf( trans.block<3, 3>( 0, 0 ) ).w() );
@@ -332,13 +332,14 @@ private:
     void publish_odometry( const rclcpp::Time& stamp, const std::string& base_frame_id, const Eigen::Matrix4f& pose )
     {
         // publish transform stamped for IMU integration
-        geometry_msgs::msg::TransformStamped odom_trans = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
+        std::string                          odom_frame_id = get_parameter( "odom_frame_id" ).as_string();
+        geometry_msgs::msg::TransformStamped odom_trans    = matrix2transform( stamp, pose, odom_frame_id, base_frame_id );
         trans_pub->publish( odom_trans );
 
         // broadcast the transform over tf
         RCLCPP_INFO_STREAM_ONCE( get_logger(),
                                  "broadcasting transform from " << odom_trans.header.frame_id << " to " << odom_trans.child_frame_id );
-        odom_broadcaster->sendTransform( odom_trans );
+        tf_broadcaster->sendTransform( odom_trans );
 
         // publish the transform
         nav_msgs::msg::Odometry odom;
@@ -355,7 +356,6 @@ private:
         odom.twist.twist.linear.y  = 0.0;
         odom.twist.twist.angular.z = 0.0;
 
-        // TODO transform odometry into correct frame for displaying it correctly in rviz?
         odom_pub->publish( odom );
     }
 
@@ -418,7 +418,7 @@ private:
 
     std::shared_ptr<tf2_ros::TransformListener>    tf_listener;
     std::unique_ptr<tf2_ros::Buffer>               tf_buffer;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> odom_broadcaster;
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
 
     // odometry calculation
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose;
@@ -430,17 +430,11 @@ private:
     rclcpp::Time                      keyframe_stamp;  // keyframe time
     pcl::PointCloud<PointT>::ConstPtr keyframe;        // keyframe point cloud
 
-    // ROS2 parameters, not changed at runtime
+    pcl::VoxelGrid<PointT>::Ptr            voxel_grid_filter;
+    pcl::ApproximateVoxelGrid<PointT>::Ptr approx_voxel_grid_filter;
+
+    // not changed at runtime
     pcl::Registration<PointT, PointT>::Ptr registration;
-
-    pcl::Filter<PointT>::Ptr downsample_filter;
-    std::string              downsample_method;
-
-    std::string odom_frame_id;
-    std::string robot_odom_frame_id;
-
-    bool enable_robot_odometry_init_guess;
-    bool enable_imu_frontend;
 };
 
 }  // namespace mrg_slam
