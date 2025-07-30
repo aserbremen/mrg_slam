@@ -30,14 +30,14 @@ public:
 
         initialize_params();
 
-        points_sub = create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
-                                                                         std::bind( &FloorDetectionComponent::cloud_callback, this,
-                                                                                    std::placeholders::_1 ) );
+        points_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>( "prefiltering/filtered_points", rclcpp::QoS( 256 ),
+                                                                          std::bind( &FloorDetectionComponent::cloud_callback, this,
+                                                                                     std::placeholders::_1 ) );
 
-        floor_pub = create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
+        floor_pub_ = create_publisher<mrg_slam_msgs::msg::FloorCoeffs>( "floor_detection/floor_coeffs", rclcpp::QoS( 32 ) );
 
-        floor_filtered_pub = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points", rclcpp::QoS( 32 ) );
-        floor_points_pub   = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
+        floor_filtered_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_filtered_points", rclcpp::QoS( 32 ) );
+        floor_points_pub_   = create_publisher<sensor_msgs::msg::PointCloud2>( "floor_detection/floor_points", rclcpp::QoS( 32 ) );
 
         // Optionally print the all parameters declared in this node so far
         print_ros2_parameters( get_node_parameters_interface(), get_logger() );
@@ -89,7 +89,7 @@ private:
             }
         }
 
-        floor_pub->publish( coeffs );
+        floor_pub_->publish( coeffs );
     }
 
     /**
@@ -124,11 +124,11 @@ private:
 
         pcl::transformPointCloud( *filtered, *filtered, static_cast<Eigen::Matrix4f>( tilt_matrix.inverse() ) );
 
-        if( floor_filtered_pub->get_subscription_count() ) {
+        if( floor_filtered_pub_->get_subscription_count() ) {
             filtered->header = cloud->header;
             sensor_msgs::msg::PointCloud2 filtered_ros;
             pcl::toROSMsg( *filtered, filtered_ros );
-            floor_filtered_pub->publish( filtered_ros );
+            floor_filtered_pub_->publish( filtered_ros );
         }
 
         // too few points for RANSAC
@@ -167,8 +167,7 @@ private:
             coeffs *= -1.0f;
         }
 
-        // if( floor_points_pub.getNumSubscribers() ) {
-        if( floor_points_pub->get_subscription_count() ) {
+        if( floor_points_pub_->get_subscription_count() ) {
             pcl::PointCloud<PointT>::Ptr inlier_cloud( new pcl::PointCloud<PointT> );
             pcl::ExtractIndices<PointT>  extract;
             extract.setInputCloud( filtered );
@@ -178,7 +177,7 @@ private:
 
             sensor_msgs::msg::PointCloud2 inlier_cloud_ros;
             pcl::toROSMsg( *inlier_cloud, inlier_cloud_ros );
-            floor_points_pub->publish( inlier_cloud_ros );
+            floor_points_pub_->publish( inlier_cloud_ros );
         }
 
         return Eigen::Vector4f( coeffs );
@@ -246,11 +245,11 @@ private:
     }
 
 private:
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub_;
 
-    rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_points_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_filtered_pub;
+    rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_points_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_filtered_pub_;
 };
 
 }  // namespace mrg_slam
