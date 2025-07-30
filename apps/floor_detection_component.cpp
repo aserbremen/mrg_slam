@@ -24,7 +24,7 @@ public:
     typedef pcl::PointXYZI PointT;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options ), clock( get_clock() )
+    FloorDetectionComponent( const rclcpp::NodeOptions& options ) : Node( "floor_detection_component", options )
     {
         RCLCPP_INFO( get_logger(), "Initializing floor_detection_component ..." );
 
@@ -52,18 +52,14 @@ private:
     void initialize_params()
     {
         // Declare and set parameters
-        tilt_deg          = declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
-        sensor_height     = declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
-        height_clip_range = declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height -
-                                                                    height_clip_range, sensor_height + height_clip_range] will be used for
-                                                                    floor detection */
-        floor_pts_thresh = declare_parameter<int>( "floor_pts_thresh", 512 );      // minimum number of support points of RANSAC to accept
-                                                                                   // a detected floor plane
-        floor_normal_thresh = declare_parameter<double>( "floor_normal_thresh", 10.0 );    // verticality check thresold for the
-                                                                                           // detected floor plane [deg]
-        use_normal_filtering = declare_parameter<bool>( "use_normal_filtering", true );    // if true, points with "non-"vertical
-                                                                                           // normals will be filtered before RANSAC
-        normal_filter_thresh = declare_parameter<double>( "normal_filter_thresh", 20.0 );  // "non-"verticality check threshold [deg]
+        declare_parameter<double>( "tilt_deg", 0.0 );          // approximate sensor tilt angle [deg]
+        declare_parameter<double>( "sensor_height", 2.0 );     // approximate sensor height [m]
+        declare_parameter<double>( "height_clip_range", 1.0 ); /* points with heights in [sensor_height - height_clip_range, sensor_height +
+                                                                  height_clip_range] will be used for floor detection */
+        declare_parameter<int>( "floor_pts_thresh", 512 );  // minimum number of support points of RANSAC to accept a detected floor plane
+        declare_parameter<double>( "floor_normal_thresh_deg", 10.0 );   // verticality check thresold for the detected floor plane [deg]
+        declare_parameter<bool>( "enable_normal_filtering", true );     // points with "non-"vertical normals will be filtered before RANSAC
+        declare_parameter<double>( "normal_filter_thresh_deg", 20.0 );  // "non-"verticality check threshold [deg]
     }
 
     /**
@@ -76,7 +72,7 @@ private:
         pcl::fromROSMsg( *cloud_msg, *cloud );
 
         if( cloud->empty() ) {
-            RCLCPP_WARN_STREAM_THROTTLE( rclcpp::get_logger( "FloorDetection::cloud_callback" ), *clock, 1000, "Empty point cloud" );
+            RCLCPP_WARN_STREAM_THROTTLE( get_logger(), *get_clock(), 1000, "Empty point cloud" );
             return;
         }
 
@@ -104,22 +100,25 @@ private:
     boost::optional<Eigen::Vector4f> detect( const pcl::PointCloud<PointT>::Ptr& cloud ) const
     {
         // compensate the tilt rotation
-        Eigen::Matrix4f tilt_matrix       = Eigen::Matrix4f::Identity();
-        tilt_matrix.topLeftCorner( 3, 3 ) = Eigen::AngleAxisf( tilt_deg * M_PI / 180.0f, Eigen::Vector3f::UnitY() ).toRotationMatrix();
+        Eigen::Matrix4f tilt_matrix = Eigen::Matrix4f::Identity();
+        tilt_matrix.topLeftCorner( 3, 3 ) =
+            Eigen::AngleAxisf( get_parameter( "tilt_deg" ).as_double() * M_PI / 180.0f, Eigen::Vector3f::UnitY() ).toRotationMatrix();
 
         // filtering before RANSAC (height and normal filtering)
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT> );
         pcl::transformPointCloud( *cloud, *filtered, tilt_matrix );
-        filtered = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height + height_clip_range ), false );
-        filtered = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height - height_clip_range ), true );
+        double sensor_height     = get_parameter( "sensor_height" ).as_double();
+        double height_clip_range = get_parameter( "height_clip_range" ).as_double();
+        filtered                 = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height + height_clip_range ), false );
+        filtered                 = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height - height_clip_range ), true );
 
         if( filtered->empty() ) {
-            RCLCPP_WARN_STREAM_THROTTLE( rclcpp::get_logger( "FloorDetection::detect" ), *clock, 1000,
+            RCLCPP_WARN_STREAM_THROTTLE( get_logger(), *get_clock(), 1000,
                                          "No points after height clipping. Check sensor_height and height_clip_range params" );
             return boost::none;
         }
 
-        if( use_normal_filtering ) {
+        if( get_parameter( "use_normal_filtering" ).as_bool() ) {
             filtered = normal_filtering( filtered );
         }
 
@@ -133,7 +132,7 @@ private:
         }
 
         // too few points for RANSAC
-        if( (int)filtered->size() < floor_pts_thresh ) {
+        if( (int)filtered->size() < get_parameter( "floor_pts_thresh" ).as_int() ) {
             return boost::none;
         }
 
@@ -147,7 +146,7 @@ private:
         ransac.getInliers( inliers->indices );
 
         // too few inliers
-        if( (int)inliers->indices.size() < floor_pts_thresh ) {
+        if( (int)inliers->indices.size() < get_parameter( "floor_pts_thresh" ).as_int() ) {
             return boost::none;
         }
 
@@ -158,7 +157,7 @@ private:
         ransac.getModelCoefficients( coeffs );
 
         double dot = coeffs.head<3>().dot( reference.head<3>() );
-        if( std::abs( dot ) < std::cos( floor_normal_thresh * M_PI / 180.0 ) ) {
+        if( std::abs( dot ) < std::cos( get_parameter( "floor_normal_thresh_deg" ).as_double() * M_PI / 180.0 ) ) {
             // the normal is not vertical
             return boost::none;
         }
@@ -179,7 +178,6 @@ private:
 
             sensor_msgs::msg::PointCloud2 inlier_cloud_ros;
             pcl::toROSMsg( *inlier_cloud, inlier_cloud_ros );
-            // floor_points_pub.publish( *inlier_cloud );
             floor_points_pub->publish( inlier_cloud_ros );
         }
 
@@ -227,7 +225,7 @@ private:
 
         pcl::PointCloud<pcl::Normal>::Ptr normals( new pcl::PointCloud<pcl::Normal> );
         ne.setKSearch( 10 );
-        ne.setViewPoint( 0.0f, 0.0f, sensor_height );
+        ne.setViewPoint( 0.0f, 0.0f, get_parameter( "sensor_height" ).as_double() );
         ne.compute( *normals );
 
         pcl::PointCloud<PointT>::Ptr filtered( new pcl::PointCloud<PointT> );
@@ -235,7 +233,7 @@ private:
 
         for( int i = 0; i < (int)cloud->size(); i++ ) {
             float dot = normals->at( i ).getNormalVector3fMap().normalized().dot( Eigen::Vector3f::UnitZ() );
-            if( std::abs( dot ) > std::cos( normal_filter_thresh * M_PI / 180.0 ) ) {
+            if( std::abs( dot ) > std::cos( get_parameter( "normal_filter_thresh_deg" ).as_double() * M_PI / 180.0 ) ) {
                 filtered->push_back( cloud->at( i ) );
             }
         }
@@ -248,24 +246,11 @@ private:
     }
 
 private:
-    rclcpp::Clock::SharedPtr clock;
-
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr points_sub;
 
     rclcpp::Publisher<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_points_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr   floor_filtered_pub;
-
-    // floor detection parameters
-    double tilt_deg;
-    double sensor_height;
-    double height_clip_range;
-
-    int    floor_pts_thresh;
-    double floor_normal_thresh;
-
-    bool   use_normal_filtering;
-    double normal_filter_thresh;
 };
 
 }  // namespace mrg_slam

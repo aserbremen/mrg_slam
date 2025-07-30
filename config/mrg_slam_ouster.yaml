@@ -137,9 +137,9 @@ floor_detection_component:
     sensor_height: 2.0
     height_clip_range: 1.0
     floor_pts_thresh: 512
-    floor_normal_thresh: 10.0
-    use_normal_filtering: true
-    normal_filter_thresh: 20.0
+    floor_normal_thresh_deg: 10.0
+    enable_normal_filtering: true
+    normal_filter_thresh_deg: 20.0
   
     # remappings are handled in the python respective launch file
 
