@@ -21,7 +21,7 @@ class ImuProcessor {
 public:
     ImuProcessor() {}
 
-    void onInit( rclcpp::Node::SharedPtr &_node );
+    void onInit( rclcpp::Node::SharedPtr _node );
 
     void imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg );
 

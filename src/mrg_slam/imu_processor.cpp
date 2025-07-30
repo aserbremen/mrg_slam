@@ -14,7 +14,7 @@
 namespace mrg_slam {
 
 void
-ImuProcessor::onInit( rclcpp::Node::SharedPtr& _node )
+ImuProcessor::onInit( rclcpp::Node::SharedPtr _node )
 {
     node = _node;
 

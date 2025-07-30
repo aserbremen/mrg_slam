@@ -94,18 +94,15 @@ public:
 
         initialize_params();
 
-        // Get the shared pointer to the ROS2 node to pass it to other classes and functions
-        auto node_ros = shared_from_this();
-
         // Initialize variables
         trans_odom2map.setIdentity();
 
         graph_slam.reset( new GraphSLAM( g2o_solver_type ) );
         graph_slam->set_save_graph( save_graph );
 
-        graph_database.reset( new GraphDatabase( node_ros, graph_slam ) );
-        keyframe_updater.reset( new KeyframeUpdater( node_ros ) );
-        loop_detector.reset( new LoopDetector( node_ros ) );
+        graph_database.reset( new GraphDatabase( shared_from_this(), graph_slam ) );
+        keyframe_updater.reset( new KeyframeUpdater( shared_from_this() ) );
+        loop_detector.reset( new LoopDetector( shared_from_this() ) );
         map_cloud_generator.reset( new MapCloudGenerator() );
 
         // subscribers
@@ -117,9 +114,9 @@ public:
         RCLCPP_INFO( get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
         auto qos  = rmw_qos_profile_default;
         qos.depth = 256;
-        odom_sub.subscribe( node_ros, odom_sub_topic, qos );
+        odom_sub.subscribe( shared_from_this(), odom_sub_topic, qos );
         qos.depth = 32;
-        cloud_sub.subscribe( node_ros, cloud_sub_topic, qos );
+        cloud_sub.subscribe( shared_from_this(), cloud_sub_topic, qos );
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         sync->registerCallback( std::bind( &MrgSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
@@ -153,6 +150,8 @@ public:
             }
         }
 
+        std::string init_odom_topic = get_parameter( "init_odom_topic" ).as_string();
+        std::string init_pose_topic = get_parameter( "init_pose_topic" ).as_string();
         if( init_odom_topic != "NONE" ) {
             init_odom_sub = create_subscription<nav_msgs::msg::Odometry>( init_odom_topic, rclcpp::QoS( 32 ),
                                                                           std::bind( &MrgSlamComponent::init_odom_callback, this,
@@ -185,11 +184,11 @@ public:
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
-        optimization_timer                 = rclcpp::create_timer( node_ros, node_ros->get_clock(),
+        optimization_timer                 = rclcpp::create_timer( shared_from_this(), get_clock(),
                                                                    rclcpp::Duration( std::max( static_cast<int>( graph_update_interval ), 1 ), 0 ),
                                                                    std::bind( &MrgSlamComponent::optimization_timer_callback, this ),
                                                                    reentrant_callback_group2 );
-        map_publish_timer                  = rclcpp::create_timer( node_ros, node_ros->get_clock(),
+        map_publish_timer                  = rclcpp::create_timer( shared_from_this(), get_clock(),
                                                                    rclcpp::Duration( std::max( static_cast<int>( map_cloud_update_interval ), 1 ), 0 ),
                                                                    std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
 
@@ -268,10 +267,10 @@ public:
                                                                                                   get_graph_uuids_service_callback );
 
         // Initialize all processors
-        gps_processor.onInit( node_ros );
-        imu_processor.onInit( node_ros );
-        floor_coeffs_processor.onInit( node_ros );
-        markers_pub.onInit( node_ros );
+        gps_processor.onInit( shared_from_this() );
+        imu_processor.onInit( shared_from_this() );
+        floor_coeffs_processor.onInit( shared_from_this() );
+        markers_pub.onInit( shared_from_this() );
 
         slam_status_msg.initialized = true;
         slam_status_msg.robot_name  = own_name;
@@ -299,15 +298,14 @@ private:
         map_cloud_count_threshold = declare_parameter<int>( "map_cloud_count_threshold", 2 );
 
         // Initial pose parameters
-        init_odom_topic = declare_parameter<std::string>( "init_odom_topic", "NONE" );
-        init_pose_topic = declare_parameter<std::string>( "init_pose_topic", "NONE" );
-        init_pose_vec   = declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
+        declare_parameter<std::string>( "init_odom_topic", "NONE" );
+        declare_parameter<std::string>( "init_pose_topic", "NONE" );
+        declare_parameter<std::vector<double>>( "init_pose", std::vector<double>{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } );
 
         // Removing points of other robots from point cloud
-        robot_remove_points_radius = declare_parameter<double>( "robot_remove_points_radius", 2.0 );
+        declare_parameter<double>( "robot_remove_points_radius", 2.0 );
 
         // GraphSLAM parameters
-        fix_first_node_adaptive   = declare_parameter<bool>( "fix_first_node_adaptive", false );
         g2o_solver_type           = declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
         g2o_solver_num_iterations = declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
         save_graph                = declare_parameter<bool>( "save_graph", true );
@@ -456,7 +454,8 @@ private:
                     others_positions_sensor[i] = ( map2sensor * others_positions[i] ).cast<float>();
                 }
 
-                float robot_radius_sqr = robot_remove_points_radius * robot_remove_points_radius;
+                float robot_radius_sqr = get_parameter( "robot_remove_points_radius" ).as_double()
+                                         * get_parameter( "robot_remove_points_radius" ).as_double();
 
                 // get points to be removed
                 pcl::PointIndices::Ptr to_be_removed( new pcl::PointIndices() );
@@ -511,9 +510,10 @@ private:
     {
         Eigen::Matrix4d pose_mat = Eigen::Matrix4d::Identity();
         // try to initialize pose from init_odom or init_pose topic
-        if( init_odom_topic != "NONE" || init_pose_topic != "NONE" ) {
-            RCLCPP_INFO_STREAM( get_logger(),
-                                "Trying to initialize pose from odom topic: " << init_odom_topic << " or pose topic: " << init_pose_topic );
+        if( get_parameter( "init_odom_topic" ).as_string() != "NONE" || get_parameter( "init_pose_topic" ).as_string() != "NONE" ) {
+            RCLCPP_INFO_STREAM( get_logger(), "Trying to initialize pose from odom topic: "
+                                                  << get_parameter( "init_odom_topic" ).as_string()
+                                                  << " or pose topic: " << get_parameter( "init_pose_topic" ).as_string() );
             std::lock_guard<std::mutex> lock( init_pose_mutex );
             if( init_pose_msg == nullptr ) {
                 RCLCPP_WARN_STREAM( get_logger(), "No initial pose received yet, waiting for it..." );
@@ -531,7 +531,7 @@ private:
             pose_mat = pose.matrix();
         } else {  // use init_pose vector to initialize pose
             RCLCPP_INFO_STREAM( get_logger(), "Initializing pose from init_pose vector" );
-            Eigen::Matrix<double, 6, 1> p( init_pose_vec.data() );
+            Eigen::Matrix<double, 6, 1> p( get_parameter( "init_pose" ).as_double_array().data() );
             pose_mat.topLeftCorner<3, 3>() = ( Eigen::AngleAxisd( p[5], Eigen::Vector3d::UnitZ() )
                                                * Eigen::AngleAxisd( p[4], Eigen::Vector3d::UnitY() )
                                                * Eigen::AngleAxisd( p[3], Eigen::Vector3d::UnitX() ) )
@@ -1560,8 +1560,6 @@ private:
 
     // getting init pose from topic
     std::mutex                                                       init_pose_mutex;
-    std::string                                                      init_odom_topic;
-    std::string                                                      init_pose_topic;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr         init_odom_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr init_pose_sub;
     geometry_msgs::msg::PoseStamped::ConstSharedPtr                  init_pose_msg;  // should be accessed with keyframe_queue_mutex locked
@@ -1581,14 +1579,11 @@ private:
     std::string              own_name;
     std::vector<std::string> multi_robot_names;
 
-    float               robot_remove_points_radius;
-    std::vector<double> init_pose_vec;
-    bool                fix_first_node_adaptive;
-    std::string         g2o_solver_type;
-    bool                save_graph;
-    int                 g2o_solver_num_iterations;
-    double              graph_update_interval;
-    double              map_cloud_update_interval;
+    std::string g2o_solver_type;
+    bool        save_graph;
+    int         g2o_solver_num_iterations;
+    double      graph_update_interval;
+    double      map_cloud_update_interval;
 
     // Timing statistics
     std::vector<int64_t> loop_closure_times;
