@@ -133,7 +133,10 @@ ament_target_dependencies(floor_detection_component
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
-rclcpp_components_register_nodes(floor_detection_component "mrg_slam::FloorDetectionComponent")
+rclcpp_components_register_nodes(floor_detection_component
+  PLUGIN "mrg_slam::FloorDetectionComponent"
+  EXECUTABLE floor_detection_node
+)
 # Install the floor_detection_component (libfloor_detection_component.so) in workspace install folder
 install(
   TARGETS floor_detection_component
@@ -172,7 +175,10 @@ ament_target_dependencies(scan_matching_odometry_component
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
-rclcpp_components_register_nodes(scan_matching_odometry_component "mrg_slam::ScanMatchingOdometryComponent")
+rclcpp_components_register_nodes(scan_matching_odometry_component
+  PLUGIN "mrg_slam::ScanMatchingOdometryComponent"
+  EXECUTABLE scan_matching_odometry_node  
+)
 # Install the scan_matching_odometry_component (scan_matching_odometry_component.so) in workspace install folder
 install(
   TARGETS scan_matching_odometry_component
@@ -208,7 +214,10 @@ ament_target_dependencies(prefiltering_component
   fast_gicp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
-rclcpp_components_register_nodes(prefiltering_component "mrg_slam::PrefilteringComponent")
+rclcpp_components_register_nodes(prefiltering_component
+  PLUGIN "mrg_slam::PrefilteringComponent"
+  EXECUTABLE prefiltering_node
+)
 # Install the prefiltering_component (prefiltering_component.so) in workspace install folder
 install(
   TARGETS prefiltering_component
@@ -278,7 +287,10 @@ ament_target_dependencies(mrg_slam_component
   ndt_omp
 )
 # Register the component as part of mrg_slam (project) ComponentManager
-rclcpp_components_register_nodes(mrg_slam_component "mrg_slam::MrgSlamComponent")
+rclcpp_components_register_node(mrg_slam_component
+  PLUGIN "mrg_slam::MrgSlamComponent"
+  EXECUTABLE mrg_slam_node
+)
 # Install the mrg_slam_component (mrg_slam_component.so) in workspace install folder
 install(
   TARGETS mrg_slam_component
