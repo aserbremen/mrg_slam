@@ -163,7 +163,6 @@ private:
     // ROS2 parameters
     std::string         own_name;
     bool                fix_first_node;
-    bool                fix_first_node_adaptive;
     std::vector<double> fix_first_node_stddev_vec;
     bool                enable_fill_first_cloud;
     double              fill_first_cloud_radius;

@@ -190,7 +190,6 @@ mrg_slam_component:
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     # fix first node for optimization stability
     fix_first_node: true
-    fix_first_node_adaptive: false
     fix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
     # loop closure params
     distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates

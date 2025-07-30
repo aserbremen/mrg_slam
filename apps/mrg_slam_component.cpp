@@ -979,14 +979,6 @@ private:
         auto end = std::chrono::high_resolution_clock::now();
         loop_closure_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
 
-        // move the first node anchor position to the current estimate of the first node pose, so the first node moves freely while
-        // trying to stay around the origin. Fixing the first node adaptively with initial positions that are not the identity
-        // transform, leads to the fixed node moving at every optimization (not implemented atm), TODO remove this
-        // if( anchor_node && fix_first_node_adaptive ) {
-        //     Eigen::Isometry3d anchor_target = static_cast<g2o::VertexSE3 *>( anchor_edge_g2o->vertices()[1] )->estimate();
-        //     anchor_node->setEstimate( anchor_target );
-        // }
-
         const auto &keyframes           = graph_database->get_keyframes();
         const auto &edges               = graph_database->get_edges();
         const auto &prev_robot_keyframe = graph_database->get_prev_robot_keyframe();

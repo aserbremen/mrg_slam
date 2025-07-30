@@ -18,7 +18,6 @@ GraphDatabase::GraphDatabase( rclcpp::Node::SharedPtr _node, std::shared_ptr<Gra
 
     own_name                             = _node->get_parameter( "own_name" ).as_string();
     fix_first_node                       = _node->get_parameter( "fix_first_node" ).as_bool();
-    fix_first_node_adaptive              = _node->get_parameter( "fix_first_node_adaptive" ).as_bool();
     fix_first_node_stddev_vec            = _node->get_parameter( "fix_first_node_stddev" ).as_double_array();
     enable_fill_first_cloud              = _node->get_parameter( "enable_fill_first_cloud" ).as_bool();
     fill_first_cloud_radius              = _node->get_parameter( "fill_first_cloud_radius" ).as_double();
@@ -109,9 +108,6 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
 
                 anchor_kf = std::make_shared<KeyFrame>( own_name, rclcpp::Time(), Eigen::Isometry3d::Identity(), 0, -1, uuid_anchor_kf,
                                                         uuid_anchor_kf_str, slam_uuid, slam_uuid_str, nullptr );
-                if( fix_first_node_adaptive ) {
-                    // TODO if the anchor node is adaptive, handling needs to be implemented
-                }
                 anchor_kf->node                    = anchor_node;
                 uuid_keyframe_map[anchor_kf->uuid] = anchor_kf;
 
