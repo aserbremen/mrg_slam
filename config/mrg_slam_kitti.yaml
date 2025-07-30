@@ -84,6 +84,7 @@ scan_matching_odometry_component:
     enable_transform_thresholding: false
     max_acceptable_translation: 1.0
     max_acceptable_angle: 1.0 # rad
+    max_consecutive_rejections: 5 # number of consecutive rejections before accepting the transform
 
     enable_imu_frontend: false
 

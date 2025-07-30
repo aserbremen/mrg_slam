@@ -28,7 +28,8 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // We need to pass NodeOptions in ROS2 to register a component
-    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) : Node( "scan_matching_odometry_component", options )
+    ScanMatchingOdometryComponent( const rclcpp::NodeOptions& options ) :
+        Node( "scan_matching_odometry_component", options ), consecutive_rejections( 0 )
     {
         RCLCPP_INFO( get_logger(), "Initializing scan_matching_odometry_component..." );
 
@@ -106,6 +107,7 @@ private:
         declare_parameter<bool>( "enable_transform_thresholding", false );
         declare_parameter<double>( "max_acceptable_translation", 1.0 );
         declare_parameter<double>( "max_acceptable_angle", 1.0 );
+        declare_parameter<int>( "max_consecutive_rejections", 5 );
 
         declare_parameter<bool>( "enable_imu_frontend", false );
 
@@ -278,14 +280,37 @@ private:
             double          dx    = delta.block<3, 1>( 0, 3 ).norm();
             double          da    = std::acos( Eigen::Quaternionf( delta.block<3, 3>( 0, 0 ) ).w() );
 
-            if( dx > get_parameter( "max_acceptable_translation" ).as_double()
-                || da > get_parameter( "max_acceptable_angle" ).as_double() ) {
-                RCLCPP_WARN_STREAM( get_logger(), "too large transform!! " << dx << "[m] " << da << "[rad], ignoring frame at ("
-                                                                           << stamp.seconds() << ")" );
+            double max_acceptable_translation = get_parameter( "max_acceptable_translation" ).as_double();
+            double max_acceptable_angle       = get_parameter( "max_acceptable_angle" ).as_double();
 
-                // TODO implement consecutive rejections reset
+            if( dx > max_acceptable_translation || da > max_acceptable_angle ) {
+                consecutive_rejections++;
+                RCLCPP_WARN_STREAM( get_logger(), "Large transform rejected: " << dx << "[m] " << da << "[rad], ignoring frame at ("
+                                                                               << stamp.seconds() << ")" );
 
+                if( consecutive_rejections >= get_parameter( "max_consecutive_rejections" ).as_int() ) {
+                    RCLCPP_WARN_STREAM( get_logger(), "Max consecutive rejections reached, accepting transform at " << stamp.seconds() );
+
+                    keyframe = filtered;
+                    registration->setInputTarget( keyframe );
+
+                    // Maintain pose continuity
+                    keyframe_pose  = odom;
+                    keyframe_stamp = stamp;
+                    prev_time      = stamp;
+                    prev_trans.setIdentity();
+                    consecutive_rejections = 0;
+                    return keyframe_pose;
+                }
+
+                prev_time = stamp;
                 return keyframe_pose * prev_trans;
+            } else {
+                // Reset counter if the transform is acceptable
+                if( consecutive_rejections > 0 ) {
+                    RCLCPP_INFO_STREAM( get_logger(), "Transform accepted after " << consecutive_rejections << " rejections" );
+                }
+                consecutive_rejections = 0;
             }
         }
 
@@ -424,6 +449,7 @@ private:
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose;
     geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr msf_pose_after_update;
 
+    int                               consecutive_rejections;  // number of consecutive rejections due to large transform
     rclcpp::Time                      prev_time;
     Eigen::Matrix4f                   prev_trans;      // previous estimated transform from keyframe
     Eigen::Matrix4f                   keyframe_pose;   // keyframe pose
