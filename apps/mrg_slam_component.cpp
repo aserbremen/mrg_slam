@@ -44,7 +44,6 @@
 #include <mrg_slam_msgs/msg/pose_with_name_array.hpp>
 #include <mrg_slam_msgs/msg/slam_status.hpp>
 #include <mrg_slam_msgs/srv/add_static_key_frames.hpp>
-#include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_uuids.hpp>
 #include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
@@ -181,17 +180,16 @@ public:
         pub_options.callback_group                                 = reentrant_callback_group2;
         slam_status_publisher = create_publisher<mrg_slam_msgs::msg::SlamStatus>( "mrg_slam/slam_status", rclcpp::QoS( 16 ), pub_options );
 
-        cloud_msg_update_required          = false;
-        graph_estimate_msg_update_required = false;
 
-        optimization_timer = rclcpp::create_timer( shared_from_this(), get_clock(),
-                                                   rclcpp::Duration::from_seconds( get_parameter( "graph_update_interval" ).as_double() ),
-                                                   std::bind( &MrgSlamComponent::optimization_timer_callback, this ),
-                                                   reentrant_callback_group2 );
-        map_publish_timer  = rclcpp::create_timer( shared_from_this(), get_clock(),
-                                                   rclcpp::Duration::from_seconds(
+        optimization_timer        = rclcpp::create_timer( shared_from_this(), get_clock(),
+                                                          rclcpp::Duration::from_seconds( get_parameter( "graph_update_interval" ).as_double() ),
+                                                          std::bind( &MrgSlamComponent::optimization_timer_callback, this ),
+                                                          reentrant_callback_group2 );
+        map_publish_timer         = rclcpp::create_timer( shared_from_this(), get_clock(),
+                                                          rclcpp::Duration::from_seconds(
                                                       get_parameter( "map_cloud_update_interval" ).as_double() ),
-                                                   std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
+                                                          std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
+        cloud_msg_update_required = false;
 
         // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
         // the callback is a class member function, see
@@ -229,13 +227,6 @@ public:
             publish_map_service_callback = std::bind( &MrgSlamComponent::publish_map_service, this, std::placeholders::_1,
                                                       std::placeholders::_2 );
         publish_map_service_server = create_service<mrg_slam_msgs::srv::PublishMap>( "mrg_slam/publish_map", publish_map_service_callback );
-        // Get graph estimate service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::GetGraphEstimate::Response>      res )>
-            get_graph_estimate_service_callback = std::bind( &MrgSlamComponent::get_graph_estimate_service, this, std::placeholders::_1,
-                                                             std::placeholders::_2 );
-        get_graph_estimate_service_server       = create_service<mrg_slam_msgs::srv::GetGraphEstimate>( "mrg_slam/get_graph_estimate",
-                                                                                                        get_graph_estimate_service_callback );
         // Publish graph service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Response>      res )>
@@ -837,78 +828,6 @@ private:
     }
 
     /**
-     * @brief get the curren graph estimate
-     * @param req
-     * @param res
-     * @return
-     */
-    void get_graph_estimate_service( mrg_slam_msgs::srv::GetGraphEstimate::Request::ConstSharedPtr req,
-                                     mrg_slam_msgs::srv::GetGraphEstimate::Response::SharedPtr     res )
-    {
-        std::lock_guard<std::mutex> lock( graph_estimate_msg_mutex );
-
-        if( graph_estimate_msg_update_required ) {
-            if( keyframes_snapshot.empty() || edges_snapshot.empty() ) {
-                return;
-            }
-
-            if( !graph_estimate_msg ) {
-                graph_estimate_msg = mrg_slam_msgs::msg::GraphEstimate::SharedPtr( new mrg_slam_msgs::msg::GraphEstimate() );
-            }
-
-            std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp;
-            std::vector<EdgeSnapshot::Ptr>     edges_snapshot_tmp;
-
-            {
-                std::lock_guard<std::mutex> lock( snapshots_mutex );
-
-                keyframes_snapshot_tmp = keyframes_snapshot;
-                edges_snapshot_tmp     = edges_snapshot;
-            }
-
-            graph_estimate_msg->header.frame_id = map_frame_id;
-            rclcpp::Time graph_estimate_stamp;
-            pcl_conversions::fromPCL( keyframes_snapshot_tmp.back()->cloud->header.stamp, graph_estimate_stamp );
-            graph_estimate_msg->header.stamp = graph_estimate_stamp.operator builtin_interfaces::msg::Time();
-
-            graph_estimate_msg->edges.resize( edges_snapshot_tmp.size() );
-            graph_estimate_msg->keyframes.resize( keyframes_snapshot_tmp.size() );
-
-            for( size_t i = 0; i < edges_snapshot_tmp.size(); i++ ) {
-                auto &edge_out         = graph_estimate_msg->edges[i];
-                auto &edge_in          = edges_snapshot_tmp[i];
-                edge_out.uuid_str      = boost::uuids::to_string( edge_in->uuid );
-                edge_out.from_uuid_str = boost::uuids::to_string( edge_in->from_uuid );
-                edge_out.to_uuid_str   = boost::uuids::to_string( edge_in->to_uuid );
-                edge_out.type          = static_cast<uint8_t>( edge_in->type );
-            }
-
-            for( size_t i = 0; i < keyframes_snapshot_tmp.size(); i++ ) {
-                auto &keyframe_out         = graph_estimate_msg->keyframes[i];
-                auto &keyframe_in          = keyframes_snapshot_tmp[i];
-                keyframe_out.uuid_str      = boost::uuids::to_string( keyframe_in->uuid );
-                keyframe_out.stamp         = keyframe_in->stamp;
-                keyframe_out.estimate.pose = tf2::toMsg( keyframe_in->pose );
-                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> covMap( keyframe_out.estimate.covariance.data() );
-                covMap = keyframe_in->covariance;
-            }
-
-            graph_estimate_msg_update_required = false;
-        }
-
-        if( !graph_estimate_msg ) {
-            return;
-        }
-
-        if( req->last_stamp != graph_estimate_msg->header.stamp ) {
-            res->updated        = true;
-            res->graph_estimate = *graph_estimate_msg;
-        } else {
-            res->updated = false;
-        }
-    }
-
-    /**
      * @brief this methods adds all the data in the queues to the pose graph, and then optimizes the pose graph
      * @param event
      */
@@ -997,15 +916,10 @@ private:
         std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot_tmp( keyframes.size() );
         std::transform( keyframes.begin(), keyframes.end(), keyframes_snapshot_tmp.begin(),
                         [=]( const KeyFrame::Ptr &k ) { return std::make_shared<KeyFrameSnapshot>( k, marginals ); } );
-        std::vector<EdgeSnapshot::Ptr> edges_snapshot_tmp( edges.size() );
-        std::transform( edges.begin(), edges.end(), edges_snapshot_tmp.begin(),
-                        [=]( const Edge::Ptr &e ) { return std::make_shared<EdgeSnapshot>( e ); } );
 
         snapshots_mutex.lock();
         keyframes_snapshot.swap( keyframes_snapshot_tmp );
-        edges_snapshot.swap( edges_snapshot_tmp );
-        cloud_msg_update_required          = true;
-        graph_estimate_msg_update_required = true;
+        cloud_msg_update_required = true;
         snapshots_mutex.unlock();
 
         // Publish the current optimized slam pose
@@ -1491,7 +1405,6 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishMap>::SharedPtr         publish_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr   get_graph_estimate_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphUuids>::SharedPtr      get_graph_uuids_service_server;
@@ -1508,11 +1421,6 @@ private:
     std::atomic_bool                         cloud_msg_update_required;
     sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg;
 
-    // latest graph estimate
-    std::mutex                                   graph_estimate_msg_mutex;
-    std::atomic_bool                             graph_estimate_msg_update_required;
-    mrg_slam_msgs::msg::GraphEstimate::SharedPtr graph_estimate_msg;
-
     // getting init pose from topic
     std::mutex                                                       init_pose_mutex;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr         init_odom_sub;
@@ -1527,7 +1435,6 @@ private:
     double                             map_cloud_count_threshold;
     std::mutex                         snapshots_mutex;
     std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot;
-    std::vector<EdgeSnapshot::Ptr>     edges_snapshot;
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;
 
     // More parameters
