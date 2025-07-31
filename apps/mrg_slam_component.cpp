@@ -279,10 +279,11 @@ private:
         cloud_sub_topic   = declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
-        map_frame_id              = declare_parameter<std::string>( "map_frame_id", "map" );
-        odom_frame_id             = declare_parameter<std::string>( "odom_frame_id", "odom" );
-        map_cloud_resolution      = declare_parameter<double>( "map_cloud_resolution", 0.05 );
-        map_cloud_count_threshold = declare_parameter<int>( "map_cloud_count_threshold", 2 );
+        map_frame_id  = declare_parameter<std::string>( "map_frame_id", "map" );
+        odom_frame_id = declare_parameter<std::string>( "odom_frame_id", "odom" );
+        declare_parameter<double>( "map_cloud_resolution", 0.05 );
+        declare_parameter<int>( "map_cloud_min_points_per_voxel", 2 );
+        declare_parameter<bool>( "map_cloud_skip_first_cloud", false );
 
         // Initial pose parameters
         declare_parameter<std::string>( "init_odom_topic", "NONE" );
@@ -763,7 +764,8 @@ private:
             cloud_msg_update_required = false;
         }
 
-        auto cloud = map_cloud_generator->generate( snapshot, map_cloud_resolution, map_cloud_count_threshold );
+        auto cloud = map_cloud_generator->generate( snapshot, get_parameter( "map_cloud_resolution" ).as_double(),
+                                                    get_parameter( "map_cloud_min_points_per_voxel" ).as_int(), false );
         if( !cloud ) {
             return false;
         }
@@ -807,11 +809,12 @@ private:
             snapshot = keyframes_snapshot;
         }
 
-        double      resolution      = req->resolution == 0 ? map_cloud_resolution : req->resolution;
-        int         count_threshold = req->count_threshold < 0 ? map_cloud_count_threshold : req->count_threshold;
-        std::string frame_id        = req->frame_id.empty() ? map_frame_id : req->frame_id;
+        double      resolution           = req->resolution == 0 ? get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
+        int         min_points_per_voxel = req->min_points_per_voxel < 0 ? get_parameter( "map_cloud_min_points_per_voxel" ).as_int()
+                                                                         : req->min_points_per_voxel;
+        std::string frame_id             = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud = map_cloud_generator->generate( snapshot, resolution, count_threshold, req->skip_first_cloud );
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, min_points_per_voxel, req->skip_first_cloud );
         if( !cloud ) {
             RCLCPP_WARN_STREAM( get_logger(), "Failed to generate map cloud" );
             res->success = false;
@@ -1431,8 +1434,6 @@ private:
     std::string                        base_frame_id;
     std::string                        map_frame_id;
     std::string                        odom_frame_id;
-    double                             map_cloud_resolution;
-    double                             map_cloud_count_threshold;
     std::mutex                         snapshots_mutex;
     std::vector<KeyFrameSnapshot::Ptr> keyframes_snapshot;
     std::unique_ptr<MapCloudGenerator> map_cloud_generator;

@@ -257,7 +257,7 @@ mrg_slam_component:
     map_cloud_update_interval: 5.0
     map_cloud_resolution: 0.1
     # minimum number of points in a voxel to consider it as occupied
-    map_cloud_count_threshold: 1
+    map_cloud_min_points_per_voxel: 1
     save_graph: false
     # if result_dir is given, all kinds of stats will be saved in this directory
     result_dir: ""
