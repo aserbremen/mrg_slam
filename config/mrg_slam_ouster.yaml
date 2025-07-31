@@ -173,10 +173,6 @@ mrg_slam_component:
     g2o_solver_type: "lm_var_cholmod"
     g2o_solver_num_iterations: 512
     g2o_verbose: false
-    # constraint switches
-    enable_gps: false
-    enable_imu_acceleration: false
-    enable_imu_orientation: false
     # whether to fill a circular ground plane below the robot's very first keyframe at initialization
     # this is helpful for navigation algorithms that need a map for planning
     enable_fill_first_cloud: true
@@ -212,8 +208,8 @@ mrg_slam_component:
     reg_correspondence_randomness: 20
     reg_resolution: 1.0
     reg_nn_search_method: "DIRECT7"
-    #  edge params
-    # GPS
+    # GPS edges
+    enable_gps: false
     gps_edge_robust_kernel: "NONE"
     gps_edge_robust_kernel_size: 1.0
     gps_edge_stddev_xy: 20.0
@@ -221,16 +217,19 @@ mrg_slam_component:
     gps_use_enu: false # whether to treat local Cartesian coordinates as ENU or UTM coordinate system for GPS calculations
     gps_enu_origin_from_msg: true # whether to calculate ENU frame origin from the first matched GPS message
     gps_enu_origin: [0.0, 0.0, 0.0] # latitude, longitude, ellipsoidal height. Origin of the local ENU frame in WGS 84 (EPSG:4979) coordinates
-    # IMU orientation
+    # IMU orientation edges
+    enable_imu_orientation: false
     imu_orientation_edge_robust_kernel: "NONE"
     imu_orientation_edge_stddev: 1.0
-    # IMU acceleration (gravity vector)
+    # IMU acceleration (gravity vector) edges
+    enable_imu_acceleration: false
     imu_acceleration_edge_robust_kernel: "NONE"
     imu_acceleration_edge_stddev: 1.0
-    # ground plane
+    # ground plane edges
+    enable_floor_coeffs: false
     floor_edge_robust_kernel: "NONE"
     floor_edge_stddev: 10.0
-    # scan matching
+    # odometry edges
     # robust kernels [NONE, Cauchy, DCS, Fair, GemanMcClure, Huber, PseudoHuber, Saturated, Tukey, Welsch]
     odometry_edge_robust_kernel: "NONE"
     odometry_edge_robust_kernel_size: 1.0

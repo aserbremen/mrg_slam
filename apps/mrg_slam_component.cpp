@@ -345,6 +345,7 @@ private:
         declare_parameter<double>( "imu_acceleration_edge_robust_kernel_size", 1.0 );
 
         // FloorCoeffsProcessor parameters (not directly used by this class)
+        declare_parameter<bool>( "enable_floor_coeffs", false );
         declare_parameter<double>( "floor_edge_stddev", 10.0 );
         declare_parameter<std::string>( "floor_edge_robust_kernel", "NONE" );
         declare_parameter<double>( "floor_edge_robust_kernel_size", 1.0 );
