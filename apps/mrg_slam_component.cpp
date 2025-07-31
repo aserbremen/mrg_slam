@@ -104,17 +104,8 @@ public:
         map_cloud_generator.reset( new MapCloudGenerator() );
 
         // subscribers
-        if( !own_name.empty() ) {
-            odom_sub_topic  = "/" + own_name + odom_sub_topic;
-            cloud_sub_topic = "/" + own_name + cloud_sub_topic;
-        }
-        RCLCPP_INFO( get_logger(), "Subscribing to odom topic %s", odom_sub_topic.c_str() );
-        RCLCPP_INFO( get_logger(), "Subscribing to cloud topic %s", cloud_sub_topic.c_str() );
-        auto qos  = rmw_qos_profile_default;
-        qos.depth = 256;
-        odom_sub.subscribe( shared_from_this(), odom_sub_topic, qos );
-        qos.depth = 32;
-        cloud_sub.subscribe( shared_from_this(), cloud_sub_topic, qos );
+        odom_sub.subscribe( shared_from_this(), "scan_matching_odometry/odom", rmw_qos_profile_default );
+        cloud_sub.subscribe( shared_from_this(), "prefiltering/filtered_points", rmw_qos_profile_default );
         sync.reset( new message_filters::Synchronizer<ApproxSyncPolicy>( ApproxSyncPolicy( 32 ), odom_sub, cloud_sub ) );
         sync->registerCallback( std::bind( &MrgSlamComponent::cloud_callback, this, std::placeholders::_1, std::placeholders::_2 ) );
 
@@ -275,15 +266,14 @@ private:
         // General and scenario parameters
         own_name          = declare_parameter<std::string>( "own_name", "atlas" );
         multi_robot_names = declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        odom_sub_topic    = declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
-        cloud_sub_topic   = declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
+        declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
+        declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
         map_frame_id  = declare_parameter<std::string>( "map_frame_id", "map" );
         odom_frame_id = declare_parameter<std::string>( "odom_frame_id", "odom" );
         declare_parameter<double>( "map_cloud_resolution", 0.05 );
         declare_parameter<int>( "map_cloud_min_points_per_voxel", 2 );
-        declare_parameter<bool>( "map_cloud_skip_first_cloud", false );
 
         // Initial pose parameters
         declare_parameter<std::string>( "init_odom_topic", "NONE" );
@@ -1370,9 +1360,8 @@ private:
     rclcpp::TimerBase::SharedPtr optimization_timer;
     rclcpp::TimerBase::SharedPtr map_publish_timer;
 
-    std::string                                                      odom_sub_topic;
+    // Odometry and pointCloud synchronization for SLAM keyframe generation
     message_filters::Subscriber<nav_msgs::msg::Odometry>             odom_sub;
-    std::string                                                      cloud_sub_topic;
     message_filters::Subscriber<sensor_msgs::msg::PointCloud2>       cloud_sub;
     std::unique_ptr<message_filters::Synchronizer<ApproxSyncPolicy>> sync;
 

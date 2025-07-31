@@ -19,8 +19,6 @@ PARAM_MAPPING = {
     'enable_gps': bool,
     'enable_imu_acceleration': bool,
     'enable_imu_orientation': bool,
-    'odom_sub_topic': str,
-    'cloud_sub_topic': str,
     'enable_graph_slam': bool,
     'tf_link_values': str,
     'points_topic': str,
@@ -121,7 +119,7 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(mrg_slam_params, 'mrg_slam_params')
 
     # Use remapped tf topics to avoid conflicts in multi robot case, if necessary
-    tf_remappings = [] # [('/tf', 'tf'), ('/tf_static', 'tf_static')]
+    tf_remappings = []  # [('/tf', 'tf'), ('/tf_static', 'tf_static')]
     print_remappings(tf_remappings, 'tf_remappings')
 
     # Create the static transform publisher node between the base and the lidar frame
