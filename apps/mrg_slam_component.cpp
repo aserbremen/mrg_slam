@@ -46,7 +46,6 @@
 #include <mrg_slam_msgs/srv/add_static_key_frames.hpp>
 #include <mrg_slam_msgs/srv/get_graph_estimate.hpp>
 #include <mrg_slam_msgs/srv/get_graph_uuids.hpp>
-#include <mrg_slam_msgs/srv/get_map.hpp>
 #include <mrg_slam_msgs/srv/load_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_graph.hpp>
 #include <mrg_slam_msgs/srv/publish_map.hpp>
@@ -222,11 +221,6 @@ public:
             save_map_service_callback = std::bind( &MrgSlamComponent::save_map_service, this, std::placeholders::_1,
                                                    std::placeholders::_2 );
         save_map_service_server       = create_service<mrg_slam_msgs::srv::SaveMap>( "mrg_slam/save_map", save_map_service_callback );
-        // Get map service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetMap::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::GetMap::Response>      res )>
-            get_map_service_callback = std::bind( &MrgSlamComponent::get_map_service, this, std::placeholders::_1, std::placeholders::_2 );
-        get_map_service_server       = create_service<mrg_slam_msgs::srv::GetMap>( "mrg_slam/get_map", get_map_service_callback );
         // Publish map service
         std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Request> req,
                             std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Response>      res )>
@@ -807,27 +801,6 @@ private:
     }
 
     /**
-     * @brief get the curren map as point cloud
-     * @param req
-     * @param res
-     * @return
-     */
-    void get_map_service( mrg_slam_msgs::srv::GetMap::Request::ConstSharedPtr req, mrg_slam_msgs::srv::GetMap::Response::SharedPtr res )
-    {
-        std::lock_guard<std::mutex> lock( cloud_msg_mutex );
-
-        update_cloud_msg();
-
-        // == and != operators are defined for builtin_interfaces::msg::Time
-        if( req->last_stamp != cloud_msg->header.stamp ) {
-            res->updated   = true;
-            res->cloud_map = *cloud_msg;
-        } else {
-            res->updated = false;
-        }
-    }
-
-    /**
      * @brief Publish the map points triggered by a service call and not by a timer. On a different topic than the timer
      */
     void publish_map_service( mrg_slam_msgs::srv::PublishMap::Request::ConstSharedPtr req,
@@ -858,7 +831,6 @@ private:
         map_points_service_pub->publish( *cloud_msg );
         res->success = true;
     }
-
 
     /**
      * @brief get the curren graph estimate
@@ -1534,7 +1506,6 @@ private:
     rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr          save_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetMap>::SharedPtr             get_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishMap>::SharedPtr         publish_map_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::GetGraphEstimate>::SharedPtr   get_graph_estimate_service_server;
     rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
