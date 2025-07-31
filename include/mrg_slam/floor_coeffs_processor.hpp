@@ -21,28 +21,33 @@ class FloorCoeffsProcessor {
 public:
     FloorCoeffsProcessor() {}
 
-    void onInit( rclcpp::Node::SharedPtr _node );
+    void onInit( rclcpp::Node::SharedPtr node );
 
+    /**
+     * @brief received floor coefficients are added to #floor_coeffs_queue
+     * @param floor_coeffs_msg
+     */
     void floor_coeffs_callback( mrg_slam_msgs::msg::FloorCoeffs::ConstSharedPtr floor_coeffs_msg );
 
-    bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes,
-                const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash> &keyframe_hash,
-                const builtin_interfaces::msg::Time                                                 &latest_keyframe_stamp );
 
+    /**
+     * @brief this methods associates floor coefficients messages with registered keyframes, and then adds the associated coeffs to the pose
+     * graph
+     * @return if true, at least one floor plane edge is added to the pose graph
+     */
     bool flush( std::shared_ptr<GraphDatabase> graph_db, std::shared_ptr<GraphSLAM> &graph_slam );
 
-    const g2o::VertexPlane *floor_plane_node() const { return floor_plane_node_ptr; }
+    const g2o::VertexPlane *floor_plane_node() const { return floor_plane_node_ptr_; }
 
 private:
-    rclcpp::Subscription<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_sub;
+    rclcpp::Node::SharedPtr node_;
 
-    double                                                      floor_edge_stddev;
-    std::string                                                 floor_edge_robust_kernel;
-    double                                                      floor_edge_robust_kernel_size;
-    std::mutex                                                  floor_coeffs_queue_mutex;
-    std::deque<mrg_slam_msgs::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue;
+    rclcpp::Subscription<mrg_slam_msgs::msg::FloorCoeffs>::SharedPtr floor_sub_;
 
-    g2o::VertexPlane *floor_plane_node_ptr;
+    std::mutex                                                  floor_coeffs_queue_mutex_;
+    std::deque<mrg_slam_msgs::msg::FloorCoeffs::ConstSharedPtr> floor_coeffs_queue_;
+
+    g2o::VertexPlane *floor_plane_node_ptr_;
 };
 
 }  // namespace mrg_slam
