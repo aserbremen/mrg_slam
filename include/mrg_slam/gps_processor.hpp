@@ -3,6 +3,7 @@
 #ifndef GPS_PROCESSOR_HPP
 #define GPS_PROCESSOR_HPP
 
+#include <GeographicLib/LocalCartesian.hpp>
 #include <boost/optional.hpp>
 #include <deque>
 #include <geographic_msgs/msg/geo_point.hpp>
@@ -14,7 +15,6 @@
 #include <nmea_msgs/msg/sentence.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
-#include <GeographicLib/LocalCartesian.hpp>
 
 
 namespace mrg_slam {
@@ -23,7 +23,7 @@ class GpsProcessor {
 public:
     GpsProcessor() {}
 
-    void onInit( rclcpp::Node::SharedPtr _node );
+    void onInit( rclcpp::Node::SharedPtr node );
 
     void nmea_callback( const nmea_msgs::msg::Sentence::SharedPtr nmea_msg );
     void navsat_callback( const sensor_msgs::msg::NavSatFix::SharedPtr navsat_msg );
@@ -31,31 +31,25 @@ public:
 
     bool flush( std::shared_ptr<GraphSLAM> &graph_slam, const std::vector<KeyFrame::Ptr> &keyframes );
 
-    const boost::optional<Eigen::Vector3d> &zero_utm() const { return zero_utm_vec; }
-    const boost::optional<Eigen::Vector3d> &zero_enu() const { return zero_enu_vec; }
-    const boost::optional<geographic_msgs::msg::GeoPoint> &enu_origin() const { return gps_enu_origin; }
+    const boost::optional<Eigen::Vector3d>                &zero_utm() const { return zero_utm_vec_; }
+    const boost::optional<Eigen::Vector3d>                &zero_enu() const { return zero_enu_vec_; }
+    const boost::optional<geographic_msgs::msg::GeoPoint> &enu_origin() const { return gps_enu_origin_; }
 
 private:
-    rclcpp::Subscription<nmea_msgs::msg::Sentence>::SharedPtr              nmea_sub;
-    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr           navsat_sub;
-    rclcpp::Subscription<geographic_msgs::msg::GeoPointStamped>::SharedPtr gps_sub;
+    rclcpp::Node::SharedPtr node_;
 
-    std::unique_ptr<NmeaSentenceParser> nmea_parser;
+    rclcpp::Subscription<nmea_msgs::msg::Sentence>::SharedPtr              nmea_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr           navsat_sub_;
+    rclcpp::Subscription<geographic_msgs::msg::GeoPointStamped>::SharedPtr gps_sub_;
 
-    bool                                                         enable_gps;
-    double                                                       gps_time_offset;
-    double                                                       gps_edge_stddev_xy;
-    double                                                       gps_edge_stddev_z;
-    std::string                                                  gps_edge_robust_kernel;
-    double                                                       gps_edge_robust_kernel_size;
-    bool                                                         gps_use_enu;
-    bool                                                         gps_enu_origin_from_msg;
-    boost::optional<Eigen::Vector3d>                             zero_utm_vec;
-    boost::optional<Eigen::Vector3d>                             zero_enu_vec;
-    boost::optional<geographic_msgs::msg::GeoPoint>              gps_enu_origin;
-    std::mutex                                                   gps_queue_mutex;
-    std::deque<geographic_msgs::msg::GeoPointStamped::SharedPtr> gps_queue;
-    GeographicLib::LocalCartesian                                local_cartesian;
+    std::unique_ptr<NmeaSentenceParser> nmea_parser_;
+
+    boost::optional<Eigen::Vector3d>                             zero_utm_vec_;
+    boost::optional<Eigen::Vector3d>                             zero_enu_vec_;
+    boost::optional<geographic_msgs::msg::GeoPoint>              gps_enu_origin_;
+    std::mutex                                                   gps_queue_mutex_;
+    std::deque<geographic_msgs::msg::GeoPointStamped::SharedPtr> gps_queue_;
+    GeographicLib::LocalCartesian                                local_cartesian_;
 };
 
 }  // namespace mrg_slam
