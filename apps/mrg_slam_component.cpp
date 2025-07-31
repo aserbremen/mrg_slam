@@ -182,67 +182,39 @@ public:
                                                           std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
         cloud_msg_update_required = false;
 
-        // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
-        // the callback is a class member function, see
-        // https://answers.ros.org/question/308386/ros2-add-arguments-to-callback/ If these service callbacks dont
-        // work during runtime, try using lambda functions as in
-        // https://github.com/ros2/demos/blob/foxy/demo_nodes_cpp/src/services/add_two_ints_server.cpp
         // Add static map service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::AddStaticKeyFrames::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::AddStaticKeyFrames::Response>      res )>
-            add_static_keyframes_service_callback = std::bind( &MrgSlamComponent::add_static_keyframes_service, this, std::placeholders::_1,
-                                                               std::placeholders::_2 );
-        add_static_keyframes_service_server       = create_service<mrg_slam_msgs::srv::AddStaticKeyFrames>(
-            "mrg_slam/add_static_keyframes", add_static_keyframes_service_callback );
+        add_static_keyframes_service_ = create_service<mrg_slam_msgs::srv::AddStaticKeyFrames>(
+            "mrg_slam/add_static_keyframes",
+            std::bind( &MrgSlamComponent::add_static_keyframes_service, this, std::placeholders::_1, std::placeholders::_2 ) );
         // Save graph service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::SaveGraph::Response>      res )>
-            save_graph_service_callback = std::bind( &MrgSlamComponent::save_graph_service, this, std::placeholders::_1,
-                                                     std::placeholders::_2 );
-        save_graph_service_server = create_service<mrg_slam_msgs::srv::SaveGraph>( "mrg_slam/save_graph", save_graph_service_callback );
+        save_graph_service_ = create_service<mrg_slam_msgs::srv::SaveGraph>( "mrg_slam/save_graph",
+                                                                             std::bind( &MrgSlamComponent::save_graph_service, this,
+                                                                                        std::placeholders::_1, std::placeholders::_2 ) );
         // Load graph service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::LoadGraph::Response>      res )>
-            load_graph_service_callback = std::bind( &MrgSlamComponent::load_graph_service, this, std::placeholders::_1,
-                                                     std::placeholders::_2 );
-        load_graph_service_server = create_service<mrg_slam_msgs::srv::LoadGraph>( "mrg_slam/load_graph", load_graph_service_callback );
+        load_graph_service_ = create_service<mrg_slam_msgs::srv::LoadGraph>( "mrg_slam/load_graph",
+                                                                             std::bind( &MrgSlamComponent::load_graph_service, this,
+                                                                                        std::placeholders::_1, std::placeholders::_2 ) );
         // Save map service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::SaveMap::Response>      res )>
-            save_map_service_callback = std::bind( &MrgSlamComponent::save_map_service, this, std::placeholders::_1,
-                                                   std::placeholders::_2 );
-        save_map_service_server       = create_service<mrg_slam_msgs::srv::SaveMap>( "mrg_slam/save_map", save_map_service_callback );
+        save_map_service_ = create_service<mrg_slam_msgs::srv::SaveMap>( "mrg_slam/save_map",
+                                                                         std::bind( &MrgSlamComponent::save_map_service, this,
+                                                                                    std::placeholders::_1, std::placeholders::_2 ) );
         // Publish map service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::PublishMap::Response>      res )>
-            publish_map_service_callback = std::bind( &MrgSlamComponent::publish_map_service, this, std::placeholders::_1,
-                                                      std::placeholders::_2 );
-        publish_map_service_server = create_service<mrg_slam_msgs::srv::PublishMap>( "mrg_slam/publish_map", publish_map_service_callback );
+        publish_map_service_ = create_service<mrg_slam_msgs::srv::PublishMap>( "mrg_slam/publish_map",
+                                                                               std::bind( &MrgSlamComponent::publish_map_service, this,
+                                                                                          std::placeholders::_1, std::placeholders::_2 ) );
         // Publish graph service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::PublishGraph::Response>      res )>
-                    publish_graph_service_callback = std::bind( &MrgSlamComponent::publish_graph_service, this, std::placeholders::_1,
-                                                                std::placeholders::_2 );
-        std::string publish_graph_service_topic    = "mrg_slam/publish_graph";
-        if( !own_name.empty() ) {
-            publish_graph_service_topic = "/" + own_name + "/" + publish_graph_service_topic;
-        }
-        publish_graph_service_server = create_service<mrg_slam_msgs::srv::PublishGraph>( publish_graph_service_topic,
-                                                                                         publish_graph_service_callback );
-        // Request graph service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::RequestGraphs::Response>      res )>
-            request_graph_service_callback = std::bind( &MrgSlamComponent::request_graph_service, this, std::placeholders::_1,
-                                                        std::placeholders::_2 );
-        request_graph_service_server       = create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
-                                                                                                request_graph_service_callback );
-        // Get graph IDs (gids) service
-        std::function<void( const std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Request> req,
-                            std::shared_ptr<mrg_slam_msgs::srv::GetGraphUuids::Response>      res )>
-            get_graph_uuids_service_callback = std::bind( &MrgSlamComponent::get_graph_uuids_service, this, std::placeholders::_1,
-                                                          std::placeholders::_2 );
-        get_graph_uuids_service_server       = create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
-                                                                                                  get_graph_uuids_service_callback );
+        publish_graph_service_   = create_service<mrg_slam_msgs::srv::PublishGraph>( "mrg_slam/publish_graph",
+                                                                                     std::bind( &MrgSlamComponent::publish_graph_service,
+                                                                                                this, std::placeholders::_1,
+                                                                                                std::placeholders::_2 ) );
+        request_graph_service_   = create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
+                                                                                      std::bind( &MrgSlamComponent::request_graph_service,
+                                                                                                 this, std::placeholders::_1,
+                                                                                                 std::placeholders::_2 ) );
+        get_graph_uuids_service_ = create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
+                                                                                      std::bind( &MrgSlamComponent::get_graph_uuids_service,
+                                                                                                 this, std::placeholders::_1,
+                                                                                                 std::placeholders::_2 ) );
 
         // Initialize all processors
         gps_processor.onInit( shared_from_this() );
@@ -1392,14 +1364,14 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_points_service_pub;  // service based map cloud publisher
 
     // Services
-    rclcpp::Service<mrg_slam_msgs::srv::AddStaticKeyFrames>::SharedPtr add_static_keyframes_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr          save_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::PublishMap>::SharedPtr         publish_map_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_server;
-    rclcpp::Service<mrg_slam_msgs::srv::GetGraphUuids>::SharedPtr      get_graph_uuids_service_server;
+    rclcpp::Service<mrg_slam_msgs::srv::AddStaticKeyFrames>::SharedPtr add_static_keyframes_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::SaveGraph>::SharedPtr          save_graph_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::LoadGraph>::SharedPtr          load_graph_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::SaveMap>::SharedPtr            save_map_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::PublishMap>::SharedPtr         publish_map_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::PublishGraph>::SharedPtr       publish_graph_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::RequestGraphs>::SharedPtr      request_graph_service_;
+    rclcpp::Service<mrg_slam_msgs::srv::GetGraphUuids>::SharedPtr      get_graph_uuids_service_;
 
     // Processors
     ImuProcessor         imu_processor;
