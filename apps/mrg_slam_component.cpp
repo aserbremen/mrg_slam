@@ -96,8 +96,8 @@ public:
         // Initialize variables
         trans_odom2map.setIdentity();
 
-        graph_slam.reset( new GraphSLAM( g2o_solver_type ) );
-        graph_slam->set_save_graph( save_graph );
+        graph_slam.reset( new GraphSLAM( get_parameter( "g2o_solver_type" ).as_string() ) );
+        graph_slam->set_save_graph( get_parameter( "save_graph" ).as_bool() );
 
         graph_database.reset( new GraphDatabase( shared_from_this(), graph_slam ) );
         keyframe_updater.reset( new KeyframeUpdater( shared_from_this() ) );
@@ -183,13 +183,15 @@ public:
 
         cloud_msg_update_required          = false;
         graph_estimate_msg_update_required = false;
-        optimization_timer                 = rclcpp::create_timer( shared_from_this(), get_clock(),
-                                                                   rclcpp::Duration( std::max( static_cast<int>( graph_update_interval ), 1 ), 0 ),
-                                                                   std::bind( &MrgSlamComponent::optimization_timer_callback, this ),
-                                                                   reentrant_callback_group2 );
-        map_publish_timer                  = rclcpp::create_timer( shared_from_this(), get_clock(),
-                                                                   rclcpp::Duration( std::max( static_cast<int>( map_cloud_update_interval ), 1 ), 0 ),
-                                                                   std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
+
+        optimization_timer = rclcpp::create_timer( shared_from_this(), get_clock(),
+                                                   rclcpp::Duration::from_seconds( get_parameter( "graph_update_interval" ).as_double() ),
+                                                   std::bind( &MrgSlamComponent::optimization_timer_callback, this ),
+                                                   reentrant_callback_group2 );
+        map_publish_timer  = rclcpp::create_timer( shared_from_this(), get_clock(),
+                                                   rclcpp::Duration::from_seconds(
+                                                      get_parameter( "map_cloud_update_interval" ).as_double() ),
+                                                   std::bind( &MrgSlamComponent::map_points_publish_timer_callback, this ) );
 
         // We need to define a special function to pass arguments to a ROS2 callback with multiple parameters when
         // the callback is a class member function, see
@@ -300,17 +302,16 @@ private:
         declare_parameter<double>( "robot_remove_points_radius", 2.0 );
 
         // GraphSLAM parameters
-        g2o_solver_type           = declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
-        g2o_solver_num_iterations = declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
-        save_graph                = declare_parameter<bool>( "save_graph", true );
+        declare_parameter<std::string>( "g2o_solver_type", "lm_var_cholmod" );
+        declare_parameter<int>( "g2o_solver_num_iterations", 1024 );
+        declare_parameter<bool>( "save_graph", true );
         declare_parameter<bool>( "g2o_verbose", false );
-        graph_update_interval               = declare_parameter<double>( "graph_update_interval", 3.0 );
-        map_cloud_update_interval           = declare_parameter<double>( "map_cloud_update_interval", 10.0 );
-        graph_request_min_accum_dist        = declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
-        graph_request_max_robot_dist        = declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
-        graph_request_min_time_delay        = declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
-        std::string graph_exchange_mode_str = declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
-        graph_exchange_mode                 = graph_exchange_mode_from_string( graph_exchange_mode_str );
+        declare_parameter<double>( "graph_update_interval", 3.0 );
+        declare_parameter<double>( "map_cloud_update_interval", 10.0 );
+        declare_parameter<double>( "graph_request_min_accum_dist", 3.0 );
+        declare_parameter<double>( "graph_request_max_robot_dist", 10.0 );
+        declare_parameter<double>( "graph_request_min_time_delay", 5.0 );
+        declare_parameter<std::string>( "graph_exchange_mode", "PATH_PROXIMITY" );
 
         // Fill first cloud parameters
         declare_parameter<bool>( "enable_fill_first_cloud", false );
@@ -578,23 +579,26 @@ private:
         double     &other_last_accum_dist = others_last_accum_dist[other_robot_name];
         others_slam_poses[other_robot_name].push_back( *slam_pose_msg );
 
-        if( other_last_accum_dist >= 0 && fabs( other_accum_dist - other_last_accum_dist ) < graph_request_min_accum_dist ) {
+        if( other_last_accum_dist >= 0
+            && fabs( other_accum_dist - other_last_accum_dist ) < get_parameter( "graph_request_min_accum_dist" ).as_double() ) {
             return;
         }
         if( others_last_graph_exchange_time[other_robot_name] >= 0.0
-            && now().seconds() - others_last_graph_exchange_time[other_robot_name] < graph_request_min_time_delay ) {
+            && now().seconds() - others_last_graph_exchange_time[other_robot_name]
+                   < get_parameter( "graph_request_min_time_delay" ).as_double() ) {
             return;
         }
 
         bool   request_graph      = false;
-        double max_robot_dist_sqr = graph_request_max_robot_dist * graph_request_max_robot_dist;
-        if( graph_exchange_mode == CURRENT_PROXIMITY ) {
+        double max_robot_dist_sqr = get_parameter( "graph_request_max_robot_dist" ).as_double()
+                                    * get_parameter( "graph_request_max_robot_dist" ).as_double();
+        if( get_parameter( "graph_exchange_mode" ).as_string() == "CURRENT_PROXIMITY" ) {
             Eigen::Vector2d other_position = Eigen::Vector2d( slam_pose_msg->pose.position.x, slam_pose_msg->pose.position.y );
             Eigen::Vector2d own_position   = prev_robot_keyframe->estimate().translation().head( 2 );
             if( ( own_position - other_position ).squaredNorm() < max_robot_dist_sqr ) {
                 request_graph = true;
             }
-        } else if( graph_exchange_mode == PATH_PROXIMITY ) {
+        } else if( get_parameter( "graph_exchange_mode" ).as_string() == "PATH_PROXIMITY" ) {
             for( const auto &keyframe : keyframes ) {
                 Eigen::Vector2d own_position = keyframe->estimate().translation().head( 2 );
                 for( const auto &other_pose : others_slam_poses[other_robot_name] ) {
@@ -965,7 +969,7 @@ private:
         slam_status_msg.in_optimization = true;
         slam_status_publisher->publish( slam_status_msg );
         start = std::chrono::high_resolution_clock::now();
-        graph_slam->optimize( g2o_solver_num_iterations, get_parameter( "g2o_verbose" ).as_bool() );
+        graph_slam->optimize( get_parameter( "g2o_solver_num_iterations" ).as_int(), get_parameter( "g2o_verbose" ).as_bool() );
         end = std::chrono::high_resolution_clock::now();
         graph_optimization_times.push_back( std::chrono::duration_cast<std::chrono::microseconds>( end - start ).count() );
 
@@ -1444,22 +1448,6 @@ private:
     }
 
 private:
-    enum GraphExchangeMode {
-        CURRENT_PROXIMITY,
-        PATH_PROXIMITY,
-    };
-
-    GraphExchangeMode graph_exchange_mode_from_string( const std::string &str )
-    {
-        // Transform to upper case
-        if( str == "CURRENT_PROXIMITY" ) {
-            return GraphExchangeMode::CURRENT_PROXIMITY;
-        } else if( str == "PATH_PROXIMITY" ) {
-            return GraphExchangeMode::PATH_PROXIMITY;
-        } else {
-            throw std::runtime_error( "Unknown graph exchange mode: " + str );
-        }
-    }
     // timers
     rclcpp::TimerBase::SharedPtr one_shot_initalization_timer;
     rclcpp::TimerBase::SharedPtr optimization_timer;
@@ -1481,10 +1469,6 @@ private:
     std::unordered_map<std::string, double> others_last_accum_dist;
     // other robot name -> unix seconds when last graph update was requested from that robot
     std::unordered_map<std::string, double> others_last_graph_exchange_time;
-    double                                  graph_request_min_accum_dist;
-    double                                  graph_request_max_robot_dist;
-    double                                  graph_request_min_time_delay;
-    GraphExchangeMode                       graph_exchange_mode;
 
     rclcpp::Subscription<mrg_slam_msgs::msg::PoseWithName>::SharedPtr   odom_broadcast_sub;
     rclcpp::Publisher<mrg_slam_msgs::msg::PoseWithName>::SharedPtr      odom_broadcast_pub;
@@ -1549,12 +1533,6 @@ private:
     // More parameters
     std::string              own_name;
     std::vector<std::string> multi_robot_names;
-
-    std::string g2o_solver_type;
-    bool        save_graph;
-    int         g2o_solver_num_iterations;
-    double      graph_update_interval;
-    double      map_cloud_update_interval;
 
     // Timing statistics
     std::vector<int64_t> loop_closure_times;

@@ -223,10 +223,10 @@ mrg_slam_component:
     # on which basis to trigger graph exchange between robots options [current_proximity, path_proximity, timer_based]
     # CURRENT_PROMIXITY: based on current distance between robots ()
     # PATH_PROXIMITY: based on already traversed path
+    graph_exchange_mode: "PATH_PROXIMITY"
     graph_request_min_accum_dist: 15.0
     graph_request_max_robot_dist: 25.0
     graph_request_min_time_delay: 5.0
-    graph_exchange_mode: "PATH_PROXIMITY"
     # graph update params
     graph_update_interval: 1.0
     map_cloud_update_interval: 2.0
