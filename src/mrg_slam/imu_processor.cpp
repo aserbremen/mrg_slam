@@ -32,10 +32,6 @@ ImuProcessor::onInit( rclcpp::Node::SharedPtr node )
 void
 ImuProcessor::imu_callback( const sensor_msgs::msg::Imu::SharedPtr imu_msg )
 {
-    if( !node_->get_parameter( "enable_imu_orientation" ).as_bool() && !node_->get_parameter( "enable_imu_acceleration" ).as_bool() ) {
-        return;
-    }
-
     std::lock_guard<std::mutex> lock( imu_queue_mutex_ );
     imu_msg->header.stamp = ( rclcpp::Time( imu_msg->header.stamp )
                               + rclcpp::Duration::from_seconds( node_->get_parameter( "imu_time_offset" ).as_double() ) )
