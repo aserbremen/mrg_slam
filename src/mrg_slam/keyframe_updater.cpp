@@ -5,7 +5,7 @@
 namespace mrg_slam {
 
 KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr node ) :
-    node_( node ), is_first_( true ), prev_keypose_( Eigen::Isometry3d::Identity() ), accum_distance_( 0.0 )
+    node_( node ), is_first_( true ), accum_distance_( 0.0 ), prev_keypose_( Eigen::Isometry3d::Identity() )
 {
 }
 
