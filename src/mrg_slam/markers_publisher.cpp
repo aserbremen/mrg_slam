@@ -13,21 +13,13 @@
 namespace mrg_slam {
 
 void
-MarkersPublisher::onInit( rclcpp::Node::SharedPtr _node )
+MarkersPublisher::onInit( rclcpp::Node::SharedPtr node )
 {
-    node = _node;
+    node_ = node;
 
-    markers_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
-    // markers_node_names_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers/node_names",
-    //                                                                                        rclcpp::QoS( 16 ) );
-    markers_marginals_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
-                                                                                          rclcpp::QoS( 16 ) );
-
-    // Declare only once across all nodes
-    map_frame_id = node->get_parameter( "map_frame_id" ).as_string();
-    own_name     = node->get_parameter( "own_name" ).as_string();
-
-    loop_closure_distance_thresh = node->get_parameter( "distance_thresh" ).as_double();
+    markers_pub           = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
+    markers_marginals_pub = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
+                                                                                           rclcpp::QoS( 16 ) );
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
     color_blue.r = 31.0 / 255.0;
@@ -111,8 +103,11 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         MARKER_MISC_EDGES,
         __NUM_MARKERS__,
     };
-    builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
+    builtin_interfaces::msg::Time        stamp = node_->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
+
+    std::string map_frame_id                 = node_->get_parameter( "map_frame_id" ).as_string();
+    double      loop_closure_distance_thresh = node_->get_parameter( "distance_thresh" ).as_double();
 
     // The size is determined by the number of enum members above + the number of keyframes, as we have to add a single marker for every
     // text marker of the node names
@@ -419,8 +414,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     // node names
 
     for( int i = 0; i < (int)keyframes.size(); i++ ) {
-        Eigen::Vector3d pos = keyframes[i]->node->estimate().translation();
-        // visualization_msgs::msg::Marker& node_names_marker = markers.markers[__NUM_MARKERS__ + i];
+        Eigen::Vector3d                 pos = keyframes[i]->node->estimate().translation();
         visualization_msgs::msg::Marker node_names_marker;
         node_names_marker.header.frame_id    = map_frame_id;
         node_names_marker.header.stamp       = stamp;
@@ -455,8 +449,10 @@ MarkersPublisher::publishMarginals( const boost::uuids::uuid& own_slam_uuid, con
 {
     // code partially adopted from https://github.com/laas/rviz_plugin_covariance/blob/master/src/covariance_visual.cpp
 
-    builtin_interfaces::msg::Time        stamp = node->now().operator builtin_interfaces::msg::Time();
+    builtin_interfaces::msg::Time        stamp = node_->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
+
+    std::string map_frame_id = node_->get_parameter( "map_frame_id" ).as_string();
 
     markers.markers.resize( keyframes.size() );
 
@@ -487,8 +483,7 @@ MarkersPublisher::publishMarginals( const boost::uuids::uuid& own_slam_uuid, con
             eigenvalues  = eigensolver.eigenvalues();
             eigenvectors = eigensolver.eigenvectors();
         } else {
-            // ROS_WARN_THROTTLE( 1, "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
-            RCLCPP_WARN_THROTTLE( node->get_logger(), *( node->get_clock() ), 1000,
+            RCLCPP_WARN_THROTTLE( node_->get_logger(), *( node_->get_clock() ), 1000,
                                   "Failed to compute eigen vectors/values. Is the covariance matrix correct?" );
         }
 

@@ -14,7 +14,7 @@ namespace mrg_slam {
 
 class MarkersPublisher {
 public:
-    void onInit( rclcpp::Node::SharedPtr _node );
+    void onInit( rclcpp::Node::SharedPtr node );
 
     void publish( std::shared_ptr<GraphSLAM> &graph_slam, const boost::uuids::uuid &own_slam_uuid,
                   const std::vector<KeyFrame::Ptr> &keyframes, const std::vector<Edge::Ptr> &edges, const KeyFrame::ConstPtr &last_keyframe,
@@ -28,16 +28,10 @@ public:
 
 
 private:
+    rclcpp::Node::SharedPtr node_;
+
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
-    // rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_node_names_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_marginals_pub;
-
-    rclcpp::Node::SharedPtr node;
-
-    std::string map_frame_id;
-    std::string own_name;
-
-    double loop_closure_distance_thresh;
 
     std_msgs::msg::ColorRGBA color_blue, color_orange, color_green, color_red, color_purple, color_brown, color_pink, color_olive,
         color_cyan, color_black, color_white, color_dark_gray, color_light_gray;
