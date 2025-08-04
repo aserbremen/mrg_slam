@@ -23,6 +23,8 @@ InformationMatrixCalculator::calc_information_matrix( const pcl::PointCloud<Poin
         return inf;
     }
 
+    // TODO - use different fitness score parameters for odometry and loop closure edges?
+
     double fitness_score = calc_fitness_score( cloud1, cloud2, relpose );
 
     double min_var_x = std::pow( node_->get_parameter( "min_stddev_x" ).as_double(), 2 );
