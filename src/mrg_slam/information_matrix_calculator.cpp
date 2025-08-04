@@ -7,20 +7,7 @@
 
 namespace mrg_slam {
 
-InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPtr _node )
-{
-    use_const_inf_matrix = _node->get_parameter( "use_const_inf_matrix" ).as_bool();
-    const_stddev_x       = _node->get_parameter( "const_stddev_x" ).as_double();
-    const_stddev_q       = _node->get_parameter( "const_stddev_q" ).as_double();
-
-    var_gain_a           = _node->get_parameter( "var_gain_a" ).as_double();
-    min_stddev_x         = _node->get_parameter( "min_stddev_x" ).as_double();
-    max_stddev_x         = _node->get_parameter( "max_stddev_x" ).as_double();
-    min_stddev_q         = _node->get_parameter( "min_stddev_q" ).as_double();
-    max_stddev_q         = _node->get_parameter( "max_stddev_q" ).as_double();
-    fitness_score_thresh = _node->get_parameter( "fitness_score_thresh" ).as_double();
-}
-
+InformationMatrixCalculator::InformationMatrixCalculator( rclcpp::Node::SharedPtr node ) { node_ = node; }
 
 InformationMatrixCalculator::~InformationMatrixCalculator() {}
 
@@ -29,22 +16,24 @@ InformationMatrixCalculator::calc_information_matrix( const pcl::PointCloud<Poin
                                                       const pcl::PointCloud<PointT>::ConstPtr& cloud2,
                                                       const Eigen::Isometry3d&                 relpose ) const
 {
-    if( use_const_inf_matrix ) {
+    if( node_->get_parameter( "use_const_inf_matrix" ).as_bool() ) {
         Eigen::MatrixXd inf = Eigen::MatrixXd::Identity( 6, 6 );
-        inf.topLeftCorner( 3, 3 ).array() /= const_stddev_x;
-        inf.bottomRightCorner( 3, 3 ).array() /= const_stddev_q;
+        inf.topLeftCorner( 3, 3 ).array() /= node_->get_parameter( "const_stddev_x" ).as_double();
+        inf.bottomRightCorner( 3, 3 ).array() /= node_->get_parameter( "const_stddev_q" ).as_double();
         return inf;
     }
 
     double fitness_score = calc_fitness_score( cloud1, cloud2, relpose );
 
-    double min_var_x = std::pow( min_stddev_x, 2 );
-    double max_var_x = std::pow( max_stddev_x, 2 );
-    double min_var_q = std::pow( min_stddev_q, 2 );
-    double max_var_q = std::pow( max_stddev_q, 2 );
+    double min_var_x = std::pow( node_->get_parameter( "min_stddev_x" ).as_double(), 2 );
+    double max_var_x = std::pow( node_->get_parameter( "max_stddev_x" ).as_double(), 2 );
+    double min_var_q = std::pow( node_->get_parameter( "min_stddev_q" ).as_double(), 2 );
+    double max_var_q = std::pow( node_->get_parameter( "max_stddev_q" ).as_double(), 2 );
 
-    float w_x = weight( var_gain_a, fitness_score_thresh, min_var_x, max_var_x, fitness_score );
-    float w_q = weight( var_gain_a, fitness_score_thresh, min_var_q, max_var_q, fitness_score );
+    double w_x = weight( node_->get_parameter( "var_gain_a" ).as_double(), node_->get_parameter( "fitness_score_thresh" ).as_double(),
+                         min_var_x, max_var_x, fitness_score );
+    double w_q = weight( node_->get_parameter( "var_gain_a" ).as_double(), node_->get_parameter( "fitness_score_thresh" ).as_double(),
+                         min_var_q, max_var_q, fitness_score );
 
     Eigen::MatrixXd inf = Eigen::MatrixXd::Identity( 6, 6 );
     inf.topLeftCorner( 3, 3 ).array() /= w_x;
@@ -57,8 +46,8 @@ InformationMatrixCalculator::calc_fitness_score( const pcl::PointCloud<PointT>::
                                                  const pcl::PointCloud<PointT>::ConstPtr& cloud2, const Eigen::Isometry3d& relpose,
                                                  double max_range )
 {
-    pcl::search::KdTree<PointT>::Ptr tree_( new pcl::search::KdTree<PointT>() );
-    tree_->setInputCloud( cloud1 );
+    pcl::search::KdTree<PointT>::Ptr tree( new pcl::search::KdTree<PointT>() );
+    tree->setInputCloud( cloud1 );
 
     double fitness_score = 0.0;
 
@@ -73,7 +62,7 @@ InformationMatrixCalculator::calc_fitness_score( const pcl::PointCloud<PointT>::
     int nr = 0;
     for( size_t i = 0; i < input_transformed.points.size(); ++i ) {
         // Find its nearest neighbor in the target
-        tree_->nearestKSearch( input_transformed.points[i], 1, nn_indices, nn_dists );
+        tree->nearestKSearch( input_transformed.points[i], 1, nn_indices, nn_dists );
 
         // Deal with occlusions (incomplete targets)
         if( nn_dists[0] <= max_range ) {
@@ -87,6 +76,13 @@ InformationMatrixCalculator::calc_fitness_score( const pcl::PointCloud<PointT>::
         return ( fitness_score / nr );
     else
         return ( std::numeric_limits<double>::max() );
+}
+
+double
+InformationMatrixCalculator::weight( double a, double max_x, double min_y, double max_y, double x ) const
+{
+    double y = ( 1.0 - std::exp( -a * x ) ) / ( 1.0 - std::exp( -a * max_x ) );
+    return min_y + ( max_y - min_y ) * y;
 }
 
 }  // namespace mrg_slam
