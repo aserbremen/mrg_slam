@@ -7,27 +7,10 @@
 
 namespace mrg_slam {
 
-LoopDetector::LoopDetector( rclcpp::Node::SharedPtr _node ) : node_ros( _node )
+LoopDetector::LoopDetector( rclcpp::Node::SharedPtr node ) : node_( node ), loop_manager_( std::make_shared<LoopManager>() )
 {
-    distance_thresh                           = node_ros->get_parameter( "distance_thresh" ).as_double();
-    distance_thresh_squared                   = distance_thresh * distance_thresh;
-    accum_distance_thresh                     = node_ros->get_parameter( "accum_distance_thresh" ).as_double();
-    accum_distance_thresh_other_slam_instance = node_ros->get_parameter( "accum_distance_thresh_other_slam_instance" ).as_double();
-
-    fitness_score_max_range = node_ros->get_parameter( "fitness_score_max_range" ).as_double();
-    fitness_score_thresh    = node_ros->get_parameter( "fitness_score_thresh" ).as_double();
-
-    use_loop_closure_consistency_check       = node_ros->get_parameter( "use_loop_closure_consistency_check" ).as_bool();
-    loop_closure_consistency_max_delta_trans = node_ros->get_parameter( "loop_closure_consistency_max_delta_trans" ).as_double();
-    loop_closure_consistency_max_delta_angle = node_ros->get_parameter( "loop_closure_consistency_max_delta_angle" ).as_double();
-
-    use_planar_registration_guess = node_ros->get_parameter( "use_planar_registration_guess" ).as_bool();
-
-    loop_manager = std::make_shared<LoopManager>();
-
-    registration = select_registration_method( node_ros.get() );
+    registration_ = select_registration_method( node_.get() );
 }
-
 
 std::vector<Loop::Ptr>
 LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
@@ -54,22 +37,17 @@ LoopDetector::detect( std::shared_ptr<GraphDatabase> graph_db )
     return detected_loops;
 }
 
-
-double
-LoopDetector::get_distance_thresh() const
-{
-    return distance_thresh;
-}
-
-
 std::vector<KeyFrame::Ptr>
 LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vector<KeyFrame::Ptr>& keyframes ) const
 {
     std::vector<KeyFrame::Ptr> candidates = std::vector<KeyFrame::Ptr>();
-    // TODO reserve size with random number?
-    candidates.reserve( 32 );
+    candidates.reserve( 100 );
     auto logger = rclcpp::get_logger( "LoopDetector::find_candidates" );
 
+    double distance_thresh_squared = node_->get_parameter( "distance_thresh" ).as_double()
+                                     * node_->get_parameter( "distance_thresh" ).as_double();
+    double accum_distance_thresh                     = node_->get_parameter( "accum_distance_thresh" ).as_double();
+    double accum_distance_thresh_other_slam_instance = node_->get_parameter( "accum_distance_thresh_other_slam_instance" ).as_double();
     for( const auto& candidate : keyframes ) {
         // there is already an edge
         if( new_keyframe->edge_exists( *candidate, logger ) ) {
@@ -97,7 +75,7 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
         }
 
         // dont consider keyframes if there was a recent loop closure
-        auto last_loop = loop_manager->get_loop( new_keyframe->slam_uuid, candidate->slam_uuid );
+        auto last_loop = loop_manager_->get_loop( new_keyframe->slam_uuid, candidate->slam_uuid );
 
         // Check if the candidate is too close in distance for the same SLAM instance to avoid loops very close to each other
         if( last_loop && new_keyframe->slam_uuid == candidate->slam_uuid
@@ -116,7 +94,6 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
     return candidates;
 }
 
-
 Loop::Ptr
 LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, const KeyFrame::Ptr& new_keyframe )
 {
@@ -124,11 +101,15 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
         return nullptr;
     }
 
-    registration->setInputTarget( new_keyframe->cloud );
+    registration_->setInputTarget( new_keyframe->cloud );
 
     double          best_score   = std::numeric_limits<double>::max();
     KeyFrame::Ptr   best_matched = nullptr;
     Eigen::Matrix4f rel_pose_new_to_best_matched;
+
+    // Get parameters before the loop
+    bool   use_planar_registration_guess = node_->get_parameter( "use_planar_registration_guess" ).as_bool();
+    double fitness_score_max_range       = node_->get_parameter( "fitness_score_max_range" ).as_double();
 
     std::cout << std::endl << "--- loop detection/candidate matching ---" << std::endl;
     std::cout << "new keyframe " << new_keyframe->readable_id << " has " << candidate_keyframes.size() << " candidates, matching..."
@@ -143,24 +124,24 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     Eigen::Isometry3d            new_keyframe_estimate = normalize_estimate( new_keyframe->node->estimate() );
 
     for( const auto& candidate : candidate_keyframes ) {
-        registration->setInputSource( candidate->cloud );
+        registration_->setInputSource( candidate->cloud );
 
         Eigen::Isometry3d candidate_estimate = normalize_estimate( candidate->node->estimate() );
         Eigen::Matrix4f   guess              = ( new_keyframe_estimate.inverse() * candidate_estimate ).matrix().cast<float>();
         if( use_planar_registration_guess ) {
             guess( 2, 3 ) = 0.0;
         }
-        registration->align( *aligned, guess );
+        registration_->align( *aligned, guess );
         std::cout << "." << std::flush;
 
-        double score = registration->getFitnessScore( fitness_score_max_range );
-        if( !registration->hasConverged() || score > best_score ) {
+        double score = registration_->getFitnessScore( fitness_score_max_range );
+        if( !registration_->hasConverged() || score > best_score ) {
             continue;
         }
 
         best_score                   = score;
         best_matched                 = candidate;
-        rel_pose_new_to_best_matched = registration->getFinalTransformation();  // New to candidate
+        rel_pose_new_to_best_matched = registration_->getFinalTransformation();  // New to candidate
     }
 
     if( best_matched != nullptr ) {
@@ -172,13 +153,14 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
 
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - t1 );
     std::cout << "elapsed time in loop closure: " << elapsed_ms.count() << "[msec]" << std::endl;
-    if( best_score > fitness_score_thresh ) {
-        std::cout << "loop not found... best score " << best_score << " > " << fitness_score_thresh << " fitness thresh" << std::endl;
+    if( best_score > node_->get_parameter( "fitness_score_thresh" ).as_double() ) {
+        std::cout << "loop not found... best score " << best_score << " > " << node_->get_parameter( "fitness_score_thresh" ).as_double()
+                  << " fitness thresh" << std::endl;
         return nullptr;
     }
 
-    if( use_loop_closure_consistency_check && best_matched != nullptr && best_matched->first_keyframe == false
-        && !consistency_check_passed ) {
+    if( node_->get_parameter( "enable_loop_closure_consistency_check" ).as_bool() && best_matched != nullptr
+        && best_matched->first_keyframe == false && !consistency_check_passed ) {
         std::cout << "didnt pass either consistency check" << std::endl;
         return nullptr;
     }
@@ -190,13 +172,12 @@ LoopDetector::matching( const std::vector<KeyFrame::Ptr>& candidate_keyframes, c
     // Last edge accum distance is only updated if the new keyframe is a keyframe of this robot
     std::cout << "updating last loop edge accum distance for " << new_keyframe->readable_id << " to " << new_keyframe->accum_distance
               << std::endl;
-    // last_loop_info_map[new_keyframe->slam_uuid] = LoopClosureInfo( new_keyframe, best_matched );
+
     auto new_loop = std::make_shared<Loop>( new_keyframe, best_matched, rel_pose_new_to_best_matched );
-    loop_manager->add_loop( new_loop );
+    loop_manager_->add_loop( new_loop );
 
     return new_loop;
 }
-
 
 Eigen::Isometry3d
 LoopDetector::normalize_estimate( const Eigen::Isometry3d& estimate ) const
@@ -205,7 +186,6 @@ LoopDetector::normalize_estimate( const Eigen::Isometry3d& estimate ) const
     normalized_estimate.linear()          = Eigen::Quaterniond( normalized_estimate.linear() ).normalized().toRotationMatrix();
     return normalized_estimate;
 }
-
 
 bool
 LoopDetector::perform_loop_closure_consistency_check( const Eigen::Isometry3d& new_keyframe_estimate,
@@ -218,7 +198,8 @@ LoopDetector::perform_loop_closure_consistency_check( const Eigen::Isometry3d& n
         return true;
     }
 
-    if( best_matched == nullptr || !use_loop_closure_consistency_check || best_score > fitness_score_thresh ) {
+    if( best_matched == nullptr || !node_->get_parameter( "enable_loop_closure_consistency_check" ).as_bool()
+        || best_score > node_->get_parameter( "fitness_score_thresh" ).as_double() ) {
         return false;
     }
 
@@ -245,17 +226,17 @@ LoopDetector::check_consistency_with_prev_keyframe( const Eigen::Isometry3d& new
     Eigen::Matrix4f rel_pose_candidate_to_prev = best_matched->prev_edge->relative_pose().matrix().cast<float>();
 
     const auto& prev_kf = best_matched->prev_edge->to_keyframe;
-    registration->setInputSource( prev_kf->cloud );
+    registration_->setInputSource( prev_kf->cloud );
     Eigen::Isometry3d prev_kf_estimate = normalize_estimate( prev_kf->node->estimate() );
     Eigen::Matrix4f   prev_guess       = ( new_keyframe_estimate.inverse() * prev_kf_estimate ).matrix().cast<float>();
-    if( use_planar_registration_guess ) {
+    if( node_->get_parameter( "use_planar_registration_guess" ).as_bool() ) {
         prev_guess( 2, 3 ) = 0.0;
     }
     pcl::PointCloud<PointT>::Ptr prev_aligned( new pcl::PointCloud<PointT>() );
-    registration->align( *prev_aligned, prev_guess );
+    registration_->align( *prev_aligned, prev_guess );
 
     // We dont check if the registration has converged here, since we are only interested in the relative pose
-    Eigen::Matrix4f rel_pose_new_to_prev = registration->getFinalTransformation();
+    Eigen::Matrix4f rel_pose_new_to_prev = registration_->getFinalTransformation();
 
     // Calculate the transformation from candidate to prev to new keyframe which should be identity matrix
     auto  rel_pose_identity_check_prev = rel_pose_new_to_prev.inverse() * rel_pose_new_to_best_matched * rel_pose_candidate_to_prev;
@@ -263,7 +244,8 @@ LoopDetector::check_consistency_with_prev_keyframe( const Eigen::Isometry3d& new
     float delta_angle =
         Eigen::Quaternionf( rel_pose_identity_check_prev.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
 
-    if( delta_trans > loop_closure_consistency_max_delta_trans || delta_angle > loop_closure_consistency_max_delta_angle ) {
+    if( delta_trans > node_->get_parameter( "loop_closure_consistency_max_delta_trans" ).as_double()
+        || delta_angle > node_->get_parameter( "loop_closure_consistency_max_delta_angle" ).as_double() ) {
         std::cout << "Inconsistent with prev keyframe " << prev_kf->readable_id << " delta trans " << delta_trans << " delta angle (deg)"
                   << delta_angle * 180.0 / M_PI << std::endl;
         return false;
@@ -273,7 +255,6 @@ LoopDetector::check_consistency_with_prev_keyframe( const Eigen::Isometry3d& new
               << delta_angle * 180.0 / M_PI << std::endl;
     return true;
 }
-
 
 bool
 LoopDetector::check_consistency_with_next_keyframe( const Eigen::Isometry3d& new_keyframe_estimate,
@@ -288,17 +269,17 @@ LoopDetector::check_consistency_with_next_keyframe( const Eigen::Isometry3d& new
     Eigen::Matrix4f rel_pose_next_to_candidate = best_matched->next_edge->relative_pose().matrix().cast<float>();
 
     const auto& next_kf = best_matched->next_edge->from_keyframe;
-    registration->setInputSource( next_kf->cloud );
+    registration_->setInputSource( next_kf->cloud );
     Eigen::Isometry3d next_kf_estimate = normalize_estimate( next_kf->node->estimate() );
     Eigen::Matrix4f   next_guess       = ( new_keyframe_estimate.inverse() * next_kf_estimate ).matrix().cast<float>();
-    if( use_planar_registration_guess ) {
+    if( node_->get_parameter( "use_planar_registration_guess" ).as_bool() ) {
         next_guess( 2, 3 ) = 0.0;
     }
     pcl::PointCloud<PointT>::Ptr next_aligned( new pcl::PointCloud<PointT>() );
-    registration->align( *next_aligned, next_guess );
+    registration_->align( *next_aligned, next_guess );
 
     // We dont check if the registration has converged here, since we are only interested in the relative pose
-    Eigen::Matrix4f rel_pose_new_to_next = registration->getFinalTransformation();
+    Eigen::Matrix4f rel_pose_new_to_next = registration_->getFinalTransformation();
 
     // Calculate the transformation from candidate to next to new keyframe which should be identity matrix
     auto rel_pose_identity_check_next = rel_pose_new_to_best_matched.inverse() * rel_pose_new_to_next * rel_pose_next_to_candidate;
@@ -309,7 +290,8 @@ LoopDetector::check_consistency_with_next_keyframe( const Eigen::Isometry3d& new
     float delta_angle_next =
         Eigen::Quaternionf( rel_pose_identity_check_next.block<3, 3>( 0, 0 ) ).angularDistance( Eigen::Quaternionf::Identity() );
 
-    if( delta_trans_next > loop_closure_consistency_max_delta_trans || delta_angle_next > loop_closure_consistency_max_delta_angle ) {
+    if( delta_trans_next > node_->get_parameter( "loop_closure_consistency_max_delta_trans" ).as_double()
+        || delta_angle_next > node_->get_parameter( "loop_closure_consistency_max_delta_angle" ).as_double() ) {
         std::cout << "Inconsistent with next keyframe " << next_kf->readable_id << " delta trans " << delta_trans_next << " delta angle "
                   << delta_angle_next * 180.0 / M_PI << std::endl;
         return false;
@@ -319,6 +301,5 @@ LoopDetector::check_consistency_with_next_keyframe( const Eigen::Isometry3d& new
               << delta_angle_next * 180.0 / M_PI << std::endl;
     return true;
 }
-
 
 }  // namespace mrg_slam

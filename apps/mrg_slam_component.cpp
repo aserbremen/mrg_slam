@@ -295,7 +295,7 @@ private:
         declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
         declare_parameter<double>( "fitness_score_thresh", 0.5 );
         declare_parameter<bool>( "use_planar_registration_guess", false );
-        declare_parameter<bool>( "use_loop_closure_consistency_check", true );
+        declare_parameter<bool>( "enable_loop_closure_consistency_check", true );
         declare_parameter<double>( "loop_closure_consistency_max_delta_trans", 0.25 );
         declare_parameter<double>( "loop_closure_consistency_max_delta_angle", 5 );
 

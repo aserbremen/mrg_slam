@@ -127,16 +127,14 @@ public:
      * @brief Construct a new Loop Detector object
      * @param _node Shared pointer to the main slam node
      */
-    LoopDetector( rclcpp::Node::SharedPtr _node );
+    LoopDetector( rclcpp::Node::SharedPtr node );
 
     /**
      * @brief Detect loops and perform loop consistency checks
      */
     std::vector<Loop::Ptr> detect( std::shared_ptr<GraphDatabase> graph_db );
 
-    double get_distance_thresh() const;
-
-    LoopManager::Ptr get_loop_manager() { return loop_manager; }
+    LoopManager::Ptr get_loop_manager() { return loop_manager_; }
 
     // Statistics
     std::vector<int64_t> loop_detection_times;
@@ -208,28 +206,11 @@ private:
 
 
 private:
-    rclcpp::Node::SharedPtr node_ros;
+    rclcpp::Node::SharedPtr node_;
 
-    double distance_thresh,
-        distance_thresh_squared;   // estimated distance between new keyframe and candidate be less than this distance, for the candidate to
-                                   // be considered
-    double accum_distance_thresh;  // accumulated distance difference between new keyframe and candidandate keyframe of the same slam
-                                   // instance  must be larger than  this, otherwise candidate is ignored
-    double accum_distance_thresh_other_slam_instance;  // accumulated distance difference between new keyframe and candidandate keyframe of
-                                                       // another slam instance must be larger than this, otherwise candidate is ignored
+    LoopManager::Ptr loop_manager_;
 
-    double fitness_score_max_range;  // maximum allowable distance between corresponding points
-    double fitness_score_thresh;     // threshold for scan matching
-
-    bool   use_loop_closure_consistency_check;        // whether to check
-    double loop_closure_consistency_max_delta_trans;  // maximum allowed translation distance for loop closure graph consistency check (m)
-    double loop_closure_consistency_max_delta_angle;  // maximum allowed rotation angle for loop closure graph consistency check (deg)
-
-    bool use_planar_registration_guess;  // Whether to set z=0 for the registration guess
-
-    LoopManager::Ptr loop_manager;
-
-    pcl::Registration<PointT, PointT>::Ptr registration;
+    pcl::Registration<PointT, PointT>::Ptr registration_;
 };
 
 }  // namespace mrg_slam
