@@ -236,9 +236,9 @@ mrg_slam_component:
     use_const_inf_matrix: false
     const_stddev_x: 0.5
     const_stddev_q: 0.1
-    var_gain_a: 20.0
+    var_gain_a: 2.0
     min_stddev_x: 0.1
-    max_stddev_x: 5.0
+    max_stddev_x: 0.75
     min_stddev_q: 0.05
     max_stddev_q: 0.2
     # graph exchange params
