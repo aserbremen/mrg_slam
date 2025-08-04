@@ -4,12 +4,9 @@
 
 namespace mrg_slam {
 
-KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr _node ) : is_first( true ), prev_keypose( Eigen::Isometry3d::Identity() )
+KeyframeUpdater::KeyframeUpdater( rclcpp::Node::SharedPtr node ) :
+    node_( node ), is_first_( true ), prev_keypose_( Eigen::Isometry3d::Identity() ), accum_distance_( 0.0 )
 {
-    keyframe_delta_trans = _node->get_parameter( "keyframe_delta_trans" ).as_double();
-    keyframe_delta_angle = _node->get_parameter( "keyframe_delta_angle" ).as_double();
-
-    accum_distance = 0.0;
 }
 
 
@@ -17,24 +14,25 @@ bool
 KeyframeUpdater::update( const Eigen::Isometry3d& pose )
 {
     // first frame is always registered to the graph
-    if( is_first ) {
-        is_first     = false;
-        prev_keypose = pose;
+    if( is_first_ ) {
+        is_first_     = false;
+        prev_keypose_ = pose;
         return true;
     }
 
     // calculate the delta transformation from the previous keyframe
-    Eigen::Isometry3d delta = prev_keypose.inverse() * pose;
+    Eigen::Isometry3d delta = prev_keypose_.inverse() * pose;
     double            dx    = delta.translation().norm();
     double            da    = Eigen::AngleAxisd( delta.linear() ).angle();
 
     // too close to the previous frame
-    if( dx < keyframe_delta_trans && da < keyframe_delta_angle ) {
+    if( dx < node_->get_parameter( "keyframe_delta_trans" ).as_double()
+        && da < node_->get_parameter( "keyframe_delta_angle" ).as_double() ) {
         return false;
     }
 
-    accum_distance += dx;
-    prev_keypose = pose;
+    accum_distance_ += dx;
+    prev_keypose_ = pose;
     return true;
 }
 
@@ -42,7 +40,7 @@ KeyframeUpdater::update( const Eigen::Isometry3d& pose )
 double
 KeyframeUpdater::get_accum_distance() const
 {
-    return accum_distance;
+    return accum_distance_;
 }
 
 

@@ -19,7 +19,7 @@ public:
      * @brief constructor
      * @param sharedptr to the node
      */
-    KeyframeUpdater( rclcpp::Node::SharedPtr _node );
+    KeyframeUpdater( rclcpp::Node::SharedPtr node );
 
     /**
      * @brief decide if a new frame should be registered to the graph
@@ -35,13 +35,11 @@ public:
     double get_accum_distance() const;
 
 private:
-    // parameters
-    double keyframe_delta_trans;
-    double keyframe_delta_angle;
+    rclcpp::Node::SharedPtr node_;
 
-    bool              is_first;
-    double            accum_distance;
-    Eigen::Isometry3d prev_keypose;
+    bool              is_first_;
+    double            accum_distance_;
+    Eigen::Isometry3d prev_keypose_;
 };
 
 }  // namespace mrg_slam
