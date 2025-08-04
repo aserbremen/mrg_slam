@@ -36,9 +36,9 @@ class GraphDatabase {
 public:
     typedef pcl::PointXYZI PointT;
 
-    GraphDatabase( rclcpp::Node::SharedPtr _node, std::shared_ptr<GraphSLAM> _graph_slam );
+    GraphDatabase( rclcpp::Node::SharedPtr node, std::shared_ptr<GraphSLAM> graph_slam );
 
-    bool empty() const { return keyframes.empty() && new_keyframes.empty(); }
+    bool empty() const { return keyframes_.empty() && new_keyframes_.empty(); }
 
     void add_odom_keyframe( const builtin_interfaces::msg::Time& stamp, const Eigen::Isometry3d& odom, double accum_distance,
                             pcl::PointCloud<PointT>::ConstPtr cloud, sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud_msg );
@@ -54,7 +54,7 @@ public:
      * @brief Adds static keyframes to the queue
      * @param keyframes vector of keyframes from the static map provider
      */
-    void add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes );
+    void add_static_keyframes( const std::vector<mrg_slam_msgs::msg::KeyFrameRos>& keyframes_ros );
 
     /**
      * @brief Process keyframes in the static keyframe queue and add them to the graph
@@ -103,77 +103,70 @@ public:
      */
     void save_keyframe_poses();
 
-    const std::deque<KeyFrame::Ptr>&                                               get_keyframe_queue() const { return keyframe_queue; }
-    const std::vector<KeyFrame::Ptr>&                                              get_keyframes() const { return keyframes; }
-    const std::deque<KeyFrame::Ptr>&                                               get_new_keyframes() const { return new_keyframes; }
-    const std::vector<Edge::Ptr>&                                                  get_edges() const { return edges; }
-    const std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>>& get_edge_ignore_uuids() const { return edge_uuids; }
-    KeyFrame::ConstPtr get_prev_robot_keyframe() const { return prev_robot_keyframe; }
-    const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>& get_keyframe_hash() const { return keyframe_hash; }
-    const g2o::VertexSE3*                                                                get_anchor_node() const { return anchor_node; }
-    const g2o::EdgeSE3*       get_anchor_edge_g2o() const { return anchor_edge_g2o; }
-    const boost::uuids::uuid& get_slam_uuid() const { return slam_uuid; }
+    const std::deque<KeyFrame::Ptr>&                                               get_keyframe_queue() const { return keyframe_queue_; }
+    const std::vector<KeyFrame::Ptr>&                                              get_keyframes() const { return keyframes_; }
+    const std::deque<KeyFrame::Ptr>&                                               get_new_keyframes() const { return new_keyframes_; }
+    const std::vector<Edge::Ptr>&                                                  get_edges() const { return edges_; }
+    const std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>>& get_edge_ignore_uuids() const { return edge_uuids_; }
+    KeyFrame::ConstPtr get_prev_robot_keyframe() const { return prev_robot_keyframe_; }
+    const std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>& get_keyframe_hash() const
+    {
+        return keyframe_hash_;
+    }
+    const g2o::VertexSE3*     get_anchor_node() const { return anchor_node_; }
+    const g2o::EdgeSE3*       get_anchor_edge_g2o() const { return anchor_edge_g2o_; }
+    const boost::uuids::uuid& get_slam_uuid() const { return slam_uuid_; }
 
 private:
-    std::shared_ptr<GraphSLAM>                   graph_slam;
-    std::unique_ptr<InformationMatrixCalculator> inf_calclator;
+    rclcpp::Node::SharedPtr node_;
 
-    int odom_keyframe_counter;
+    std::shared_ptr<GraphSLAM>                   graph_slam_;
+    std::unique_ptr<InformationMatrixCalculator> inf_calculator_;
 
-    std::mutex                keyframe_queue_mutex;  // keyframes to be added to the graph
-    std::deque<KeyFrame::Ptr> keyframe_queue;
+    int odom_keyframe_counter_;
 
-    std::mutex                static_keyframe_queue_mutex;  // keyframes from the static keyframe provider
-    std::deque<KeyFrame::Ptr> static_keyframe_queue;
+    std::mutex                keyframe_queue_mutex_;  // keyframes to be added to the graph
+    std::deque<KeyFrame::Ptr> keyframe_queue_;
 
-    std::deque<KeyFrame::Ptr> new_keyframes;  // keyframes to be checked for loop closure
-    KeyFrame::ConstPtr        prev_robot_keyframe;
+    std::mutex                static_keyframe_queue_mutex_;  // keyframes from the static keyframe provider
+    std::deque<KeyFrame::Ptr> static_keyframe_queue_;
+
+    std::deque<KeyFrame::Ptr> new_keyframes_;  // keyframes to be checked for loop closure
+    KeyFrame::ConstPtr        prev_robot_keyframe_;
 
     // keyframe and edges container for loading graph from a previously save_graph call
-    std::mutex                 loaded_graph_mutex;
-    std::vector<KeyFrame::Ptr> loaded_keyframes;
-    std::vector<Edge::Ptr>     loaded_edges;
+    std::mutex                 loaded_graph_mutex_;
+    std::vector<KeyFrame::Ptr> loaded_keyframes_;
+    std::vector<Edge::Ptr>     loaded_edges_;
 
     // keyframes and edges in the graph in order of addition
-    std::vector<KeyFrame::Ptr> keyframes;
-    std::vector<Edge::Ptr>     edges;
+    std::vector<KeyFrame::Ptr> keyframes_;
+    std::vector<Edge::Ptr>     edges_;
 
-    std::deque<mrg_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue;
+    std::deque<mrg_slam_msgs::msg::GraphRos::ConstSharedPtr> graph_queue_;
 
     // keyframes and edges successfully added to the graph
-    std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>          keyframe_hash;
-    std::unordered_map<boost::uuids::uuid, KeyFrame::Ptr, boost::hash<boost::uuids::uuid>> uuid_keyframe_map;
-    std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>>                edge_uuids;
-    std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>> edge_ignore_uuids;  // TODO test if this is still necessary
+    std::unordered_map<builtin_interfaces::msg::Time, KeyFrame::Ptr, RosTimeHash>          keyframe_hash_;
+    std::unordered_map<boost::uuids::uuid, KeyFrame::Ptr, boost::hash<boost::uuids::uuid>> uuid_keyframe_map_;
+    std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>>                edge_uuids_;
+    std::unordered_set<boost::uuids::uuid, boost::hash<boost::uuids::uuid>> edge_ignore_uuids_;  // TODO test if this is still necessary
 
     // Anchor node/keyframe and edge which are treated differently
-    g2o::VertexSE3* anchor_node;
-    g2o::EdgeSE3*   anchor_edge_g2o;
-    KeyFrame::Ptr   anchor_kf;
-    Edge::Ptr       anchor_edge_ptr;
+    g2o::VertexSE3* anchor_node_;
+    g2o::EdgeSE3*   anchor_edge_g2o_;
+    KeyFrame::Ptr   anchor_kf_;
+    Edge::Ptr       anchor_edge_ptr_;
 
     // unique id generators
-    boost::uuids::random_generator_pure uuid_generator;
-    boost::uuids::string_generator      uuid_from_string_generator;
+    boost::uuids::random_generator_pure uuid_generator_;
+    boost::uuids::string_generator      uuid_from_string_generator_;
 
     // unique id the current instance of the slam graph. unique for each robot run
-    boost::uuids::uuid slam_uuid;
-    std::string        slam_uuid_str;
+    boost::uuids::uuid slam_uuid_;
+    std::string        slam_uuid_str_;
 
     // ROS2 parameters
-    std::string         own_name;
-    bool                fix_first_node;
-    std::vector<double> fix_first_node_stddev_vec;
-    bool                enable_fill_first_cloud;
-    double              fill_first_cloud_radius;
-    bool                fill_first_cloud_simple;
-    double              map_cloud_resolution;
-    int                 max_keyframes_per_update;
-    std::string         odometry_edge_robust_kernel;
-    double              odometry_edge_robust_kernel_size;
-    std::string         loop_closure_edge_robust_kernel;
-    double              loop_closure_edge_robust_kernel_size;
-    std::string         result_dir;
+    std::string own_name_;
 };
 
 }  // namespace mrg_slam

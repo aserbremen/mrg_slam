@@ -1390,7 +1390,7 @@ private:
     std::mutex                                                       init_pose_mutex;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr         init_odom_sub;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr init_pose_sub;
-    geometry_msgs::msg::PoseStamped::ConstSharedPtr                  init_pose_msg;  // should be accessed with keyframe_queue_mutex locked
+    geometry_msgs::msg::PoseStamped::ConstSharedPtr                  init_pose_msg;
 
     // for map cloud generation and graph publishing
     std::string                        base_frame_id;
