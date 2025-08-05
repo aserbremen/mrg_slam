@@ -300,15 +300,11 @@ install(
   RUNTIME DESTINATION bin
 )
 
-
-# Here we can export all downstream dependencies and include directories
-# TODO do we need to mark EXPORT with _export as described here? https://github.com/ament/ament_cmake/issues/329#issuecomment-801187892
-# TODO export package for downstream packages to use see: https://discourse.ros.org/t/ament-best-practice-for-sharing-libraries/3602/2
-# also see: https://answers.ros.org/question/331277/ament_cmake-confused-about-ament_export_dependencies-and-ament_export_interfaces/
-# ament_export_libraries(${PROJECT_NAME})
-# ament_export_interfaces(${PROJECT_NAME})
-ament_export_dependencies(rosidl_default_runtime)
-ament_export_include_directories(include)
+# Install header files
+install(
+	DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+	DESTINATION include/${PROJECT_NAME}
+)
 
 # Install necessary directories to install folder
 install(DIRECTORY 
