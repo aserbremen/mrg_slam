@@ -37,11 +37,6 @@ map2robotmap_publisher:
     map2robotmap_frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
     map2robotmap_child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
 
-# In case of using ros bags we need to publish the the time on the /clock topic using high frequency imu messages
-clock_publisher_ros2:
-  ros__parameters:
-    imu_topic: "/gpsimu_driver/imu_data"
-
 # Parameters for the Velodyne driver and transform
 velodyne:
   ros__parameters:

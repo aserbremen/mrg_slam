@@ -83,7 +83,6 @@ def launch_setup(context, *args, **kwargs):
         shared_params = config_params['/**']['ros__parameters']
         lidar2base_publisher_params = config_params['lidar2base_publisher']['ros__parameters']
         map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
-        clock_publisher_ros2_params = config_params['clock_publisher_ros2']['ros__parameters']
         velodyne_params = config_params['velodyne']['ros__parameters']
         prefiltering_params = config_params['prefiltering_component']['ros__parameters']
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
@@ -111,7 +110,6 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(lidar2base_publisher_params, 'lidar2base_publisher_params')
     print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
-    print_yaml_params(clock_publisher_ros2_params, 'clock_publisher_ros2_params')
     print_yaml_params(velodyne_params, 'velodyne_params')
     print_yaml_params(prefiltering_params, 'prefiltering_params')
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
@@ -190,16 +188,6 @@ def launch_setup(context, *args, **kwargs):
             parameters=[shared_params],
             output='both',
             remappings=tf_remappings,
-        )
-
-    # In case we play a rosbag in ROS2 foxy, we need to publish the clock from the rosbag to the /clock topic
-    if os.path.expandvars('$ROS_DISTRO') == 'foxy' or os.path.expandvars('$ROS_DISTRO') == 'eloquent':
-        clock_publisher_ros2 = Node(
-            package='mrg_slam',
-            executable='clock_publisher_ros2.py',
-            name=model_namespace + '_clock_publisher_ros2',
-            parameters=[clock_publisher_ros2_params, shared_params],
-            output='both',
         )
 
     # Create the map2odom publisher node
@@ -391,9 +379,6 @@ def launch_setup(context, *args, **kwargs):
         launch_description_list.append(static_transform_publisher)
     if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
         launch_description_list.append(map2robotmap_publisher)
-    # For ROS2 foxy we need to add our own clock publisher, from ROS2 humble we can publish the clock topic with ros2 bag play <bag> --clock
-    if os.path.expandvars('$ROS_DISTRO') == 'foxy' or os.path.expandvars('$ROS_DISTRO') == 'eloquent':
-        launch_description_list.append(clock_publisher_ros2)
     launch_description_list.append(map2odom_publisher_ros2)
     launch_description_list.append(container)
     launch_description_list.append(load_composable_nodes)
