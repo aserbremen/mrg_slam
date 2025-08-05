@@ -248,6 +248,7 @@ mrg_slam_component:
     graph_update_interval: 3.0
     map_cloud_update_interval: 2.0
     map_cloud_resolution: 0.1
+    map_cloud_distance_far_thresh: 10000.0
     # minimum number of points in a voxel to consider it as occupied
     map_cloud_min_points_per_voxel: 2 
     save_graph: false

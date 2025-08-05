@@ -24,11 +24,12 @@ public:
     /**
      * @brief generates a map point cloud
      * @param keyframes   snapshots of keyframes
-     * @param resolution  resolution of generated map
+     * @param resolution  voxel grid resolution of generated map
+     * @param min_points_per_voxel minimum number of points per voxel to keep the corresponding points in the map
      * @return generated map point cloud
      */
-    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int count_threshold,
-                                           bool skip_first_cloud = true ) const;
+    pcl::PointCloud<PointT>::Ptr generate( const std::vector<KeyFrameSnapshot::Ptr>& keyframes, float resolution, int min_points_per_voxel,
+                                           float distance_far_thresh, bool skip_first_cloud = true ) const;
 };
 
 }  // namespace mrg_slam

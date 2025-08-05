@@ -203,14 +203,16 @@ public:
                                                                                std::bind( &MrgSlamComponent::publish_map_service, this,
                                                                                           std::placeholders::_1, std::placeholders::_2 ) );
         // Publish graph service
-        publish_graph_service_   = create_service<mrg_slam_msgs::srv::PublishGraph>( "mrg_slam/publish_graph",
-                                                                                     std::bind( &MrgSlamComponent::publish_graph_service,
-                                                                                                this, std::placeholders::_1,
-                                                                                                std::placeholders::_2 ) );
-        request_graph_service_   = create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
-                                                                                      std::bind( &MrgSlamComponent::request_graph_service,
-                                                                                                 this, std::placeholders::_1,
-                                                                                                 std::placeholders::_2 ) );
+        publish_graph_service_ = create_service<mrg_slam_msgs::srv::PublishGraph>( "mrg_slam/publish_graph",
+                                                                                   std::bind( &MrgSlamComponent::publish_graph_service,
+                                                                                              this, std::placeholders::_1,
+                                                                                              std::placeholders::_2 ) );
+        // Request graphs service
+        request_graph_service_ = create_service<mrg_slam_msgs::srv::RequestGraphs>( "mrg_slam/request_graph",
+                                                                                    std::bind( &MrgSlamComponent::request_graph_service,
+                                                                                               this, std::placeholders::_1,
+                                                                                               std::placeholders::_2 ) );
+        // Get graph uuids service
         get_graph_uuids_service_ = create_service<mrg_slam_msgs::srv::GetGraphUuids>( "mrg_slam/get_graph_uuids",
                                                                                       std::bind( &MrgSlamComponent::get_graph_uuids_service,
                                                                                                  this, std::placeholders::_1,
@@ -246,6 +248,7 @@ private:
         odom_frame_id = declare_parameter<std::string>( "odom_frame_id", "odom" );
         declare_parameter<double>( "map_cloud_resolution", 0.05 );
         declare_parameter<int>( "map_cloud_min_points_per_voxel", 2 );
+        declare_parameter<double>( "map_cloud_distance_far_thresh", 10000.0 );
 
         // Initial pose parameters
         declare_parameter<std::string>( "init_odom_topic", "NONE" );
@@ -728,7 +731,8 @@ private:
         }
 
         auto cloud = map_cloud_generator->generate( snapshot, get_parameter( "map_cloud_resolution" ).as_double(),
-                                                    get_parameter( "map_cloud_min_points_per_voxel" ).as_int(), false );
+                                                    get_parameter( "map_cloud_min_points_per_voxel" ).as_int(),
+                                                    get_parameter( "map_cloud_distance_far_thresh" ).as_double(), false );
         if( !cloud ) {
             return false;
         }
@@ -772,12 +776,16 @@ private:
             snapshot = keyframes_snapshot;
         }
 
-        double      resolution           = req->resolution == 0 ? get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
+        // Use config values if not set in request
+        float       resolution           = req->resolution == 0 ? get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
         int         min_points_per_voxel = req->min_points_per_voxel < 0 ? get_parameter( "map_cloud_min_points_per_voxel" ).as_int()
                                                                          : req->min_points_per_voxel;
+        float       distance_far_thresh  = req->distance_far_thresh == 0 ? get_parameter( "map_cloud_distance_far_thresh" ).as_double()
+                                                                         : req->distance_far_thresh;
         std::string frame_id             = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        auto cloud = map_cloud_generator->generate( snapshot, resolution, min_points_per_voxel, req->skip_first_cloud );
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, min_points_per_voxel, distance_far_thresh,
+                                                    req->skip_first_cloud );
         if( !cloud ) {
             RCLCPP_WARN_STREAM( get_logger(), "Failed to generate map cloud" );
             res->success = false;
@@ -1076,15 +1084,24 @@ private:
     void save_map_service( mrg_slam_msgs::srv::SaveMap::Request::ConstSharedPtr req, mrg_slam_msgs::srv::SaveMap::Response::SharedPtr res )
     {
         std::vector<KeyFrameSnapshot::Ptr> snapshot;
+        {
+            std::lock_guard<std::mutex> lock( snapshots_mutex );
+            snapshot = keyframes_snapshot;
+        }
 
-        RCLCPP_INFO_STREAM( get_logger(), "Trying to save map to " << req->file_path << " with resolution " << req->resolution
-                                                                   << " and count_threshold " << req->count_threshold );
+        // Use config values if not set in request
+        float       resolution           = req->resolution == 0 ? get_parameter( "map_cloud_resolution" ).as_double() : req->resolution;
+        int         min_points_per_voxel = req->min_points_per_voxel < 0 ? get_parameter( "map_cloud_min_points_per_voxel" ).as_int()
+                                                                         : req->min_points_per_voxel;
+        float       distance_far_thresh  = req->distance_far_thresh == 0 ? get_parameter( "map_cloud_distance_far_thresh" ).as_double()
+                                                                         : req->distance_far_thresh;
+        std::string frame_id             = req->frame_id.empty() ? map_frame_id : req->frame_id;
 
-        snapshots_mutex.lock();
-        snapshot = keyframes_snapshot;
-        snapshots_mutex.unlock();
+        RCLCPP_INFO_STREAM( get_logger(), "Trying to save map to " << req->file_path << " with resolution " << resolution
+                                                                   << " and min_points_per_voxel " << min_points_per_voxel );
 
-        auto cloud = map_cloud_generator->generate( snapshot, req->resolution, req->count_threshold );
+        auto cloud = map_cloud_generator->generate( snapshot, resolution, min_points_per_voxel, distance_far_thresh,
+                                                    req->skip_first_cloud );
         if( !cloud ) {
             res->success = false;
             return;
@@ -1123,12 +1140,12 @@ private:
             boost::filesystem::create_directories( dir );
         }
         int ret      = pcl::io::savePCDFileBinary( req->file_path, *cloud );
-        res->success = ret == 0;
+        res->success = ( ret == 0 );
 
         if( res->success ) {
-            std::cout << "saved map " << req->file_path << " with " << cloud->points.size() << " points" << std::endl;
+            RCLCPP_INFO_STREAM( get_logger(), "Saved map " << req->file_path << " with " << cloud->points.size() << " points" );
         } else {
-            std::cout << "failed to save " << req->file_path << " with " << cloud->points.size() << " points" << std::endl;
+            RCLCPP_ERROR_STREAM( get_logger(), "Failed to save " << req->file_path << " with " << cloud->points.size() << " points" );
         }
     }
 
