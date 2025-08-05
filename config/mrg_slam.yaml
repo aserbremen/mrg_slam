@@ -1,7 +1,7 @@
 # Parameters shared across all nodes or general parameters
 /**:
   ros__parameters:
-    model_namespace: "atlas" # is going to be used as namespace for all topics and tf frames
+    model_namespace: "bestla" # is going to be used as namespace for all topics and tf frames
     use_sim_time: true # true for rosbags and for gazebo
     points_topic: "velodyne_points"
     imu_topic: "imu/data"
@@ -10,14 +10,14 @@
 lidar2base_publisher:
   ros__parameters:
     enable_lidar2base_publisher: true
-    lidar2base_x: 0.0012
-    lidar2base_y: 0.0
-    lidar2base_z: 0.716
-    lidar2base_roll: 0.0
-    lidar2base_pitch: 0.0 # 0.261799 # 15 degrees inclined
-    lidar2base_yaw: 0.0
-    base_frame_id: "base_link" # default "base_link", is prepended by model_namespace
-    lidar_frame_id: "velodyne" # is prepended by model_namespace
+    x: 0.0012
+    y: 0.0
+    z: 0.716
+    roll: 0.0
+    pitch: 0.0 # 0.261799 # 15 degrees inclined
+    yaw: 0.0
+    frame_id: "base_link" # default "base_link", is prepended by model_namespace
+    child_frame_id: "velodyne" # is prepended by model_namespace
 
 # A transform between the map and namespace/map frame
 # The final tf tree should for a dual robot experiment should look like: 
@@ -28,14 +28,14 @@ lidar2base_publisher:
 map2robotmap_publisher:
   ros__parameters:
     enable_map2robotmap_publisher: true
-    map2robotmap_x: 0.0
-    map2robotmap_y: 0.0
-    map2robotmap_z: 0.0
-    map2robotmap_roll: 0.0
-    map2robotmap_pitch: 0.0 
-    map2robotmap_yaw: 0.0
-    map2robotmap_frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
-    map2robotmap_child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    roll: 0.0
+    pitch: 0.0 
+    yaw: 0.0
+    frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
+    child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
 
 # Parameters for the Velodyne driver and transform
 velodyne:

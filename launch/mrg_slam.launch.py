@@ -78,8 +78,6 @@ def launch_setup(context, *args, **kwargs):
     with open(config_file_path, 'r') as file:
         config_params = yaml.safe_load(file)
         print('Loaded config file: ' + config_file_path)
-        # # Print all parameters from the yaml file for convenience when launching the nodes
-        # print(yaml.dump(config_params, sort_keys=False, default_flow_style=False))
         shared_params = config_params['/**']['ros__parameters']
         lidar2base_publisher_params = config_params['lidar2base_publisher']['ros__parameters']
         map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
@@ -122,8 +120,8 @@ def launch_setup(context, *args, **kwargs):
 
     # Create the static transform publisher node between the base and the lidar frame
     if lidar2base_publisher_params['enable_lidar2base_publisher']:
-        frame_id = lidar2base_publisher_params['base_frame_id']
-        child_frame_id = lidar2base_publisher_params['lidar_frame_id']
+        frame_id = lidar2base_publisher_params['frame_id']
+        child_frame_id = lidar2base_publisher_params['child_frame_id']
         if model_namespace != '':
             frame_id = model_namespace + '/' + frame_id
             child_frame_id = model_namespace + '/' + child_frame_id
@@ -135,17 +133,17 @@ def launch_setup(context, *args, **kwargs):
             # arguments has to be a list of strings
             arguments=[
                 '--x',
-                str(lidar2base_publisher_params['lidar2base_x']),
+                str(lidar2base_publisher_params['x']),
                 '--y',
-                str(lidar2base_publisher_params['lidar2base_y']),
+                str(lidar2base_publisher_params['y']),
                 '--z',
-                str(lidar2base_publisher_params['lidar2base_z']),
+                str(lidar2base_publisher_params['z']),
                 '--roll',
-                str(lidar2base_publisher_params['lidar2base_roll']),
+                str(lidar2base_publisher_params['roll']),
                 '--pitch',
-                str(lidar2base_publisher_params['lidar2base_pitch']),
+                str(lidar2base_publisher_params['pitch']),
                 '--yaw',
-                str(lidar2base_publisher_params['lidar2base_yaw']),
+                str(lidar2base_publisher_params['yaw']),
                 '--frame-id',
                 frame_id,
                 '--child-frame-id',
@@ -158,9 +156,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Create the map2robotmap publisher node, if it is enabled and a model_namespace is set
     if map2robotmap_publisher_params['enable_map2robotmap_publisher'] and model_namespace != '':
-        map2robotmap_child_frame_id = (
-            model_namespace + '/' + map2robotmap_publisher_params['map2robotmap_child_frame_id']
-        )
+        map2robotmap_child_frame_id = model_namespace + '/' + map2robotmap_publisher_params['child_frame_id']
         map2robotmap_publisher = Node(
             name='map2robotmap_publisher',
             namespace=model_namespace,
@@ -169,19 +165,19 @@ def launch_setup(context, *args, **kwargs):
             # arguments has to be a list of strings
             arguments=[
                 '--x',
-                str(map2robotmap_publisher_params['map2robotmap_x']),
+                str(map2robotmap_publisher_params['x']),
                 '--y',
-                str(map2robotmap_publisher_params['map2robotmap_y']),
+                str(map2robotmap_publisher_params['y']),
                 '--z',
-                str(map2robotmap_publisher_params['map2robotmap_z']),
+                str(map2robotmap_publisher_params['z']),
                 '--roll',
-                str(map2robotmap_publisher_params['map2robotmap_roll']),
+                str(map2robotmap_publisher_params['roll']),
                 '--pitch',
-                str(map2robotmap_publisher_params['map2robotmap_pitch']),
+                str(map2robotmap_publisher_params['pitch']),
                 '--yaw',
-                str(map2robotmap_publisher_params['map2robotmap_yaw']),
+                str(map2robotmap_publisher_params['yaw']),
                 '--frame-id',
-                map2robotmap_publisher_params['map2robotmap_frame_id'],
+                map2robotmap_publisher_params['frame_id'],
                 '--child-frame-id',
                 map2robotmap_child_frame_id,
             ],
