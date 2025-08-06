@@ -13,6 +13,8 @@ def static_transform_publisher(
     frame_id: str = "",
     child_frame_id: str = "",
     name: str = "static_transform_publisher",
+    remaps: dict = {},
+    params: dict = {},
 ):
     """
     Launch a static transform publisher with given arguments
@@ -46,5 +48,7 @@ def static_transform_publisher(
             "--child-frame-id",
             f"{child_frame_id}",
         ],
+        remaps=remaps,
+        params=params,
         output="screen",
     )
