@@ -3,7 +3,7 @@ from better_launch import BetterLaunch, launch_this
 import pprint
 
 
-@launch_this(ui=True)
+@launch_this(ui=False)
 def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
     """
     This is a launch file for the Multi-Robot Graph SLAM (mrg_slam) system.
@@ -24,13 +24,12 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
     if remap_tf:
         remappings = {**remappings, **{"/tf": "tf", "/tf_static": "tf_static"}}
 
-    pprint.pprint(all_params)
-
     with bl.group(model_ns):
         if lidar_params["enable_lidar2base_publisher"]:
             bl.include(
                 package=None,
                 launchfile="static_transform_publisher.py",
+                name="lidar2base_publisher",
                 x=lidar_params["x"],
                 y=lidar_params["y"],
                 z=lidar_params["z"],
@@ -47,7 +46,6 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
             package="mrg_slam",
             executable="map2odom_publisher_ros2.py",
             name="map2odom_publisher",
-            output="screen",
             params={**shared_params, 
                     **{"map_frame_id": model_ns + "/" + slam_params["map_frame_id"] if model_ns else slam_params["map_frame_id"], 
                        "odom_frame_id": model_ns + "/" + slam_params["odom_frame_id"] if model_ns else slam_params["odom_frame_id"]}},
@@ -62,7 +60,7 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
                     plugin="mrg_slam::PrefilteringComponent",
                     name="prefiltering_component",
                     params={**shared_params, **prefiltering_params},
-                    output="screen",
+                    remaps=remappings,
                 )
             scan_matching_params["odom_frame_id"] = model_ns + "/" + scan_matching_params["odom_frame_id"] if model_ns else scan_matching_params["odom_frame_id"]
             scan_matching_params["robot_odom_frame_id"] = model_ns + "/" + scan_matching_params["robot_odom_frame_id"] if model_ns else scan_matching_params["robot_odom_frame_id"]
@@ -72,7 +70,7 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
                     plugin="mrg_slam::ScanMatchingOdometryComponent",
                     name="scan_matching_odometry_component",
                     params={**shared_params, **scan_matching_params},
-                    output="screen",
+                    remaps=remappings,
                 )
             if floor_detection_params["enable_floor_detection"]:
                 bl.component(
@@ -80,6 +78,7 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
                     plugin="mrg_slam::FloorDetectionComponent",
                     name="floor_detection_component",
                     params={**shared_params, **floor_detection_params},
+                    remaps=remappings,
                     output="screen",
                 )
             slam_params["own_name"] = model_ns
@@ -91,6 +90,6 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
                     plugin="mrg_slam::MrgSlamComponent",
                     name="mrg_slam_component",
                     params={**shared_params, **slam_params},
-                    output="screen",
+                    remaps=remappings,
                 )
 
