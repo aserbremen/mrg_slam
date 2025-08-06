@@ -4,7 +4,7 @@ import pprint
 
 
 @launch_this(ui=False)
-def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
+def mrg_slam(model_namespace: str = "", init_odom_topic: str= "", remap_tf: bool = False):
     """
     This is a launch file for the Multi-Robot Graph SLAM (mrg_slam) system.
     """
@@ -84,6 +84,7 @@ def mrg_slam(model_namespace: str = "", remap_tf: bool = False):
             slam_params["own_name"] = model_ns
             slam_params["map_frame_id"] = model_ns + "/" + slam_params["map_frame_id"] if model_ns else slam_params["map_frame_id"]
             slam_params["odom_frame_id"] = model_ns + "/" + slam_params["odom_frame_id"] if model_ns else slam_params["odom_frame_id"]
+            slam_params["init_odom_topic"] = init_odom_topic if init_odom_topic else slam_params["init_odom_topic"]
             if slam_params["enable_mrg_slam"]:
                 bl.component(
                     package="mrg_slam",
