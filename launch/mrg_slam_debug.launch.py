@@ -60,7 +60,7 @@ PARAM_MAPPING = {
     'enable_imu_orientation': bool,
     'odom_sub_topic': str,
     'cloud_sub_topic': str,
-    'enable_graph_slam': bool,
+    'enable_mrg_slam': bool,
     'tf_link_values': str,
     'points_topic': str,
     'map_frame_id': str,
@@ -330,7 +330,7 @@ def launch_setup(context, *args, **kwargs):
         )
 
     # mrg_slam component
-    if mrg_slam_params['enable_graph_slam']:
+    if mrg_slam_params['enable_mrg_slam']:
         mrg_slam_params['own_name'] = model_namespace
         # Overwrite init_pose array with the actual values
         mrg_slam_params['init_pose'][0] = mrg_slam_params['x']
@@ -365,7 +365,7 @@ def launch_setup(context, *args, **kwargs):
         composable_nodes.append(scan_matching_odometry_node)
     if floor_detection_params['enable_floor_detection']:
         composable_nodes.append(floor_detection_node)
-    if mrg_slam_params['enable_graph_slam']:
+    if mrg_slam_params['enable_mrg_slam']:
         composable_nodes.append(mrg_slam_node)
 
     # https://docs.ros.org/en/foxy/How-To-Guides/Launching-composable-nodes.html

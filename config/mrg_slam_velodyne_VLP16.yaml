@@ -141,7 +141,7 @@ floor_detection_component:
 # HDL graph slam component parameters
 mrg_slam_component:
   ros__parameters:
-    enable_graph_slam: true
+    enable_mrg_slam: true
     # The own_name is set to the model_namespace in the launch file, so don't worry about it
     own_name: "atlas" # is overwritten by the model_namespace
     # The names of the robots that are part of the multi-robot system need to be specified here, including the own robot
