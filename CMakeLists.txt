@@ -313,9 +313,9 @@ install(DIRECTORY
 )
 
 # Install ROS2 launch files
+file(GLOB launch_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} launch/*.py)
 install(PROGRAMS
-  launch/mrg_slam.launch.py
-  launch/mrg_slam_debug.launch.py
+  ${launch_files}
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
