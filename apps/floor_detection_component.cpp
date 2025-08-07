@@ -113,8 +113,7 @@ private:
         filtered                 = plane_clip( filtered, Eigen::Vector4f( 0.0f, 0.0f, 1.0f, sensor_height - height_clip_range ), true );
 
         if( filtered->empty() ) {
-            RCLCPP_WARN_STREAM_THROTTLE( get_logger(), *get_clock(), 1000,
-                                         "No points after height clipping. Check sensor_height and height_clip_range params" );
+            RCLCPP_WARN_STREAM( get_logger(), "No points after height clipping. Check sensor_height and height_clip_range params" );
             return boost::none;
         }
 
