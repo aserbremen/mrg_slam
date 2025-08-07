@@ -81,7 +81,6 @@ def launch_setup(context, *args, **kwargs):
         shared_params = config_params['/**']['ros__parameters']
         lidar2base_publisher_params = config_params['lidar2base_publisher']['ros__parameters']
         map2robotmap_publisher_params = config_params['map2robotmap_publisher']['ros__parameters']
-        velodyne_params = config_params['velodyne']['ros__parameters']
         prefiltering_params = config_params['prefiltering_component']['ros__parameters']
         scan_matching_odometry_params = config_params['scan_matching_odometry_component']['ros__parameters']
         floor_detection_params = config_params['floor_detection_component']['ros__parameters']
@@ -95,7 +94,6 @@ def launch_setup(context, *args, **kwargs):
     map2robotmap_publisher_params = overwrite_yaml_params_from_cli(
         map2robotmap_publisher_params, context.launch_configurations
     )
-    velodyne_params = overwrite_yaml_params_from_cli(velodyne_params, context.launch_configurations)
     prefiltering_params = overwrite_yaml_params_from_cli(prefiltering_params, context.launch_configurations)
     scan_matching_odometry_params = overwrite_yaml_params_from_cli(
         scan_matching_odometry_params, context.launch_configurations
@@ -108,7 +106,6 @@ def launch_setup(context, *args, **kwargs):
     print_yaml_params(shared_params, 'shared_params')
     print_yaml_params(lidar2base_publisher_params, 'lidar2base_publisher_params')
     print_yaml_params(map2robotmap_publisher_params, 'map2robotmap_publisher_params')
-    print_yaml_params(velodyne_params, 'velodyne_params')
     print_yaml_params(prefiltering_params, 'prefiltering_params')
     print_yaml_params(scan_matching_odometry_params, 'scan_matching_odometry_params')
     print_yaml_params(floor_detection_params, 'floor_detection_params')
@@ -223,50 +220,6 @@ def launch_setup(context, *args, **kwargs):
         remappings=container_remaps,
     )
 
-    # Launch the velodyne driver and pointcloud transform node if the lidar is enabled in the config
-    # Note, we don't need the laserscan node, since we only use the pointcloud data
-    # Also, we set the frame_ids according to the model_namespace, e.g. atlas/velodyne (default without namespace = velodyne)
-    if velodyne_params['enable_velodyne']:
-        velodyne_driver_share_dir = get_package_share_directory('velodyne_driver')
-        velodyne_params_file = os.path.join(
-            velodyne_driver_share_dir, 'config', velodyne_params['velodyne_driver']['driver_node_params_file']
-        )
-        with open(velodyne_params_file, 'r') as f:
-            driver_node_params = yaml.safe_load(f)['velodyne_driver_node']['ros__parameters']
-        # overwrite the frame_id to consider the model_namespace
-        if model_namespace != '':
-            driver_node_params['frame_id'] = model_namespace + '/' + velodyne_params['velodyne_driver']['frame_id']
-        velodyne_driver_node = ComposableNode(
-            package='velodyne_driver',
-            plugin='velodyne_driver::VelodyneDriver',
-            name='velodyne_driver_node',
-            namespace=model_namespace,
-            parameters=[shared_params, driver_node_params],
-            extra_arguments=[{'use_intra_process_comms': True}],
-        )
-        velodyne_transform_share_dir = get_package_share_directory('velodyne_pointcloud')
-        velodyne_transform_params_file = os.path.join(
-            velodyne_transform_share_dir, 'config', velodyne_params['velodyne_transform']['transform_node_params_file']
-        )
-        with open(velodyne_transform_params_file, 'r') as f:
-            transform_node_params = yaml.safe_load(f)['velodyne_transform_node']['ros__parameters']
-        # overwrite the frame_id to consider the model_namespace, and set correct calibration file
-        if model_namespace != '':
-            transform_node_params['fixed_frame'] = (
-                model_namespace + '/' + velodyne_params['velodyne_transform']['fixed_frame']
-            )
-        transform_node_params['calibration'] = os.path.join(
-            velodyne_transform_share_dir, 'params', velodyne_params['velodyne_transform']['calibration']
-        )
-        velodyne_transform_node = ComposableNode(
-            package='velodyne_pointcloud',
-            plugin='velodyne_pointcloud::Transform',
-            name='velodyne_transform_node',
-            namespace=model_namespace,
-            parameters=[shared_params, transform_node_params],
-            extra_arguments=[{'use_intra_process_comms': True}],
-        )
-
     # Create the composable nodes, change names, topics, remappings to avoid conflicts for the multi robot case
 
     # prefiltering component
@@ -353,9 +306,6 @@ def launch_setup(context, *args, **kwargs):
         )
 
     composable_nodes = []
-    if velodyne_params['enable_velodyne']:
-        composable_nodes.append(velodyne_driver_node)
-        composable_nodes.append(velodyne_transform_node)
     if prefiltering_params['enable_prefiltering']:
         composable_nodes.append(prefiltering_node)
     if scan_matching_odometry_params['enable_scan_matching_odometry']:

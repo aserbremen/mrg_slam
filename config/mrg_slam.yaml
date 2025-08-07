@@ -37,21 +37,6 @@ map2robotmap_publisher:
     frame_id: "map" # frame_id "map" without model_namespace to display multiple robots in rviz
     child_frame_id: "map" # child_frame_id is prepended by model_namespace!!! -> e.g. "husky1/map"
 
-# Parameters for the Velodyne driver and transform
-velodyne:
-  ros__parameters:
-    enable_velodyne: false
-    velodyne_driver:
-        # This file will be loaded from the velodyne_driver package config share directory
-        driver_node_params_file: VLP16-velodyne_driver_node-params.yaml
-        frame_id: velodyne # is prepended by model_namespace
-    velodyne_transform:
-        # This file will be loaded from the velodyne_transform package config share directory
-        transform_node_params_file: VLP16-velodyne_transform_node-params.yaml
-        # This params file will be loaded from the velodyne_transform params package share directory
-        calibration: VLP16db.yaml
-        fixed_frame: "velodyne" # is prepended by model_namespace
-
 # Prefiltering component parameters
 prefiltering_component:
   ros__parameters:
@@ -183,7 +168,7 @@ mrg_slam_component:
     # loop closure params
     candidate_max_xy_distance: 15.0 # maximum allowed xy distance threshold for loop closure candidates
     accum_distance_thresh_same_robot: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
-    accum_distance_thresh_other_robot:5.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
+    accum_distance_thresh_other_robot: 5.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
     fitness_score_max_range: .inf
     fitness_score_thresh: 1.25
     use_planar_registration_guess: false
