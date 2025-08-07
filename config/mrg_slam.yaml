@@ -177,9 +177,9 @@ mrg_slam_component:
     max_keyframes_per_update: 10000
     keyframe_delta_trans: 1.0
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
-    # fix first node for optimization stability
-    fix_first_node: true
-    fix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
+    # custom information matrix for first node
+    use_custom_inf_matrix_first_node: true
+    custom_inf_matrix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
     # loop closure params
     distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
     accum_distance_thresh: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
@@ -244,7 +244,7 @@ mrg_slam_component:
     graph_request_min_accum_dist: 2.0
     graph_request_max_robot_dist: 50.0
     graph_request_min_time_delay: 2.0
-    # update params
+    # map params
     graph_update_interval: 3.0
     map_cloud_update_interval: 5.0
     map_cloud_resolution: 0.1

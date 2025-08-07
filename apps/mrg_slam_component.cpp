@@ -276,10 +276,10 @@ private:
         declare_parameter<bool>( "fill_first_cloud_simple", false );
 
         // GraphDatabase parameters (not directly used by this class)
-        declare_parameter<bool>( "fix_first_node", false );
-        declare_parameter<std::vector<double>>( "fix_first_node_stddev",
-                                                std::vector<double>{ 0.5, 0.5, 0.5, angles::from_degrees( 5 ), angles::from_degrees( 5 ),
-                                                                     angles::from_degrees( 5 ) } );
+        declare_parameter<bool>( "use_custom_inf_matrix_first_node", false );
+        declare_parameter<std::vector<double>>( "custom_inf_matrix_first_node_stddev",
+                                                std::vector<double>{ 4.0, 4.0, 4.0, angles::from_degrees( 23 ), angles::from_degrees( 23 ),
+                                                                     angles::from_degrees( 23 ) } );
         declare_parameter<int>( "max_keyframes_per_update", 10 );
         declare_parameter<std::string>( "odometry_edge_robust_kernel", "NONE" );
         declare_parameter<double>( "odometry_edge_robust_kernel_size", 1.0 );

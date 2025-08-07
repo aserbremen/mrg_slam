@@ -80,12 +80,12 @@ GraphDatabase::flush_keyframe_queue( const Eigen::Isometry3d &odom2map )
             keyframe->first_keyframe = true;  // exclude point cloud of first keyframe from map, because points corresponding to
                                               // other robots have not been filtered for this keyframe
 
-            // fix the first node
-            if( node_->get_parameter( "fix_first_node" ).as_bool() ) {
-                std::vector<double> fix_first_node_stddev_vec = node_->get_parameter( "fix_first_node_stddev" ).as_double_array();
-                Eigen::MatrixXd     information               = Eigen::MatrixXd::Identity( 6, 6 );
+            // handle the first node
+            if( node_->get_parameter( "use_custom_inf_matrix_first_node" ).as_bool() ) {
+                std::vector<double> first_node_stddev_vec = node_->get_parameter( "custom_inf_matrix_first_node_stddev" ).as_double_array();
+                Eigen::MatrixXd     information           = Eigen::MatrixXd::Identity( 6, 6 );
                 for( int i = 0; i < 6; i++ ) {
-                    information( i, i ) = 1.0 / ( fix_first_node_stddev_vec[i] * fix_first_node_stddev_vec[i] );
+                    information( i, i ) = 1.0 / ( first_node_stddev_vec[i] * first_node_stddev_vec[i] );
                 }
                 RCLCPP_INFO_STREAM( logger, "fixing first node with information:\n" << information );
 
