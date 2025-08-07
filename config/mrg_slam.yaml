@@ -16,7 +16,7 @@ lidar2base_publisher:
     roll: 0.0
     pitch: 0.0 # 0.261799 # 15 degrees inclined
     yaw: 0.0
-    frame_id: "base_link" # default "base_link", is prepended by model_namespace
+    frame_id: "base_link" # is prepended by model_namespace
     child_frame_id: "velodyne" # is prepended by model_namespace
 
 # A transform between the map and namespace/map frame
@@ -42,7 +42,7 @@ prefiltering_component:
   ros__parameters:
     enable_prefiltering: true
 
-    base_link_frame: "base_link" # default "base_link", is prepended by model_namespace
+    base_link_frame: "base_link" # is prepended by model_namespace
 
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "VOXELGRID"
@@ -75,7 +75,7 @@ scan_matching_odometry_component:
     enable_scan_matching_odometry: true
     enable_odom_to_file: false
 
-    odom_frame_id: "odom" # default "odom", is prepended by model_namespace
+    odom_frame_id: "odom" # is prepended by model_namespace
 
     keyframe_delta_translation: 1.0
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
@@ -89,7 +89,7 @@ scan_matching_odometry_component:
     enable_imu_frontend: false
 
     enable_robot_odometry_init_guess: false
-    robot_odom_frame_id: "robot_odom" # default "robot_odom", is prepended by model_namespace
+    robot_odom_frame_id: "robot_odom" # is prepended by model_namespace
 
     # Downsample method options [VOXELGRID, APPROX_VOXELGRID, NONE]
     downsample_method: "NONE"
@@ -146,8 +146,8 @@ mrg_slam_component:
     init_odom_topic: "NONE" # nav_msgs/Odometry to set initial pose, if this is set init_pose_topic is ignored
     init_pose_topic: "NONE" # geometry_msgs/PoseStamped to set initial pose
     # Frame settings
-    map_frame_id: "map"
-    odom_frame_id: "odom"
+    map_frame_id: "map" # is prepended by model_namespace, e.g. "atlas/map"
+    odom_frame_id: "odom" # is prepended by model_namespace, e.g. "atlas/odom"
     # Optimization parameters
     # typical solvers [gn_var, gn_fix6_3, gn_var_cholmod, lm_var, lm_fix6_3, lm_var_cholmod, ...]
     g2o_solver_type: "lm_var_cholmod"
