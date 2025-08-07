@@ -181,9 +181,9 @@ mrg_slam_component:
     use_custom_inf_matrix_first_node: true
     custom_inf_matrix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
     # loop closure params
-    distance_thresh: 15.0 # maximum allowed xy distance threshold for loop closure candidates
-    accum_distance_thresh: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
-    accum_distance_thresh_other_slam_instance: 10.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
+    candidate_max_xy_distance: 15.0 # maximum allowed xy distance threshold for loop closure candidates
+    accum_distance_thresh_same_robot: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates
+    accum_distance_thresh_other_robot: 5.0 # minimum distance to accumulate between keyframes of different slam instances for considering them as loop closure candidates
     fitness_score_max_range: .inf
     fitness_score_thresh: 1.25
     use_planar_registration_guess: false

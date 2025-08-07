@@ -292,9 +292,9 @@ private:
         declare_parameter<double>( "keyframe_delta_angle", 2.0 );
 
         // LoopDetector parameters (not directly used by this class)
-        declare_parameter<double>( "distance_thresh", 5.0 );
-        declare_parameter<double>( "accum_distance_thresh", 8.0 );
-        declare_parameter<double>( "accum_distance_thresh_other_slam_instance", 7.5 );
+        declare_parameter<double>( "candidate_max_xy_distance", 5.0 );
+        declare_parameter<double>( "accum_distance_thresh_same_robot", 8.0 );
+        declare_parameter<double>( "accum_distance_thresh_other_robot", 7.5 );
         declare_parameter<double>( "fitness_score_max_range", std::numeric_limits<double>::max() );
         declare_parameter<double>( "fitness_score_thresh", 0.5 );
         declare_parameter<bool>( "use_planar_registration_guess", false );

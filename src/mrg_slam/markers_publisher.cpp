@@ -106,8 +106,8 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     builtin_interfaces::msg::Time        stamp = node_->now().operator builtin_interfaces::msg::Time();
     visualization_msgs::msg::MarkerArray markers;
 
-    std::string map_frame_id                 = node_->get_parameter( "map_frame_id" ).as_string();
-    double      loop_closure_distance_thresh = node_->get_parameter( "distance_thresh" ).as_double();
+    std::string map_frame_id              = node_->get_parameter( "map_frame_id" ).as_string();
+    double      candidate_max_xy_distance = node_->get_parameter( "candidate_max_xy_distance" ).as_double();
 
     // The size is determined by the number of enum members above + the number of keyframes, as we have to add a single marker for every
     // text marker of the node names
@@ -397,7 +397,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     circle_marker.color.a                          = 0.3;
 
     if( !keyframes.empty() ) {
-        double                 radius     = loop_closure_distance_thresh;
+        double                 radius     = candidate_max_xy_distance;
         const Eigen::Vector3d& p_center   = last_keyframe->node->estimate().translation();
         int                    num_points = 50;
         for( int i = 0; i <= num_points; i++ ) {

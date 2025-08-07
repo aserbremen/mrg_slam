@@ -44,10 +44,10 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
     candidates.reserve( 100 );
     auto logger = rclcpp::get_logger( "LoopDetector::find_candidates" );
 
-    double distance_thresh_squared = node_->get_parameter( "distance_thresh" ).as_double()
-                                     * node_->get_parameter( "distance_thresh" ).as_double();
-    double accum_distance_thresh                     = node_->get_parameter( "accum_distance_thresh" ).as_double();
-    double accum_distance_thresh_other_slam_instance = node_->get_parameter( "accum_distance_thresh_other_slam_instance" ).as_double();
+    double candidate_max_xy_distance_squared = node_->get_parameter( "candidate_max_xy_distance" ).as_double()
+                                               * node_->get_parameter( "candidate_max_xy_distance" ).as_double();
+    double accum_distance_thresh_same_robot  = node_->get_parameter( "accum_distance_thresh_same_robot" ).as_double();
+    double accum_distance_thresh_other_robot = node_->get_parameter( "accum_distance_thresh_other_robot" ).as_double();
     for( const auto& candidate : keyframes ) {
         // there is already an edge
         if( new_keyframe->edge_exists( *candidate, logger ) ) {
@@ -64,13 +64,13 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
 
         // estimated distance between keyframes is too big for given distance threshold
         double dist_squared = ( pos1.head<2>() - pos2.head<2>() ).squaredNorm();
-        if( dist_squared > distance_thresh_squared ) {
+        if( dist_squared > candidate_max_xy_distance_squared ) {
             continue;
         }
 
         // dont consider recent keyframes of the same SLAM run
         if( new_keyframe->slam_uuid == candidate->slam_uuid
-            && new_keyframe->accum_distance - candidate->accum_distance < accum_distance_thresh ) {
+            && new_keyframe->accum_distance - candidate->accum_distance < accum_distance_thresh_same_robot ) {
             continue;
         }
 
@@ -79,12 +79,12 @@ LoopDetector::find_candidates( const KeyFrame::Ptr& new_keyframe, const std::vec
 
         // Check if the candidate is too close in distance for the same SLAM instance to avoid loops very close to each other
         if( last_loop && new_keyframe->slam_uuid == candidate->slam_uuid
-            && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh ) {
+            && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh_same_robot ) {
             continue;
         }
 
         if( last_loop && new_keyframe->slam_uuid != candidate->slam_uuid
-            && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh_other_slam_instance ) {
+            && new_keyframe->accum_distance - last_loop->key1->accum_distance < accum_distance_thresh_other_robot ) {
             continue;
         }
 
