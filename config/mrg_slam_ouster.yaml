@@ -164,7 +164,7 @@ mrg_slam_component:
     keyframe_delta_angle: 0.5236 # 0.5236 rad = 30 degrees
     # custom information matrix for first node
     use_custom_inf_matrix_first_node: true
-    custom_inf_matrix_first_node_stddev: [4.0, 4.0, 4.0, 0.4, 0.4, 0.4] # rad for stddev
+    custom_inf_matrix_first_node_stddev: [0.75, 0.75, 0.75, 0.1, 0.1, 0.1] # rad for stddev
     # loop closure params
     candidate_max_xy_distance: 15.0 # maximum allowed xy distance threshold for loop closure candidates
     accum_distance_thresh_same_robot: 15.0 # minimum distance to accumulate between keyframes of the same slam instance/robot for considering them as loop closure candidates

@@ -23,18 +23,18 @@ public:
     void publishMarginals( const boost::uuids::uuid &own_slam_uuid, const std::vector<KeyFrame::Ptr> &keyframes,
                            const std::shared_ptr<g2o::SparseBlockMatrixX> &marginals );
 
-    size_t getNumSubscribers() const { return markers_pub->get_subscription_count(); }
-    size_t getNumMarginalsSubscribers() const { return markers_marginals_pub->get_subscription_count(); }
+    size_t getNumSubscribers() const { return markers_pub_->get_subscription_count(); }
+    size_t getNumMarginalsSubscribers() const { return markers_marginals_pub_->get_subscription_count(); }
 
 
 private:
     rclcpp::Node::SharedPtr node_;
 
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_marginals_pub;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_marginals_pub_;
 
-    std_msgs::msg::ColorRGBA color_blue, color_orange, color_green, color_red, color_purple, color_brown, color_pink, color_olive,
-        color_cyan, color_black, color_white, color_dark_gray, color_light_gray;
+    std_msgs::msg::ColorRGBA color_blue_, color_orange_, color_green_, color_red_, color_purple_, color_brown_, color_pink_, color_olive_,
+        color_cyan_, color_black_, color_white_, color_dark_gray_, color_light_gray_;
 };
 
 }  // namespace mrg_slam

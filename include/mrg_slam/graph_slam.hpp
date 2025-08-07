@@ -166,11 +166,11 @@ public:
     void set_save_graph( bool save_graph );
 
 public:
-    g2o::RobustKernelFactory*        robust_kernel_factory;
-    std::unique_ptr<g2o::HyperGraph> graph;  // g2o graph
+    g2o::RobustKernelFactory*        robust_kernel_factory_;
+    std::unique_ptr<g2o::HyperGraph> graph_;  // g2o graph
 
 private:
-    bool save_graph_at_each_optimization = false;
+    bool save_graph_at_each_optimization_ = false;
 };
 
 }  // namespace mrg_slam

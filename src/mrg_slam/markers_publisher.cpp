@@ -17,75 +17,75 @@ MarkersPublisher::onInit( rclcpp::Node::SharedPtr node )
 {
     node_ = node;
 
-    markers_pub           = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
-    markers_marginals_pub = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
-                                                                                           rclcpp::QoS( 16 ) );
+    markers_pub_           = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers", rclcpp::QoS( 16 ) );
+    markers_marginals_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>( "mrg_slam/markers_covariance",
+                                                                                            rclcpp::QoS( 16 ) );
 
     // colors from pyplot tableu palette (https://matplotlib.org/3.1.0/gallery/color/named_colors.html)
-    color_blue.r = 31.0 / 255.0;
-    color_blue.g = 119.0 / 255.0;
-    color_blue.b = 180.0 / 255.0;
-    color_blue.a = 1.0;
+    color_blue_.r = 31.0 / 255.0;
+    color_blue_.g = 119.0 / 255.0;
+    color_blue_.b = 180.0 / 255.0;
+    color_blue_.a = 1.0;
 
-    color_orange.r = 255.0 / 255.0;
-    color_orange.g = 127.0 / 255.0;
-    color_orange.b = 14.0 / 255.0;
-    color_orange.a = 1.0;
+    color_orange_.r = 255.0 / 255.0;
+    color_orange_.g = 127.0 / 255.0;
+    color_orange_.b = 14.0 / 255.0;
+    color_orange_.a = 1.0;
 
-    color_green.r = 44.0 / 255.0;
-    color_green.g = 160.0 / 255.0;
-    color_green.b = 44.0 / 255.0;
-    color_green.a = 1.0;
+    color_green_.r = 44.0 / 255.0;
+    color_green_.g = 160.0 / 255.0;
+    color_green_.b = 44.0 / 255.0;
+    color_green_.a = 1.0;
 
-    color_red.r = 214.0 / 255.0;
-    color_red.g = 39.0 / 255.0;
-    color_red.b = 40.0 / 255.0;
-    color_red.a = 1.0;
+    color_red_.r = 214.0 / 255.0;
+    color_red_.g = 39.0 / 255.0;
+    color_red_.b = 40.0 / 255.0;
+    color_red_.a = 1.0;
 
-    color_purple.r = 148.0 / 255.0;
-    color_purple.g = 103.0 / 255.0;
-    color_purple.b = 189.0 / 255.0;
-    color_purple.a = 1.0;
+    color_purple_.r = 148.0 / 255.0;
+    color_purple_.g = 103.0 / 255.0;
+    color_purple_.b = 189.0 / 255.0;
+    color_purple_.a = 1.0;
 
-    color_brown.r = 140.0 / 255.0;
-    color_brown.g = 86.0 / 255.0;
-    color_brown.b = 75.0 / 255.0;
-    color_brown.a = 1.0;
+    color_brown_.r = 140.0 / 255.0;
+    color_brown_.g = 86.0 / 255.0;
+    color_brown_.b = 75.0 / 255.0;
+    color_brown_.a = 1.0;
 
-    color_pink.r = 227.0 / 255.0;
-    color_pink.g = 119.0 / 255.0;
-    color_pink.b = 194.0 / 255.0;
-    color_pink.a = 1.0;
+    color_pink_.r = 227.0 / 255.0;
+    color_pink_.g = 119.0 / 255.0;
+    color_pink_.b = 194.0 / 255.0;
+    color_pink_.a = 1.0;
 
-    color_olive.r = 188.0 / 255.0;
-    color_olive.g = 189.0 / 255.0;
-    color_olive.b = 34.0 / 255.0;
-    color_olive.a = 1.0;
+    color_olive_.r = 188.0 / 255.0;
+    color_olive_.g = 189.0 / 255.0;
+    color_olive_.b = 34.0 / 255.0;
+    color_olive_.a = 1.0;
 
-    color_cyan.r = 23.0 / 255.0;
-    color_cyan.g = 190.0 / 255.0;
-    color_cyan.b = 207.0 / 255.0;
-    color_cyan.a = 1.0;
+    color_cyan_.r = 23.0 / 255.0;
+    color_cyan_.g = 190.0 / 255.0;
+    color_cyan_.b = 207.0 / 255.0;
+    color_cyan_.a = 1.0;
 
-    color_black.r = 0;
-    color_black.g = 0;
-    color_black.b = 0;
-    color_black.a = 1.0;
+    color_black_.r = 0;
+    color_black_.g = 0;
+    color_black_.b = 0;
+    color_black_.a = 1.0;
 
-    color_white.r = 1.0;
-    color_white.g = 1.0;
-    color_white.b = 1.0;
-    color_white.a = 1.0;
+    color_white_.r = 1.0;
+    color_white_.g = 1.0;
+    color_white_.b = 1.0;
+    color_white_.a = 1.0;
 
-    color_light_gray.r = 0.75;
-    color_light_gray.g = 0.75;
-    color_light_gray.b = 0.75;
-    color_light_gray.a = 1.0;
+    color_light_gray_.r = 0.75;
+    color_light_gray_.g = 0.75;
+    color_light_gray_.b = 0.75;
+    color_light_gray_.a = 1.0;
 
-    color_dark_gray.r = 0.45;
-    color_dark_gray.g = 0.45;
-    color_dark_gray.b = 0.45;
-    color_dark_gray.a = 1.0;
+    color_dark_gray_.r = 0.45;
+    color_dark_gray_.g = 0.45;
+    color_dark_gray_.b = 0.45;
+    color_dark_gray_.a = 1.0;
 }
 
 
@@ -144,15 +144,15 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
 
         // same slam uuid
         if( keyframes[i]->slam_uuid == own_slam_uuid ) {
-            traj_marker.colors[i] = color_blue;
+            traj_marker.colors[i] = color_blue_;
 
             // node_names_marker.text  = keyframes[i]->readable_id;
-            // node_names_marker.color = color_blue;
+            // node_names_marker.color = color_blue_;
         } else {  // other slam uuid
-            traj_marker.colors[i] = color_cyan;
+            traj_marker.colors[i] = color_cyan_;
 
             // node_names_marker.text  = "+" + keyframes[i]->readable_id;
-            // node_names_marker.color = color_cyan;
+            // node_names_marker.color = color_cyan_;
         }
 
         /*
@@ -189,10 +189,10 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
         Eigen::Vector3d pos;
         if( i == others_last_kf.size() ) {
             pos                        = last_keyframe->node->estimate().translation();
-            last_node_marker.colors[i] = color_blue;
+            last_node_marker.colors[i] = color_blue_;
         } else {
             pos                        = others_last_kf[i]->node->estimate().translation();
-            last_node_marker.colors[i] = color_cyan;
+            last_node_marker.colors[i] = color_cyan_;
         }
 
         last_node_marker.points[i].x = pos.x();
@@ -203,7 +203,7 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
     last_node_marker.points.back().x = 0;
     last_node_marker.points.back().y = 0;
     last_node_marker.points.back().z = 0;
-    last_node_marker.colors.back()   = color_olive;
+    last_node_marker.colors.back()   = color_olive_;
 
     // main edges
     {
@@ -237,22 +237,22 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
             // same SLAM UUID
             if( edge->from_keyframe->slam_uuid == own_slam_uuid && edge->to_keyframe->slam_uuid == own_slam_uuid ) {
                 if( edge->type == Edge::TYPE_ANCHOR ) {
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_dark_gray;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_dark_gray_;
                 } else if( edge->type == Edge::TYPE_ODOM ) {
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_red_;
                 }
             } else {  // different SLAM UUID
                 if( edge->type == Edge::TYPE_ANCHOR ) {
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_light_gray;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_light_gray_;
                 } else if( edge->type == Edge::TYPE_ODOM ) {
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_orange;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_orange_;
                 }
             }
             if( edge->type == Edge::TYPE_LOOP ) {
                 if( edge->from_keyframe->slam_uuid == edge->to_keyframe->slam_uuid ) {  // intra-robot loop
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_purple_;
                 } else if( edge->from_keyframe->slam_uuid != edge->to_keyframe->slam_uuid ) {  // inter-robot loop
-                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_pink;
+                    main_edge_marker.colors[i * 2] = main_edge_marker.colors[i * 2 + 1] = color_pink_;
                 }
             }
 
@@ -271,11 +271,11 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
 
         misc_edge_marker.pose.orientation.w = 1.0;
         misc_edge_marker.scale.x            = 0.05;
-        misc_edge_marker.points.resize( graph_slam->graph->edges().size() * 2 - markers.markers[MARKER_MAIN_EDGES].points.size() );
-        misc_edge_marker.colors.resize( graph_slam->graph->edges().size() * 2 - markers.markers[MARKER_MAIN_EDGES].colors.size() );
+        misc_edge_marker.points.resize( graph_slam->graph_->edges().size() * 2 - markers.markers[MARKER_MAIN_EDGES].points.size() );
+        misc_edge_marker.colors.resize( graph_slam->graph_->edges().size() * 2 - markers.markers[MARKER_MAIN_EDGES].colors.size() );
 
         size_t i = 0;
-        for( const auto& edge : graph_slam->graph->edges() ) {
+        for( const auto& edge : graph_slam->graph_->edges() ) {
             /*
             g2o::EdgeSE3*          edge_se3 = dynamic_cast<g2o::EdgeSE3*>( edge );
             if( edge_se3 ) {
@@ -430,16 +430,16 @@ MarkersPublisher::publish( std::shared_ptr<GraphSLAM>& graph_slam, const boost::
 
         if( keyframes[i]->slam_uuid == own_slam_uuid ) {
             node_names_marker.text  = keyframes[i]->readable_id;
-            node_names_marker.color = color_blue;
+            node_names_marker.color = color_blue_;
         } else {
             node_names_marker.text  = "+" + keyframes[i]->readable_id;
-            node_names_marker.color = color_cyan;
+            node_names_marker.color = color_cyan_;
         }
 
         markers.markers.push_back( node_names_marker );
     }
 
-    markers_pub->publish( markers );
+    markers_pub_->publish( markers );
 }
 
 
@@ -469,9 +469,9 @@ MarkersPublisher::publishMarginals( const boost::uuids::uuid& own_slam_uuid, con
 
         // color
         if( keyframes[i]->slam_uuid == own_slam_uuid ) {
-            marker.color = color_blue;
+            marker.color = color_blue_;
         } else {
-            marker.color = color_cyan;
+            marker.color = color_cyan_;
         }
         marker.color.a = 0.25;  // semi-transparent
 
@@ -527,7 +527,7 @@ MarkersPublisher::publishMarginals( const boost::uuids::uuid& own_slam_uuid, con
         marker.scale.y = std::sqrt( eigenvalues[1] );
         marker.scale.z = std::sqrt( eigenvalues[2] );
 
-        markers_marginals_pub->publish( markers );
+        markers_marginals_pub_->publish( markers );
     }
 }
 
