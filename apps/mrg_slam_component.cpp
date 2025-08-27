@@ -236,8 +236,6 @@ private:
         // General and scenario parameters
         own_name_          = declare_parameter<std::string>( "own_name", "atlas" );
         multi_robot_names_ = declare_parameter<std::vector<std::string>>( "multi_robot_names", { "atlas", "bestla" } );
-        declare_parameter<std::string>( "odom_sub_topic", "/scan_matching_odometry/odom" );
-        declare_parameter<std::string>( "cloud_sub_topic", "/prefiltering/filtered_points" );
 
         // Map parameters
         map_frame_id_  = declare_parameter<std::string>( "map_frame_id", "map" );
