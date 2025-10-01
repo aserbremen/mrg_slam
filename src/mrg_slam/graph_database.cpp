@@ -493,6 +493,11 @@ GraphDatabase::flush_loaded_graph( LoopManager::Ptr loop_manager )
 
     auto logger = rclcpp::get_logger( "flush_loaded_graph" );
 
+    if( anchor_kf_ == nullptr ) {
+        RCLCPP_ERROR_STREAM( logger, "Anchor keyframe is not set. Cannot flush loaded graph." );
+        return false;
+    }
+
     RCLCPP_INFO_STREAM( logger, "Flushing loaded " << loaded_keyframes_.size() << " keyframes and " << loaded_edges_.size() << " edges" );
 
     for( const auto &keyframe : loaded_keyframes_ ) {
